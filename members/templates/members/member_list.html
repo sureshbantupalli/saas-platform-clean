@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="container-fluid">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold mb-0">Members</h2>
+        <a href="{% url 'member_create' %}" class="btn btn-primary btn-sm">
+            + Add Member
+        </a>
+    </div>
+
+    <!-- 📊 KPI Cards -->
+    <div class="row mb-4">
+
+        <!-- TOTAL -->
+        <div class="col-md-2">
+            <a href="{% url 'member_list' %}" style="text-decoration:none;">
+                <div class="card shadow-sm border-0 text-center p-3
+                    {% if not status_filter and not expiring_filter %}
+                        bg-primary text-white
+                    {% endif %}">
+                    <h6 class="{% if not status_filter and not expiring_filter %}text-white{% else %}text-muted{% endif %}">
+                        Total
+                    </h6>
+                    <h4 class="fw-bold mb-0">{{ kpis.total }}</h4>
+                </div>
+            </a>
+        </div>
+
+        <!-- ACTIVE -->
+        <div class="col-md-2">
+            <a href="?status=ACTIVE{% if search_query %}&q={{ search_query }}{% endif %}"
+               style="text-decoration:none;">
+                <div class="card shadow-sm border-0 text-center p-3 border-start border-4 border-success
+                    {% if status_filter == 'ACTIVE' %}
+                        bg-success text-white
+                    {% endif %}">
+                    <h6 class="{% if status_filter == 'ACTIVE' %}text-white{% else %}text-muted{% endif %}">
+                        Active
+                    </h6>
+                    <h4 class="fw-bold mb-0">{{ kpis.ACTIVE }}</h4>
+                </div>
+            </a>
+        </div>
+
+        <!-- PAUSED -->
+        <div class="col-md-2">
+            <a href="?status=PAUSED{% if search_query %}&q={{ search_query }}{% endif %}"
+               style="text-decoration:none;">
+                <div class="card shadow-sm border-0 text-center p-3 border-start border-4 border-warning
+                    {% if status_filter == 'PAUSED' %}
+                        bg-warning text-dark
+                    {% endif %}">
+                    <h6 class="{% if status_filter == 'PAUSED' %}text-dark{% else %}text-muted{% endif %}">
+                        Paused
+                    </h6>
+                    <h4 class="fw-bold mb-0">{{ kpis.PAUSED }}</h4>
+                </div>
+            </a>
+        </div>
+
+        <!-- EXPIRED -->
+        <div class="col-md-2">
+            <a href="?status=EXPIRED{% if search_query %}&q={{ search_query }}{% endif %}"
+               style="text-decoration:none;">
+                <div class="card shadow-sm border-0 text-center p-3 border-start border-4 border-danger
+                    {% if status_filter == 'EXPIRED' %}
+                        bg-danger text-white
+                    {% endif %}">
+                    <h6 class="{% if status_filter == 'EXPIRED' %}text-white{% else %}text-muted{% endif %}">
+                        Expired
+                    </h6>
+                    <h4 class="fw-bold mb-0">{{ kpis.EXPIRED }}</h4>
+                </div>
+            </a>
+        </div>
+
+        <!-- NO PLAN -->
+        <div class="col-md-2">
+            <a href="?status=NO_PLAN{% if search_query %}&q={{ search_query }}{% endif %}"
+               style="text-decoration:none;">
+                <div class="card shadow-sm border-0 text-center p-3 border-start border-4 border-secondary
+                    {% if status_filter == 'NO_PLAN' %}
+                        bg-secondary text-white
+                    {% endif %}">
+                    <h6 class="{% if status_filter == 'NO_PLAN' %}text-white{% else %}text-muted{% endif %}">
+                        No Plan
+                    </h6>
+                    <h4 class="fw-bold mb-0">{{ kpis.NO_PLAN }}</h4>
+                </div>
+            </a>
+        </div>
+
+        <!-- EXPIRING SOON -->
+        <div class="col-md-2">
+            <a href="?expiring=1{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
+               style="text-decoration:none;">
+                <div class="card shadow-sm border-0 text-center p-3 border-start border-4 border-danger
+                    {% if expiring_filter %}
+                        bg-danger text-white
+                    {% else %}
+                        bg-light
+                    {% endif %}">
+                    <h6 class="{% if expiring_filter %}text-white{% else %}text-muted{% endif %}">
+                        Expiring Soon
+                    </h6>
+                    <h4 class="fw-bold mb-0">{{ expiring_soon }}</h4>
+                    <small class="{% if expiring_filter %}text-white-50{% else %}text-muted{% endif %}">
+                        Next 7 days
+                    </small>
+                </div>
+            </a>
+        </div>
+
+    </div>
+
+
+    <!-- 🔍 Search + Status Filter -->
+    <div class="card shadow-sm border-0 mb-4 p-3">
+        <form method="get">
+            <div class="row align-items-center">
+
+                <div class="col-md-4">
+                    <input type="text"
+                           name="q"
+                           value="{{ search_query }}"
+                           class="form-control form-control-sm"
+                           placeholder="Search by name, email, phone...">
+                </div>
+
+                <div class="col-md-3">
+                    <select name="status"
+                            class="form-select form-select-sm">
+                        <option value="">All Status</option>
+                        <option value="ACTIVE" {% if status_filter == "ACTIVE" %}selected{% endif %}>Active</option>
+                        <option value="PAUSED" {% if status_filter == "PAUSED" %}selected{% endif %}>Paused</option>
+                        <option value="EXPIRED" {% if status_filter == "EXPIRED" %}selected{% endif %}>Expired</option>
+                        <option value="CANCELLED" {% if status_filter == "CANCELLED" %}selected{% endif %}>Cancelled</option>
+                        <option value="NO_PLAN" {% if status_filter == "NO_PLAN" %}selected{% endif %}>No Plan</option>
+                    </select>
+                </div>
+
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        Apply
+                    </button>
+                </div>
+
+                {% if search_query or status_filter or expiring_filter %}
+                <div class="col-auto">
+                    <a href="{% url 'member_list' %}"
+                       class="btn btn-sm btn-outline-secondary">
+                        Clear
+                    </a>
+                </div>
+                {% endif %}
+
+            </div>
+        </form>
+    </div>
+
+
+    <!-- Members Table -->
+    <div class="card shadow-sm border-0 p-4">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Status</th>
+                        <th>Branches</th>
+                        <th>Joined</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for member in members %}
+                    <tr>
+                        <td class="fw-semibold">
+                            {{ member.first_name }} {{ member.last_name }}
+                        </td>
+                        <td>{{ member.email|default:"-" }}</td>
+                        <td>{{ member.phone|default:"-" }}</td>
+
+                        <td>
+                            {% if member.display_status == "ACTIVE" %}
+                                <span class="badge bg-success">Active</span>
+                            {% elif member.display_status == "PAUSED" %}
+                                <span class="badge bg-warning text-dark">Paused</span>
+                            {% elif member.display_status == "EXPIRED" %}
+                                <span class="badge bg-danger">Expired</span>
+                            {% elif member.display_status == "CANCELLED" %}
+                                <span class="badge bg-dark">Cancelled</span>
+                            {% elif member.display_status == "NO_PLAN" %}
+                                <span class="badge bg-secondary">No Plan</span>
+                            {% else %}
+                                <span class="badge bg-light text-dark border">
+                                    {{ member.display_status }}
+                                </span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            {% for branch in member.branches.all %}
+                                <span class="badge bg-light text-dark border">
+                                    {{ branch.name }}
+                                </span>
+                            {% empty %}
+                                -
+                            {% endfor %}
+                        </td>
+
+                        <td>{{ member.created_at|date:"Y-m-d" }}</td>
+
+                        <td class="text-end">
+                            <a href="{% url 'member_detail' member.id %}" class="btn btn-sm btn-outline-primary">View</a>
+                            <a href="{% url 'member_update' member.id %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                            <a href="{% url 'member_delete' member.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            No members found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

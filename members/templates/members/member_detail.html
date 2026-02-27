@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold mb-0">
+            {{ member.first_name }} {{ member.last_name }}
+        </h2>
+
+        <div>
+            <a href="{% url 'member_update' member.id %}"
+               class="btn btn-outline-secondary btn-sm">
+                Edit
+            </a>
+
+            <a href="{% url 'member_delete' member.id %}"
+               class="btn btn-outline-danger btn-sm">
+                Delete
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+
+        <!-- Profile Card -->
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 p-4 mb-4">
+                <h5 class="fw-semibold mb-3">Profile Information</h5>
+
+                <p><strong>Email:</strong><br>{{ member.email }}</p>
+                <p><strong>Phone:</strong><br>{{ member.phone|default:"-" }}</p>
+                <p><strong>Joined:</strong><br>{{ member.created_at|date:"Y-m-d" }}</p>
+
+                <hr>
+
+                <p><strong>Status:</strong><br>
+                    {% if member.display_status == "ACTIVE" %}
+                        <span class="badge bg-success">Active</span>
+                    {% elif member.display_status == "PAUSED" %}
+                        <span class="badge bg-warning text-dark">Paused</span>
+                    {% elif member.display_status == "EXPIRED" %}
+                        <span class="badge bg-danger">Expired</span>
+                    {% elif member.display_status == "CANCELLED" %}
+                        <span class="badge bg-dark">Cancelled</span>
+                    {% elif member.display_status == "NO_PLAN" %}
+                        <span class="badge bg-secondary">No Plan</span>
+                    {% else %}
+                        <span class="badge bg-light text-dark">
+                            {{ member.display_status }}
+                        </span>
+                    {% endif %}
+                </p>
+
+                <hr>
+
+                <p><strong>Branches:</strong><br>
+                    {% for branch in member.branches.all %}
+                        <span class="badge bg-light text-dark border">
+                            {{ branch.name }}
+                        </span>
+                    {% empty %}
+                        -
+                    {% endfor %}
+                </p>
+            </div>
+        </div>
+
+        <!-- Membership Summary -->
+        <div class="col-md-8">
+            <div class="card shadow-sm border-0 p-4 mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-semibold mb-0">Memberships</h5>
+
+                    <a href="#"
+                       class="btn btn-primary btn-sm">
+                        + Add Membership
+                    </a>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Plan</th>
+                                <th>Branch</th>
+                                <th>Status</th>
+                                <th>Start</th>
+                                <th>End</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            {% for membership in member.memberships.all %}
+                            <tr>
+                                <td>{{ membership.plan_name }}</td>
+                                <td>{{ membership.branch.name }}</td>
+
+                                <td>
+                                    {% if membership.status == "active" %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% elif membership.status == "paused" %}
+                                        <span class="badge bg-warning text-dark">Paused</span>
+                                    {% elif membership.status == "expired" %}
+                                        <span class="badge bg-danger">Expired</span>
+                                    {% elif membership.status == "cancelled" %}
+                                        <span class="badge bg-dark">Cancelled</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>{{ membership.start_date }}</td>
+                                <td>{{ membership.final_end_date }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-3">
+                                    No memberships found.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

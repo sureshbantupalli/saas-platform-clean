@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Role Permissions</title>
+</head>
+<body>
+
+{% load authority_extras %}
+
+<h2>Role Permissions</h2>
+
+<!-- ========================= -->
+<!-- ROLE SELECT (GET FORM)   -->
+<!-- ========================= -->
+<form method="get">
+    <label>Select Role:</label>
+    <select name="role" onchange="this.form.submit()">
+        <option value="">-- Select Role --</option>
+        {% for role in roles %}
+            <option value="{{ role.id }}"
+                {% if selected_role and role.id == selected_role.id %}
+                    selected
+                {% endif %}
+            >
+                {{ role.name }}
+            </option>
+        {% endfor %}
+    </select>
+</form>
+
+<hr>
+
+{% if selected_role %}
+
+    <h3>Permissions for {{ selected_role.name }}</h3>
+
+    <!-- ========================= -->
+    <!-- PERMISSION SAVE (POST)   -->
+    <!-- ========================= -->
+    <form method="post">
+        {% csrf_token %}
+
+        <!-- REQUIRED hidden role id -->
+        <input type="hidden" name="role_id" value="{{ selected_role.id }}">
+
+        {% for action in permission_actions %}
+            <div style="margin-bottom: 10px; padding: 5px; border-bottom: 1px solid #ddd;">
+
+                <!-- Permission Checkbox -->
+                <label>
+                    <input type="checkbox"
+                        name="perm_{{ action.module }}_{{ action.action }}"
+                        {% if action.id in selected_permissions %}
+                            checked
+                        {% endif %}
+                    >
+                    <strong>{{ action.module }}</strong> : {{ action.action }}
+                </label>
+
+                <!-- Scope Radios -->
+                <div style="margin-left: 25px; margin-top: 5px;">
+                    <label>
+                        <input type="radio"
+                            name="scope_{{ action.module }}_{{ action.action }}"
+                            value="ANY"
+                            {% if selected_permissions|get_item:action.id == "ANY" %}
+                                checked
+                            {% endif %}
+                        >
+                        ANY
+                    </label>
+
+                    <label style="margin-left: 15px;">
+                        <input type="radio"
+                            name="scope_{{ action.module }}_{{ action.action }}"
+                            value="OWN"
+                            {% if selected_permissions|get_item:action.id == "OWN" %}
+                                checked
+                            {% endif %}
+                        >
+                        OWN
+                    </label>
+                </div>
+
+            </div>
+        {% endfor %}
+
+        <br>
+        <button type="submit">Save Permissions</button>
+    </form>
+
+{% endif %}
+
+<!-- ========================= -->
+<!-- RADIO CONTROL SCRIPT      -->
+<!-- ========================= -->
+<script>
+document.querySelectorAll("input[type=checkbox]").forEach(cb => {
+
+    const key = cb.name.replace("perm_", "");
+    const radios = document.getElementsByName("scope_" + key);
+
+    function updateState() {
+        radios.forEach(radio => {
+            radio.disabled = !cb.checked;
+        });
+
+        if (cb.checked && !Array.from(radios).some(r => r.checked)) {
+            radios[0].checked = true;  // Default ANY
+        }
+    }
+
+    cb.addEventListener("change", updateState);
+    updateState();
+});
+</script>
+
+</body>
+</html>

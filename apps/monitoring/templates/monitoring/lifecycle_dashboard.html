@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="container-fluid">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold mb-0">Lifecycle Health Dashboard</h2>
+        <span class="badge bg-secondary">Internal Monitoring</span>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="row g-4 mb-4">
+
+        <!-- Last Status -->
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 border-start border-4 
+                {% if summary.last_status == 'SUCCESS' %}
+                    border-success
+                {% elif summary.last_status == 'FAILED' %}
+                    border-danger
+                {% elif summary.last_status == 'PARTIAL' %}
+                    border-warning
+                {% else %}
+                    border-secondary
+                {% endif %}
+                p-3">
+
+                <small class="text-muted">Last Status</small>
+                <h4 class="mt-2 fw-bold">{{ summary.last_status }}</h4>
+            </div>
+        </div>
+
+        <!-- Average Duration -->
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 border-start border-4 border-primary p-3">
+                <small class="text-muted">Average Duration (7 Days)</small>
+                <h4 class="mt-2 fw-bold">{{ summary.avg_duration_7d|floatformat:0 }} ms</h4>
+            </div>
+        </div>
+
+        <!-- Runs 24h -->
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 border-start border-4 border-info p-3">
+                <small class="text-muted">Runs (24 Hours)</small>
+                <h4 class="mt-2 fw-bold">{{ summary.runs_24h }}</h4>
+            </div>
+        </div>
+
+        <!-- Failures -->
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 border-start border-4 border-danger p-3">
+                <small class="text-muted">Failures (7 Days)</small>
+                <h4 class="mt-2 fw-bold text-danger">{{ summary.failures_7d }}</h4>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Trend Chart -->
+    <div class="card shadow-sm border-0 p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-semibold mb-0">7-Day Execution Trend</h5>
+        </div>
+        <canvas id="trendChart" height="90"></canvas>
+    </div>
+
+    <!-- Recent Runs -->
+    <div class="card shadow-sm border-0 p-4">
+        <h5 class="fw-semibold mb-3">Recent Executions</h5>
+
+        <div class="table-responsive">
+            <table class="table align-middle table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Started</th>
+                        <th>Status</th>
+                        <th>Duration (ms)</th>
+                        <th>Errors</th>
+                        <th>Trigger</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for run in recent %}
+                    <tr>
+                        <td>{{ run.started_at|date:"Y-m-d H:i" }}</td>
+
+                        <td>
+                            {% if run.status == "SUCCESS" %}
+                                <span class="badge bg-success">Success</span>
+                            {% elif run.status == "FAILED" %}
+                                <span class="badge bg-danger">Failed</span>
+                            {% elif run.status == "PARTIAL" %}
+                                <span class="badge bg-warning text-dark">Partial</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ run.status }}</span>
+                            {% endif %}
+                        </td>
+
+                        <td>{{ run.duration_ms }}</td>
+                        <td>
+                            {% if run.total_errors > 0 %}
+                                <span class="text-danger fw-semibold">{{ run.total_errors }}</span>
+                            {% else %}
+                                {{ run.total_errors }}
+                            {% endif %}
+                        </td>
+
+                        <td>{{ run.triggered_by }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">
+                            No lifecycle runs recorded yet.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const ctx = document.getElementById('trendChart');
+
+new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: {{ trend.labels|safe }},
+        datasets: [
+            {
+                label: 'Total Runs',
+                data: {{ trend.total_runs|safe }},
+                borderColor: '#0d6efd',
+                backgroundColor: 'rgba(13,110,253,0.1)',
+                borderWidth: 2,
+                tension: 0.4,
+                fill: true
+            },
+            {
+                label: 'Failures',
+                data: {{ trend.failures|safe }},
+                borderColor: '#dc3545',
+                backgroundColor: 'rgba(220,53,69,0.1)',
+                borderWidth: 2,
+                tension: 0.4,
+                fill: true
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                position: 'top'
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    precision: 0
+                }
+            }
+        }
+    }
+});
+</script>
+
+{% endblock %}
