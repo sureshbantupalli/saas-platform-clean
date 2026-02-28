@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 # ==============================
@@ -21,7 +21,7 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 
 DEBUG = os.getenv("DEBUG") == "True"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
 
 
 # ==============================
@@ -40,10 +40,11 @@ INSTALLED_APPS = [
     'apps.core',
     'apps.memberships',
     'apps.accounts',
-    'apps.authority.apps.AuthorityConfig',
-    'members',
     'apps.lifecycles',
     'apps.monitoring',
+    'apps.authority.apps.AuthorityConfig',
+    'members',
+    'crm',
 ]
 
 MIDDLEWARE = [
@@ -161,3 +162,25 @@ REST_FRAMEWORK = {
         "rest_framework.filters.OrderingFilter",
     ],
 }
+
+# ==============================
+# PRODUCTION SECURITY HARDENING
+# ==============================
+
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+
+CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_HTTPONLY = True
+
+SECURE_REFERRER_POLICY = "same-origin"
+
+# ==============================
+# HTTPS ENFORCEMENT (Production Only)
+# ==============================
+
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = True

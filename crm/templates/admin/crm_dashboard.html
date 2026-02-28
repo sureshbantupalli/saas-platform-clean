@@ -1,0 +1,140 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+
+<h1>CRM Dashboard</h1>
+
+<form method="get">
+    <label><strong>Select Tenant:</strong></label>
+    <select name="tenant_id" onchange="this.form.submit()">
+        {% for t in tenants %}
+            <option value="{{ t.id }}" {% if tenant and t.id == tenant.id %}selected{% endif %}>
+                {{ t.name }}
+            </option>
+        {% endfor %}
+    </select>
+</form>
+
+<hr>
+
+{% if tenant %}
+
+<h3>Tenant: {{ tenant }}</h3>
+
+<hr>
+
+<ul>
+    <li><strong>Total Enquiries:</strong> {{ metrics.total_enquiries }}</li>
+    <li><strong>Converted:</strong> {{ metrics.converted }}</li>
+    <li><strong>Lost:</strong> {{ metrics.lost }}</li>
+    <li><strong>Conversion Rate:</strong> {{ metrics.conversion_rate }}%</li>
+</ul>
+
+<hr>
+
+<h3>📊 Pipeline Funnel</h3>
+
+<div style="
+    display:flex;
+    gap:12px;
+    align-items:center;
+    flex-wrap:wrap;
+">
+
+    {% for stage in funnel %}
+
+        <a href="{{ enquiry_changelist_url }}?tenant__id__exact={{ tenant.id }}&current_stage__id__exact={{ stage.id }}"
+           style="text-decoration:none;">
+
+            <div style="
+                min-width:120px;
+                padding:12px;
+                text-align:center;
+                border-radius:6px;
+                background:#f8f9fa;
+                transition:all 0.2s ease;
+
+                {% if stage.is_conversion %}
+                    border:2px solid #28a745;
+                {% elif stage.is_loss %}
+                    border:2px solid #dc3545;
+                {% else %}
+                    border:1px solid #ddd;
+                {% endif %}
+            ">
+                <div style="font-size:13px; margin-bottom:6px; color:#333;">
+                    {{ stage.name }}
+                </div>
+
+                <div style="
+                    font-size:20px;
+                    font-weight:bold;
+
+                    {% if stage.is_conversion %}
+                        color:#28a745;
+                    {% elif stage.is_loss %}
+                        color:#dc3545;
+                    {% else %}
+                        color:#333;
+                    {% endif %}
+                ">
+                    {{ stage.count }}
+                </div>
+            </div>
+
+        </a>
+
+        {% if not forloop.last %}
+            <div style="font-size:18px; color:#999;">→</div>
+        {% endif %}
+
+    {% endfor %}
+
+</div>
+<hr>
+
+<h3>Branch Breakdown</h3>
+<ul>
+    {% for branch in metrics.branch_breakdown %}
+        <li>{{ branch.branch__name }} — {{ branch.count }}</li>
+    {% empty %}
+        <li>No data</li>
+    {% endfor %}
+</ul>
+
+<hr>
+
+<h3>⚠ Stale Enquiries (No Progress > 3 Days)</h3>
+<ul>
+    {% for enquiry in stale_enquiries %}
+        <li>
+            <strong>{{ enquiry.full_name }}</strong> —
+            Stage: {{ enquiry.current_stage.name }} —
+            Branch: {{ enquiry.branch.name }} —
+            Created: {{ enquiry.created_at|date:"Y-m-d" }}
+        </li>
+    {% empty %}
+        <li>No stale enquiries 🎉</li>
+    {% endfor %}
+</ul>
+
+<hr>
+
+<h3>🏆 Staff Performance</h3>
+<ul>
+    {% for staff in staff_performance %}
+        <li>
+            {{ staff.assigned_to__email }} —
+            Total: {{ staff.total }} —
+            Converted: {{ staff.converted }}
+        </li>
+    {% empty %}
+        <li>No assigned enquiries</li>
+    {% endfor %}
+</ul>
+
+{% else %}
+<p>No tenant found.</p>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends "admin/change_list.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="crm-dashboard">
+
+    <h2 style="margin-bottom:15px;">📊 CRM Overview</h2>
+
+    <!-- Navigation Buttons -->
+    <div style="margin-bottom:15px; display:flex; gap:10px; flex-wrap:wrap;">
+
+        <a href="{% url 'admin:crm_enquiry_changelist' %}"
+           class="button"
+           style="background:#6c757d;color:white;padding:6px 12px;border-radius:4px;text-decoration:none;">
+            🔄 Clear Filters
+        </a>
+
+        <a href="{% url 'admin:crm_dashboard' %}?tenant_id={{ request.GET.tenant__id__exact|default:'' }}"
+           class="button"
+           style="background:#007bff;color:white;padding:6px 12px;border-radius:4px;text-decoration:none;">
+            📊 Back to CRM Dashboard
+        </a>
+
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="kpi-row">
+
+        <div class="kpi-card">
+            <h4>Total Enquiries</h4>
+            <p>{{ total_enquiries|default:0 }}</p>
+        </div>
+
+        <div class="kpi-card green">
+            <h4>Converted</h4>
+            <p>{{ converted_count|default:0 }}</p>
+        </div>
+
+        <div class="kpi-card red">
+            <h4>Lost</h4>
+            <p>{{ lost_count|default:0 }}</p>
+        </div>
+
+        <div class="kpi-card blue">
+            <h4>Conversion Rate</h4>
+            <p>{{ conversion_rate|default:0 }}%</p>
+        </div>
+
+    </div>
+
+    <hr style="margin:20px 0;">
+
+</div>
+
+{{ block.super }}
+
+{% endblock %}
+
+
+{% block extrahead %}
+{{ block.super }}
+
+<style>
+
+.crm-dashboard {
+    margin-bottom: 20px;
+}
+
+.kpi-row {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.kpi-card {
+    background: #ffffff;
+    padding: 15px;
+    border-radius: 8px;
+    width: 200px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    transition: transform 0.1s ease-in-out;
+}
+
+.kpi-card:hover {
+    transform: translateY(-2px);
+}
+
+.kpi-card h4 {
+    margin: 0;
+    font-size: 14px;
+    color: #666;
+}
+
+.kpi-card p {
+    margin: 5px 0 0;
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.kpi-card.green { border-left: 4px solid #28a745; }
+.kpi-card.red { border-left: 4px solid #dc3545; }
+.kpi-card.blue { border-left: 4px solid #007bff; }
+
+</style>
+
+{% endblock %}

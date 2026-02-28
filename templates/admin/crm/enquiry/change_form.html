@@ -1,0 +1,18 @@
+{% extends "admin/change_form.html" %}
+{% load static %}
+
+{% block content %}
+
+{% if show_convert_button %}
+    <div style="margin-bottom:15px; padding:10px; background:#f8f9fa; border-radius:6px;">
+        <a href="{% url 'admin:crm_enquiry_convert' original.pk %}"
+           class="button"
+           style="background:#28a745; color:white; padding:8px 14px; border-radius:4px; text-decoration:none;">
+            ✅ Convert to Member
+        </a>
+    </div>
+{% endif %}
+
+{{ block.super }}
+
+{% endblock %}

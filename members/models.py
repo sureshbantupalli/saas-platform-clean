@@ -32,7 +32,7 @@ class Member(models.Model):
 
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
-    email = models.EmailField()
+    email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=20, blank=True)
 
     # 🔥 Many-to-Many Branch Relationship
@@ -56,9 +56,9 @@ class Member(models.Model):
             UniqueConstraint(
                 Lower("email"),
                 "tenant",
-                condition=Q(is_deleted=False),
+                condition=Q(is_deleted=False) & Q(email__isnull=False),
                 name="unique_active_email_per_tenant"
-            )
+        )
         ]
 
     def clean(self):
