@@ -21,7 +21,6 @@ class UserAdmin(BaseUserAdmin):
         "tenant",
         "role",
         "is_platform_admin",
-        "is_staff",
         "is_active",
     )
 

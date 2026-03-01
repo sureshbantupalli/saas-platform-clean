@@ -125,6 +125,16 @@ class EnquiryAdmin(TenantScopedAdmin):
     autocomplete_fields = ("assigned_to",)
     exclude = ("created_by",)
 
+    def response_add(self, request, obj, post_url_continue=None):
+        if "_continue" not in request.POST:
+            return redirect(reverse("crm_ui:enquiry_list"))
+        return super().response_add(request, obj, post_url_continue)
+
+    def response_change(self, request, obj):
+        if "_continue" not in request.POST:
+            return redirect(reverse("crm_ui:enquiry_list"))
+        return super().response_change(request, obj)
+
     # --------------------------------------------------------
     # Dynamic Display
     # --------------------------------------------------------

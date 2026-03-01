@@ -108,3 +108,20 @@ class User(AbstractUser):
                 raise ValueError("Role must belong to the same tenant.")
 
         super().save(*args, **kwargs)
+
+    # -------------------------------------------------
+    # 🔒 Restrict Django Admin Access
+    # -------------------------------------------------
+
+    def has_module_perms(self, app_label):
+        return self.is_platform_admin and self.is_active
+
+    def has_perm(self, perm, obj=None):
+        return self.is_platform_admin and self.is_active
+
+    @property
+    def is_staff(self):
+        """
+        Only platform admins are treated as staff for Django Admin.
+        """
+        return self.is_platform_admin

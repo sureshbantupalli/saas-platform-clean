@@ -1,0 +1,41 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+
+<h2 class="mb-4">Enquiry Details</h2>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <strong>Name:</strong> {{ enquiry.full_name }}
+            </div>
+            <div class="col-md-6">
+                <strong>Phone:</strong> {{ enquiry.phone }}
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <strong>Stage:</strong>
+                <span class="badge bg-primary">
+                    {{ enquiry.current_stage }}
+                </span>
+            </div>
+            <div class="col-md-6">
+                <strong>Created:</strong>
+                {{ enquiry.created_at|date:"Y-m-d H:i" }}
+            </div>
+        </div>
+
+        <hr>
+
+        <a href="{% url 'crm_ui:enquiry_list' %}" class="btn btn-secondary">
+            Back to List
+        </a>
+
+    </div>
+</div>
+
+{% endblock %}

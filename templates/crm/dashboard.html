@@ -1,0 +1,164 @@
+{% extends "crm/base.html" %}
+
+{% block content %}
+
+<div class="container-fluid">
+
+  <h2 class="mb-4">CRM Dashboard</h2>
+
+  <!-- ===================== -->
+  <!-- KPI CARDS -->
+  <!-- ===================== -->
+  <div class="row g-3 mb-4">
+
+      <div class="col-md-3">
+          <div class="card shadow-sm border-0">
+              <div class="card-body">
+                  <h6 class="text-muted">Total Enquiries</h6>
+                  <h3>{{ total_enquiries }}</h3>
+              </div>
+          </div>
+      </div>
+
+      <div class="col-md-3">
+          <div class="card shadow-sm border-0">
+              <div class="card-body">
+                  <h6 class="text-muted">New Enquiries</h6>
+                  <h3>{{ new_count }}</h3>
+              </div>
+          </div>
+      </div>
+
+      <div class="col-md-3">
+          <div class="card shadow-sm border-0">
+              <div class="card-body">
+                  <h6 class="text-muted">Converted</h6>
+                  <h3>{{ converted_count }}</h3>
+              </div>
+          </div>
+      </div>
+
+      <div class="col-md-3">
+          <div class="card shadow-sm border-0">
+              <div class="card-body">
+                  <h6 class="text-muted">Conversion Rate</h6>
+                  <h3>{{ conversion_rate }}%</h3>
+              </div>
+          </div>
+      </div>
+
+  </div>
+
+
+  <!-- ===================== -->
+  <!-- FUNNEL + RECENT -->
+  <!-- ===================== -->
+  <div class="row">
+
+      <!-- Funnel Section -->
+      <div class="col-md-8">
+          <div class="card shadow-sm border-0 mb-4">
+              <div class="card-body">
+                  <h5 class="mb-4">Conversion Funnel</h5>
+
+                  {% for stage in stage_counts %}
+                      <div class="mb-3">
+                          <div class="d-flex justify-content-between">
+                              <span>{{ stage.label }}</span>
+                              <span>{{ stage.count }} ({{ stage.percentage }}%)</span>
+                          </div>
+
+                          <div class="progress">
+                              <div class="progress-bar"
+                                   role="progressbar"
+                                   style="width: {{ stage.percentage }}%;">
+                              </div>
+                          </div>
+                      </div>
+                  {% empty %}
+                      <p class="text-muted">No funnel data available.</p>
+                  {% endfor %}
+
+              </div>
+          </div>
+      </div>
+
+
+      <!-- Recent Enquiries Section -->
+      <div class="col-md-4">
+          <div class="card shadow-sm border-0 mb-4">
+              <div class="card-body">
+                  <h5 class="mb-4">Recent Enquiries</h5>
+
+                  <ul class="list-group list-group-flush">
+                      {% for enquiry in recent_enquiries %}
+                          <li class="list-group-item d-flex justify-content-between align-items-center">
+                              <div>
+                                  <strong>{{ enquiry.full_name }}</strong><br>
+                                  <small class="text-muted">
+                                      {{ enquiry.created_at|date:"d M Y" }}
+                                  </small>
+                              </div>
+
+                              {% if enquiry.converted_member %}
+                                  <span class="badge bg-success">Converted</span>
+                              {% else %}
+                                  <span class="badge bg-secondary">New</span>
+                              {% endif %}
+                          </li>
+                      {% empty %}
+                          <li class="list-group-item">
+                              No enquiries yet.
+                          </li>
+                      {% endfor %}
+                  </ul>
+
+              </div>
+          </div>
+      </div>
+
+  </div>
+
+
+  <!-- ===================== -->
+  <!-- STAFF PERFORMANCE -->
+  <!-- ===================== -->
+  <div class="card shadow-sm border-0 mb-4">
+      <div class="card-body">
+          <h5 class="mb-4">Staff Performance</h5>
+
+          <div class="table-responsive">
+              <table class="table align-middle">
+                  <thead>
+                      <tr>
+                          <th>Staff</th>
+                          <th>Total Assigned</th>
+                          <th>Converted</th>
+                          <th>Conversion %</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      {% for staff in staff_performance %}
+                          <tr>
+                              <td>{{ staff.username }}</td>
+                              <td>{{ staff.total }}</td>
+                              <td>{{ staff.converted }}</td>
+                              <td>{{ staff.conversion_rate }}%</td>
+                          </tr>
+                      {% empty %}
+                          <tr>
+                              <td colspan="4" class="text-muted">
+                                  No assigned enquiries yet.
+                              </td>
+                          </tr>
+                      {% endfor %}
+                  </tbody>
+              </table>
+          </div>
+
+      </div>
+  </div>
+
+</div>
+
+{% endblock %}

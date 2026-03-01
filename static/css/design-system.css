@@ -1,0 +1,18 @@
+:root {
+    --brand-primary: #2563eb;
+    --brand-bg: #f8fafc;
+    --brand-card-bg: #ffffff;
+    --brand-border: #e2e8f0;
+}
+
+body {
+    background-color: var(--brand-bg);
+}
+
+.navbar {
+    background-color: var(--brand-primary) !important;
+}
+
+.card {
+    border: 1px solid var(--brand-border);
+}

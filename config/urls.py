@@ -30,6 +30,9 @@ urlpatterns = [
     # 🔵 Admin
     path("admin/", admin.site.urls),
 
+    # 🔵 CRM
+    path("crm/", include("crm.urls")),
+
     # 🔵 HTML Members App (Template-Based)
     path("members/", include("members.urls")),
 
