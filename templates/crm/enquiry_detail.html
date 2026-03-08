@@ -1,4 +1,4 @@
-{% extends "crm/base.html" %}
+{% extends "base.html" %}
 
 {% block content %}
 
@@ -31,9 +31,227 @@
 
         <hr>
 
-        <a href="{% url 'crm_ui:enquiry_list' %}" class="btn btn-secondary">
+        <!-- ===================================== -->
+        <!-- CHANGE LEAD STAGE (NEW FEATURE) -->
+        <!-- ===================================== -->
+
+        {% if not enquiry.converted_member %}
+
+        <div class="card border-light mb-3">
+            <div class="card-body">
+
+                <strong>Change Lead Stage</strong>
+
+                <form method="post"
+                      action="{% url 'crm:change_enquiry_stage' enquiry.id %}"
+                      class="mt-2">
+
+                    {% csrf_token %}
+
+                    <div class="row">
+
+                        <div class="col-md-6">
+
+                            <select name="stage_id" class="form-control">
+
+                                {% for stage in stages %}
+
+                                    <option value="{{ stage.id }}"
+                                    {% if enquiry.current_stage.id == stage.id %}
+                                        selected
+                                    {% endif %}
+                                    >
+                                        {{ stage.name }}
+                                    </option>
+
+                                {% endfor %}
+
+                            </select>
+
+                        </div>
+
+                        <div class="col-md-3">
+
+                            <button type="submit" class="btn btn-primary">
+                                Update Stage
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                </form>
+
+            </div>
+        </div>
+
+        {% endif %}
+
+        <hr>
+
+        <!-- ============================= -->
+        <!-- Conversion Actions -->
+        <!-- ============================= -->
+
+        {% if enquiry.converted_member %}
+
+            <div class="alert alert-success">
+                This enquiry has been converted to a member.
+            </div>
+
+            <a href="{% url 'members:member_detail' enquiry.converted_member.pk %}"
+               class="btn btn-primary">
+                View Member
+            </a>
+
+        {% else %}
+
+            {% if can_convert %}
+            <form method="post"
+                  action="{% url 'crm:enquiry_convert' enquiry.pk %}"
+                  style="margin-top: 15px;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-success">
+                    Convert to Member
+                </button>
+            </form>
+            {% endif %}
+
+            <a href="{% url 'crm:enquiry_edit' enquiry.pk %}" class="btn btn-warning">
+                Edit Enquiry
+            </a>
+
+        {% endif %}
+
+        <hr>
+
+        <a href="{% url 'crm:enquiry_list' %}" class="btn btn-secondary">
             Back to List
         </a>
+
+    </div>
+</div>
+
+<hr class="mt-4">
+
+<h5>Next Follow-up</h5>
+
+<form method="post"
+      action="{% url 'crm:update_followup_date' enquiry.id %}"
+      class="mb-4">
+
+    {% csrf_token %}
+
+    <div class="row">
+
+        <div class="col-md-4">
+
+            <input type="date"
+                   name="next_followup_date"
+                   class="form-control"
+                   value="{{ enquiry.next_followup_date|date:'Y-m-d' }}"
+                   required>
+
+        </div>
+
+        <div class="col-md-3">
+
+            <button class="btn btn-primary">
+                Save Follow-up
+            </button>
+
+        </div>
+
+    </div>
+
+</form>
+
+<hr class="mt-4">
+
+<h5>Add Note</h5>
+
+<form method="post"
+      action="{% url 'crm:enquiry_add_note' enquiry.pk %}"
+      class="mb-4">
+
+    {% csrf_token %}
+
+    <div class="input-group">
+
+        <textarea
+            name="note"
+            class="form-control"
+            rows="2"
+            placeholder="Add follow-up note..."
+            required></textarea>
+
+        <button class="btn btn-primary">
+            Add Note
+        </button>
+
+    </div>
+
+</form>
+
+<hr class="mt-5">
+
+<h4 class="mb-3">Lead Activity Timeline</h4>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body">
+
+        <ul class="list-group list-group-flush">
+
+            {% for activity in activities %}
+            <li class="list-group-item">
+
+                <div class="d-flex justify-content-between">
+
+                    <div>
+
+                        {% if activity.action_type == "CREATED" %}
+                            Lead created
+
+                        {% elif activity.action_type == "ASSIGNED" %}
+                            Assigned to {{ activity.performed_by.email }}
+
+                        {% elif activity.action_type == "STAGE_CHANGED" %}
+                            Stage updated
+
+                        {% elif activity.action_type == "NOTE_ADDED" %}
+                            Note added
+
+                        {% elif activity.action_type == "CONVERTED" %}
+                            <span class="text-success">
+                                Converted to Member
+                            </span>
+
+                        {% else %}
+                            Activity recorded
+                        {% endif %}
+
+                    </div>
+
+                    <small class="text-muted">
+                        {{ activity.created_at|date:"d M Y H:i" }}
+                    </small>
+
+                </div>
+
+                {% if activity.notes %}
+                    <div class="text-muted small mt-1">
+                        {{ activity.notes }}
+                    </div>
+                {% endif %}
+
+            </li>
+            {% empty %}
+            <li class="list-group-item text-muted">
+                No activity yet.
+            </li>
+            {% endfor %}
+
+        </ul>
 
     </div>
 </div>

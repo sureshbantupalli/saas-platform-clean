@@ -1,163 +1,855 @@
-{% extends "crm/base.html" %}
+{% extends "base.html" %}
 
 {% block content %}
 
-<div class="container-fluid">
+<div class="container-fluid px-4 py-3">
 
-  <h2 class="mb-4">CRM Dashboard</h2>
+<h2 class="mb-4">CRM Dashboard</h2>
 
-  <!-- ===================== -->
-  <!-- KPI CARDS -->
-  <!-- ===================== -->
-  <div class="row g-3 mb-4">
+{% if needs_attention.ignored_count or needs_attention.aging_count %}
 
-      <div class="col-md-3">
-          <div class="card shadow-sm border-0">
-              <div class="card-body">
-                  <h6 class="text-muted">Total Enquiries</h6>
-                  <h3>{{ total_enquiries }}</h3>
-              </div>
-          </div>
-      </div>
+<div class="alert alert-warning mb-4">
 
-      <div class="col-md-3">
-          <div class="card shadow-sm border-0">
-              <div class="card-body">
-                  <h6 class="text-muted">New Enquiries</h6>
-                  <h3>{{ new_count }}</h3>
-              </div>
-          </div>
-      </div>
+{% if needs_attention.ignored_count %}
+<div>⚠ {{ needs_attention.ignored_count }} leads have no follow-up scheduled</div>
+{% endif %}
 
-      <div class="col-md-3">
-          <div class="card shadow-sm border-0">
-              <div class="card-body">
-                  <h6 class="text-muted">Converted</h6>
-                  <h3>{{ converted_count }}</h3>
-              </div>
-          </div>
-      </div>
+{% if needs_attention.aging_count %}
+<div>🔥 {{ needs_attention.aging_count }} leads are older than 7 days</div>
+{% endif %}
 
-      <div class="col-md-3">
-          <div class="card shadow-sm border-0">
-              <div class="card-body">
-                  <h6 class="text-muted">Conversion Rate</h6>
-                  <h3>{{ conversion_rate }}%</h3>
-              </div>
-          </div>
-      </div>
+</div>
 
-  </div>
+{% endif %}
+
+<!-- ===================== -->
+<!-- KPI CARDS -->
+<!-- ===================== -->
+
+<div class="row g-3 mb-4">
+
+<div class="col-lg-3 col-md-6">
+<div class="card shadow-sm border-0">
+<div class="card-body">
+<h6 class="text-muted">Total Enquiries</h6>
+<h3>{{ total_enquiries }}</h3>
+</div>
+</div>
+</div>
+
+<div class="col-lg-3 col-md-6">
+<div class="card shadow-sm border-0">
+<div class="card-body">
+<h6 class="text-muted">New Enquiries</h6>
+<h3>{{ new_count }}</h3>
+</div>
+</div>
+</div>
+
+<div class="col-lg-3 col-md-6">
+<div class="card shadow-sm border-0">
+<div class="card-body">
+<h6 class="text-muted">Converted</h6>
+<h3>{{ converted_count }}</h3>
+</div>
+</div>
+</div>
+
+<div class="col-lg-3 col-md-6">
+<div class="card shadow-sm border-0">
+<div class="card-body">
+<h6 class="text-muted">Conversion Rate</h6>
+<h3>{{ conversion_rate }}%</h3>
+</div>
+</div>
+</div>
+
+</div>
+
+<div class="dashboard-section-title">
+Followups
+</div>
+
+<!-- ===================== -->
+<!-- FOLLOWUP ALERT CARDS -->
+<!-- ===================== -->
+
+<div class="dashboard-section">
+
+<div class="row g-4">
+
+<!-- Overdue -->
+<div class="col-lg-4 col-md-6">
+<div class="card border-danger">
+
+<div class="card-header bg-danger text-white d-flex justify-content-between">
+<span>⚠ Overdue Followups</span>
+<a href="{% url 'crm:enquiry_list' %}?followup=overdue"
+class="text-white small text-decoration-none">View All →</a>
+</div>
+
+<div class="card-body">
+
+{% if overdue_followups %}
+<ul class="list-group">
+
+{% for enquiry in overdue_followups %}
+
+<li class="list-group-item">
+
+<strong>{{ enquiry.full_name }}</strong>
+
+<span class="ms-2 small
+{% if enquiry.lead_temperature == 'hot' %}
+text-danger
+{% elif enquiry.lead_temperature == 'warm' %}
+text-warning
+{% else %}
+text-secondary
+{% endif %}
+">
+{{ enquiry.temperature_label }}
+</span>
+
+<span class="ms-2 small
+{% if enquiry.lead_age_days >= 10 %}
+text-danger
+{% elif enquiry.lead_age_days >= 5 %}
+text-warning
+{% else %}
+text-muted
+{% endif %}
+">
+• {{ enquiry.lead_age_days }}d
+</span>
+
+<br>
+
+Phone: {{ enquiry.phone }}
+
+<a href="tel:{{ enquiry.phone }}"
+class="ms-2 text-primary">
+<i class="bi bi-telephone-fill"></i>
+</a>
+
+<a href="https://wa.me/{{ enquiry.phone }}"
+target="_blank"
+class="ms-2 text-success">
+<i class="bi bi-whatsapp"></i>
+</a>
+
+<br>
+
+<small class="text-muted">
+Due: {{ enquiry.next_followup_date }}
+</small>
+
+</li>
+
+{% endfor %}
+
+</ul>
+
+{% else %}
+
+<p class="text-muted">No overdue followups</p>
+
+{% endif %}
+
+</div>
+</div>
+</div>
 
 
-  <!-- ===================== -->
-  <!-- FUNNEL + RECENT -->
-  <!-- ===================== -->
-  <div class="row">
+<!-- Today -->
+<div class="col-lg-4 col-md-6">
+<div class="card border-warning">
 
-      <!-- Funnel Section -->
-      <div class="col-md-8">
-          <div class="card shadow-sm border-0 mb-4">
-              <div class="card-body">
-                  <h5 class="mb-4">Conversion Funnel</h5>
+<div class="card-header bg-warning d-flex justify-content-between">
+<span>📅 Today's Followups</span>
 
-                  {% for stage in stage_counts %}
-                      <div class="mb-3">
-                          <div class="d-flex justify-content-between">
-                              <span>{{ stage.label }}</span>
-                              <span>{{ stage.count }} ({{ stage.percentage }}%)</span>
-                          </div>
+<a href="{% url 'crm:enquiry_list' %}?followup=today"
+class="text-dark small text-decoration-none">
+View All →
+</a>
 
-                          <div class="progress">
-                              <div class="progress-bar"
-                                   role="progressbar"
-                                   style="width: {{ stage.percentage }}%;">
-                              </div>
-                          </div>
-                      </div>
-                  {% empty %}
-                      <p class="text-muted">No funnel data available.</p>
-                  {% endfor %}
+</div>
 
-              </div>
-          </div>
-      </div>
+<div class="card-body">
+
+{% if today_followups %}
+<ul class="list-group">
+
+{% for enquiry in today_followups %}
+
+<li class="list-group-item">
+
+<strong>{{ enquiry.full_name }}</strong>
+
+<span class="ms-2 small text-warning">
+{{ enquiry.temperature_label }}
+</span>
+
+<span class="ms-2 small
+{% if enquiry.lead_age_days >= 10 %}
+text-danger
+{% elif enquiry.lead_age_days >= 5 %}
+text-warning
+{% else %}
+text-muted
+{% endif %}
+">
+• {{ enquiry.lead_age_days }}d
+</span>
+
+<br>
+
+Phone: {{ enquiry.phone }}
+
+<a href="tel:{{ enquiry.phone }}"
+class="ms-2 text-primary">
+<i class="bi bi-telephone-fill"></i>
+</a>
+
+<a href="https://wa.me/{{ enquiry.phone }}"
+target="_blank"
+class="ms-2 text-success">
+<i class="bi bi-whatsapp"></i>
+</a>
+
+</li>
+
+{% endfor %}
+
+</ul>
+
+{% else %}
+
+<p class="text-muted">No followups today</p>
+
+{% endif %}
+
+</div>
+</div>
+</div>
 
 
-      <!-- Recent Enquiries Section -->
-      <div class="col-md-4">
-          <div class="card shadow-sm border-0 mb-4">
-              <div class="card-body">
-                  <h5 class="mb-4">Recent Enquiries</h5>
+<!-- Upcoming -->
+<div class="col-lg-4 col-md-6">
+<div class="card border-info">
 
-                  <ul class="list-group list-group-flush">
-                      {% for enquiry in recent_enquiries %}
-                          <li class="list-group-item d-flex justify-content-between align-items-center">
-                              <div>
-                                  <strong>{{ enquiry.full_name }}</strong><br>
-                                  <small class="text-muted">
-                                      {{ enquiry.created_at|date:"d M Y" }}
-                                  </small>
-                              </div>
+<div class="card-header bg-info text-white d-flex justify-content-between">
+<span>🔔 Upcoming Followups</span>
 
-                              {% if enquiry.converted_member %}
-                                  <span class="badge bg-success">Converted</span>
-                              {% else %}
-                                  <span class="badge bg-secondary">New</span>
-                              {% endif %}
-                          </li>
-                      {% empty %}
-                          <li class="list-group-item">
-                              No enquiries yet.
-                          </li>
-                      {% endfor %}
-                  </ul>
+<a href="{% url 'crm:enquiry_list' %}?followup=upcoming"
+class="text-white small text-decoration-none">
+View All →
+</a>
 
-              </div>
-          </div>
-      </div>
+</div>
 
-  </div>
+<div class="card-body">
+
+{% if upcoming_followups %}
+<ul class="list-group">
+
+{% for enquiry in upcoming_followups %}
+
+<li class="list-group-item">
+
+<strong>{{ enquiry.full_name }}</strong>
+
+<span class="ms-2 small
+{% if enquiry.lead_temperature == 'hot' %}
+text-danger
+{% elif enquiry.lead_temperature == 'warm' %}
+text-warning
+{% else %}
+text-secondary
+{% endif %}
+">
+{{ enquiry.temperature_label }}
+</span>
+
+<span class="ms-2 small
+{% if enquiry.lead_age_days >= 10 %}
+text-danger
+{% elif enquiry.lead_age_days >= 5 %}
+text-warning
+{% else %}
+text-muted
+{% endif %}
+">
+• {{ enquiry.lead_age_days }}d
+</span>
+
+<br>
+
+Phone: {{ enquiry.phone }}
+
+<a href="tel:{{ enquiry.phone }}"
+class="ms-2 text-primary">
+<i class="bi bi-telephone-fill"></i>
+</a>
+
+<a href="https://wa.me/{{ enquiry.phone }}"
+target="_blank"
+class="ms-2 text-success">
+<i class="bi bi-whatsapp"></i>
+</a>
+
+<br>
+
+<small class="text-muted">
+Due: {{ enquiry.next_followup_date }}
+</small>
+
+</li>
+
+{% endfor %}
+
+</ul>
+
+{% else %}
+
+<p class="text-muted">No upcoming followups</p>
+
+{% endif %}
+
+</div>
+</div>
+</div>
+
+</div>
+</div>
+
+<div class="dashboard-section-title">
+Lead Pipeline
+</div>
+
+<!-- ===================== -->
+<!-- FUNNEL + RECENT -->
+<!-- ===================== -->
+
+<div class="dashboard-section">
+
+<div class="row g-4">
+
+<!-- Funnel -->
+<div class="col-md-8">
+
+<div class="card shadow-sm border-0">
+<div class="card-body">
+
+<h5 class="mb-4">Conversion Funnel</h5>
+
+{% for stage in stage_counts %}
+
+<div class="mb-3">
+
+<div class="d-flex justify-content-between">
+
+<span>{{ stage.label }}</span>
+
+<span>{{ stage.count }} ({{ stage.percentage }}%)</span>
+
+</div>
+
+<div class="progress">
+
+<div class="progress-bar"
+style="width: {{ stage.percentage }}%;">
+</div>
+
+</div>
+
+</div>
+
+{% empty %}
+
+<p class="text-muted">No funnel data available.</p>
+
+{% endfor %}
+
+</div>
+</div>
+
+</div>
 
 
-  <!-- ===================== -->
-  <!-- STAFF PERFORMANCE -->
-  <!-- ===================== -->
-  <div class="card shadow-sm border-0 mb-4">
-      <div class="card-body">
-          <h5 class="mb-4">Staff Performance</h5>
+<!-- Recent -->
+<div class="col-lg-4">
 
-          <div class="table-responsive">
-              <table class="table align-middle">
-                  <thead>
-                      <tr>
-                          <th>Staff</th>
-                          <th>Total Assigned</th>
-                          <th>Converted</th>
-                          <th>Conversion %</th>
-                      </tr>
-                  </thead>
-                  <tbody>
-                      {% for staff in staff_performance %}
-                          <tr>
-                              <td>{{ staff.username }}</td>
-                              <td>{{ staff.total }}</td>
-                              <td>{{ staff.converted }}</td>
-                              <td>{{ staff.conversion_rate }}%</td>
-                          </tr>
-                      {% empty %}
-                          <tr>
-                              <td colspan="4" class="text-muted">
-                                  No assigned enquiries yet.
-                              </td>
-                          </tr>
-                      {% endfor %}
-                  </tbody>
-              </table>
-          </div>
+<div class="card shadow-sm border-0">
 
-      </div>
-  </div>
+<div class="card-body">
+
+<h5 class="mb-4">Recent Enquiries</h5>
+
+<ul class="list-group list-group-flush">
+
+{% for enquiry in recent_enquiries %}
+
+<li class="list-group-item d-flex justify-content-between align-items-center">
+
+<div>
+
+<strong>{{ enquiry.full_name }}</strong><br>
+
+<small class="text-muted">
+
+{{ enquiry.created_at|date:"d M Y" }}
+
+</small>
+
+</div>
+
+{% if enquiry.converted_member %}
+
+<span class="badge bg-success">Converted</span>
+
+{% else %}
+
+<span class="badge bg-secondary">New</span>
+
+{% endif %}
+
+</li>
+
+{% empty %}
+
+<li class="list-group-item">No enquiries yet.</li>
+
+{% endfor %}
+
+</ul>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+<div class="dashboard-section-title">
+Team Performance
+</div>
+
+<!-- ===================== -->
+<!-- STAFF PERFORMANCE -->
+<!-- ===================== -->
+
+<div class="dashboard-section">
+
+<div class="card shadow-sm border-0">
+
+<div class="card-body">
+
+<h5 class="mb-4">Staff Performance</h5>
+
+<div class="table-responsive">
+
+<table class="table align-middle">
+
+<thead>
+
+<tr>
+
+<th>Staff</th>
+
+<th>Total Assigned</th>
+
+<th>Converted</th>
+
+<th>Conversion %</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+{% for staff in staff_performance %}
+
+<tr>
+
+<td>{{ staff.display }}</td>
+
+<td>{{ staff.total }}</td>
+
+<td>{{ staff.converted }}</td>
+
+<td>{{ staff.conversion_rate }}%</td>
+
+</tr>
+
+{% empty %}
+
+<tr>
+
+<td colspan="4" class="text-muted">
+
+No assigned enquiries yet.
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+
+<!-- ===================== -->
+<!-- FOLLOWUP DASHBOARD -->
+<!-- ===================== -->
+
+<div class="dashboard-section">
+
+<div class="card shadow-sm border-0">
+
+<div class="card-body">
+
+<h5 class="mb-4">Follow-up Dashboard</h5>
+
+<div class="row g-4">
+
+<!-- Overdue -->
+<div class="col-md-3">
+
+<h6 class="text-danger">Overdue</h6>
+
+<ul class="list-group list-group-flush">
+
+{% for enquiry in overdue_followups %}
+
+<li class="list-group-item">
+
+<a href="{% url 'crm:enquiry_detail' enquiry.pk %}">
+
+<strong>{{ enquiry.full_name }}</strong>
+
+<span class="ms-2 small
+{% if enquiry.lead_temperature == 'hot' %}
+text-danger
+{% elif enquiry.lead_temperature == 'warm' %}
+text-warning
+{% else %}
+text-secondary
+{% endif %}
+">
+{{ enquiry.temperature_label }}
+</span>
+
+<span class="ms-2 small
+{% if enquiry.lead_age_days >= 10 %}
+text-danger
+{% elif enquiry.lead_age_days >= 5 %}
+text-warning
+{% else %}
+text-muted
+{% endif %}
+">
+• {{ enquiry.lead_age_days }}d
+</span>
+
+</a>
+
+<br>
+
+<small>
+
+<a href="tel:{{ enquiry.phone }}"
+class="text-dark text-decoration-none">
+
+{{ enquiry.phone }}
+
+</a>
+
+<a href="tel:{{ enquiry.phone }}"
+class="ms-2 text-primary">
+
+<i class="bi bi-telephone-fill"></i>
+
+</a>
+
+<a href="https://wa.me/{{ enquiry.phone }}"
+target="_blank"
+class="ms-2 text-success">
+
+<i class="bi bi-whatsapp"></i>
+
+</a>
+
+</small>
+
+</li>
+
+{% empty %}
+
+<li class="list-group-item text-muted">
+No overdue followups
+</li>
+
+{% endfor %}
+
+</ul>
+
+</div>
+
+
+<!-- Today -->
+<div class="col-md-3">
+
+<h6 class="text-warning">Today</h6>
+
+<ul class="list-group list-group-flush">
+
+{% for enquiry in today_followups %}
+
+<li class="list-group-item">
+
+<a href="{% url 'crm:enquiry_detail' enquiry.pk %}">
+<strong>{{ enquiry.full_name }}</strong>
+
+<span class="ms-2 small
+{% if enquiry.lead_temperature == 'hot' %}
+text-danger
+{% elif enquiry.lead_temperature == 'warm' %}
+text-warning
+{% else %}
+text-secondary
+{% endif %}
+">
+{{ enquiry.temperature_label }}
+</span>
+
+
+<span class="ms-2 small
+{% if enquiry.lead_age_days >= 10 %}
+text-danger
+{% elif enquiry.lead_age_days >= 5 %}
+text-warning
+{% else %}
+text-muted
+{% endif %}
+">
+• {{ enquiry.lead_age_days }}d
+</span>
+
+</a>
+
+<br>
+
+<small>
+
+<a href="tel:{{ enquiry.phone }}"
+class="text-dark text-decoration-none">
+{{ enquiry.phone }}
+</a>
+
+<a href="tel:{{ enquiry.phone }}"
+class="ms-2 text-primary">
+<i class="bi bi-telephone-fill"></i>
+</a>
+
+<a href="https://wa.me/{{ enquiry.phone }}"
+target="_blank"
+class="ms-2 text-success">
+<i class="bi bi-whatsapp"></i>
+</a>
+
+</small>
+
+</li>
+
+{% empty %}
+
+<li class="list-group-item text-muted">
+No followups today
+</li>
+
+{% endfor %}
+
+</ul>
+
+</div>
+
+
+<!-- Upcoming -->
+<div class="col-md-3">
+
+<h6 class="text-success">Upcoming</h6>
+
+<ul class="list-group list-group-flush">
+
+{% for enquiry in upcoming_followups %}
+
+<li class="list-group-item">
+
+<a href="{% url 'crm:enquiry_detail' enquiry.pk %}">
+<strong>{{ enquiry.full_name }}</strong>
+
+<span class="ms-2 small
+{% if enquiry.lead_temperature == 'hot' %}
+text-danger
+{% elif enquiry.lead_temperature == 'warm' %}
+text-warning
+{% else %}
+text-secondary
+{% endif %}
+">
+{{ enquiry.temperature_label }}
+</span>
+
+
+<span class="ms-2 small
+{% if enquiry.lead_age_days >= 10 %}
+text-danger
+{% elif enquiry.lead_age_days >= 5 %}
+text-warning
+{% else %}
+text-muted
+{% endif %}
+">
+• {{ enquiry.lead_age_days }}d
+</span>
+
+</a>
+
+<br>
+
+<small>
+
+<a href="tel:{{ enquiry.phone }}"
+class="text-dark text-decoration-none">
+{{ enquiry.phone }}
+</a>
+
+<a href="tel:{{ enquiry.phone }}"
+class="ms-2 text-primary">
+<i class="bi bi-telephone-fill"></i>
+</a>
+
+<a href="https://wa.me/{{ enquiry.phone }}"
+target="_blank"
+class="ms-2 text-success">
+<i class="bi bi-whatsapp"></i>
+</a>
+
+</small>
+
+</li>
+
+{% empty %}
+
+<li class="list-group-item text-muted">
+No upcoming followups
+</li>
+
+{% endfor %}
+
+</ul>
+
+</div>
+
+
+<!-- No Followup -->
+<div class="col-md-3">
+
+<h6 class="text-secondary">No Followup</h6>
+
+<ul class="list-group list-group-flush">
+
+{% for enquiry in no_followups %}
+
+<li class="list-group-item">
+
+<a href="{% url 'crm:enquiry_detail' enquiry.pk %}">
+<strong>{{ enquiry.full_name }}</strong>
+
+<span class="ms-2 small
+{% if enquiry.lead_temperature == 'hot' %}
+text-danger
+{% elif enquiry.lead_temperature == 'warm' %}
+text-warning
+{% else %}
+text-secondary
+{% endif %}
+">
+{{ enquiry.temperature_label }}
+</span>
+
+<span class="ms-2 small
+{% if enquiry.lead_age_days >= 10 %}
+text-danger
+{% elif enquiry.lead_age_days >= 5 %}
+text-warning
+{% else %}
+text-muted
+{% endif %}
+">
+• {{ enquiry.lead_age_days }}d
+</span>
+
+
+</a>
+
+<br>
+
+<small>
+
+<a href="tel:{{ enquiry.phone }}"
+class="text-dark text-decoration-none">
+{{ enquiry.phone }}
+</a>
+
+<a href="tel:{{ enquiry.phone }}"
+class="ms-2 text-primary">
+<i class="bi bi-telephone-fill"></i>
+</a>
+
+<a href="https://wa.me/{{ enquiry.phone }}"
+target="_blank"
+class="ms-2 text-success">
+<i class="bi bi-whatsapp"></i>
+</a>
+
+</small>
+
+</li>
+
+{% empty %}
+
+<li class="list-group-item text-muted">
+All leads scheduled
+</li>
+
+{% endfor %}
+
+</ul>
+
+</div>
+
+</div>
+
+</div>
+</div>
+
+</div>
 
 </div>
 

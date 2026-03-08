@@ -1,0 +1,395 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+{% csrf_token %}
+
+<h2 class="mb-4">Lead Pipeline</h2>
+
+{% if today_followups_count > 0 %}
+
+<div class="alert alert-warning d-flex justify-content-between align-items-center">
+
+<strong>
+🔥 {{ today_followups_count }} leads require follow-up today
+</strong>
+
+<a href="{% url 'crm:enquiry_list' %}?followup=today"
+class="btn btn-sm btn-outline-dark">
+View Leads
+</a>
+
+</div>
+
+{% endif %}
+
+<div class="row flex-nowrap overflow-auto">
+
+{% for column in stages %}
+
+<div class="col-3">
+
+<div class="card shadow-sm">
+
+<div class="card-header bg-light">
+
+<strong>
+{{ column.stage.name }}
+
+<span class="badge bg-secondary">
+{{ column.enquiries|length }}
+</span>
+
+</strong>
+
+</div>
+
+<div class="card-body stage-column"
+data-stage="{{ column.stage.id }}">
+
+{% for enquiry in column.enquiries %}
+
+<div class="card mb-2 shadow-sm lead-card
+{% if enquiry.next_followup_date and enquiry.next_followup_date < today %}
+border-danger bg-light
+{% endif %}
+"
+draggable="true"
+data-enquiry="{{ enquiry.id }}">
+
+<div class="card-body p-2">
+
+<!-- Lead Name + Age -->
+<div class="d-flex justify-content-between align-items-center">
+
+<strong>
+<a href="{% url 'crm:enquiry_detail' enquiry.pk %}">
+{{ enquiry.full_name }}
+</a>
+</strong>
+
+<span class="badge bg-light text-dark">
+{{ enquiry.lead_age_days }}d
+</span>
+
+</div>
+
+<!-- PRIORITY BADGE -->
+
+<div class="mt-1">
+
+{% if enquiry.lead_priority >= 5 %}
+
+<span class="badge bg-danger">
+🔥 High Priority
+</span>
+
+{% elif enquiry.lead_priority >= 2 %}
+
+<span class="badge bg-warning text-dark">
+🟡 Medium Priority
+</span>
+
+{% else %}
+
+<span class="badge bg-light text-dark">
+⚪ Low Priority
+</span>
+
+{% endif %}
+
+</div>
+
+<!-- NEEDS ATTENTION ALERT -->
+
+<div class="mt-1">
+
+{% if not enquiry.next_followup_date or enquiry.lead_age_days >= 5 %}
+
+<span class="badge bg-dark">
+⚠ Needs Attention
+</span>
+
+{% endif %}
+
+{% if enquiry.lead_age_days >= 5 %}
+
+<span class="badge bg-danger">
+⚠ Stale Lead
+</span>
+
+{% elif enquiry.lead_age_days >= 3 %}
+
+<span class="badge bg-warning text-dark">
+🟡 Aging
+</span>
+
+{% endif %}
+
+</div>
+
+<br>
+
+<!-- PHONE -->
+
+<small class="text-muted">
+
+<a href="tel:{{ enquiry.phone }}">
+{{ enquiry.phone }}
+</a>
+
+</small>
+
+<!-- FOLLOW-UP STATUS -->
+
+<div class="mt-1">
+
+{% if enquiry.next_followup_date and enquiry.next_followup_date < today %}
+
+<span class="badge bg-danger">
+🔥 Hot
+</span>
+
+{% elif enquiry.next_followup_date == today %}
+
+<span class="badge bg-warning text-dark">
+📅 Follow-Up Today
+</span>
+
+{% endif %}
+
+</div>
+
+<!-- ACTION BUTTONS -->
+
+<div class="mt-2 d-flex gap-2 flex-wrap">
+
+<a href="tel:{{ enquiry.phone }}"
+class="btn btn-sm btn-outline-primary">
+📞 Call
+</a>
+
+<a href="https://wa.me/{{ enquiry.phone }}"
+target="_blank"
+class="btn btn-sm btn-outline-success">
+💬 WhatsApp
+</a>
+
+<button
+class="btn btn-sm btn-outline-dark"
+onclick="logCall({{ enquiry.id }}, this)">
+✔ Called
+</button>
+
+<input
+type="date"
+class="form-control form-control-sm"
+style="max-width:140px"
+value="{{ enquiry.next_followup_date|date:'Y-m-d' }}"
+onchange="scheduleFollowup({{ enquiry.id }}, this.value)">
+
+</div>
+
+{% if enquiry.next_followup_date %}
+
+<br>
+
+{% if enquiry.next_followup_date < today %}
+
+<span class="badge bg-danger">
+🔥 Overdue
+</span>
+
+{% elif enquiry.next_followup_date == today %}
+
+<span class="badge bg-warning text-dark">
+📅 Today
+</span>
+
+{% else %}
+
+<span class="badge bg-light text-dark">
+⚪ Upcoming
+</span>
+
+{% endif %}
+
+{% endif %}
+
+</div>
+
+</div>
+
+{% empty %}
+
+<p class="text-muted small">
+No leads
+</p>
+
+{% endfor %}
+
+</div>
+
+</div>
+
+</div>
+
+{% endfor %}
+
+</div>
+
+<!-- =============================== -->
+<!-- Drag & Drop Pipeline Script -->
+<!-- =============================== -->
+
+<script>
+
+document.addEventListener("DOMContentLoaded", function () {
+
+let draggedCard = null;
+
+const cards = document.querySelectorAll(".lead-card");
+
+cards.forEach(card => {
+
+card.addEventListener("dragstart", function () {
+draggedCard = this;
+});
+
+});
+
+const columns = document.querySelectorAll(".stage-column");
+
+columns.forEach(column => {
+
+column.addEventListener("dragover", function (e) {
+e.preventDefault();
+});
+
+column.addEventListener("drop", function (e) {
+
+e.preventDefault();
+
+if (!draggedCard) return;
+
+const enquiryId = draggedCard.dataset.enquiry;
+const stageId = this.dataset.stage;
+
+this.appendChild(draggedCard);
+
+fetch("{% url 'crm:update_enquiry_stage' %}", {
+
+method: "POST",
+credentials: "same-origin",
+
+headers: {
+"Content-Type": "application/x-www-form-urlencoded",
+"X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value
+},
+
+body: `enquiry_id=${enquiryId}&stage_id=${stageId}`
+
+})
+.then(response => response.json())
+.then(data => {
+
+if (data.status !== "success") {
+alert("Stage update failed");
+}
+
+})
+.catch(error => {
+console.error(error);
+});
+
+});
+
+});
+
+});
+
+function getCookie(name) {
+
+let cookieValue = null;
+
+if (document.cookie && document.cookie !== "") {
+
+const cookies = document.cookie.split(";");
+
+for (let i = 0; i < cookies.length; i++) {
+
+const cookie = cookies[i].trim();
+
+if (cookie.substring(0, name.length + 1) === (name + "=")) {
+
+cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+break;
+
+}
+
+}
+
+}
+
+return cookieValue;
+
+}
+
+function logCall(enquiryId, button) {
+
+fetch(`/crm/enquiry/${enquiryId}/quick-call/`, {
+
+method: "POST",
+credentials: "same-origin",
+
+headers: {
+"Content-Type": "application/x-www-form-urlencoded",
+"X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value
+}
+
+})
+.then(response => response.json())
+.then(data => {
+
+button.classList.remove("btn-outline-dark");
+button.classList.add("btn-success");
+
+button.innerHTML = "✔ Called ✓";
+button.disabled = true;
+
+})
+.catch(error => {
+console.error("Call logging failed", error);
+});
+
+}
+
+function scheduleFollowup(enquiryId, date) {
+
+fetch(`/crm/enquiry/${enquiryId}/quick-followup/`, {
+
+method: "POST",
+
+headers: {
+"Content-Type": "application/x-www-form-urlencoded",
+"X-CSRFToken": getCookie("csrftoken")
+},
+
+body: `date=${date}`
+
+})
+.then(response => response.json())
+.then(data => {
+
+console.log("Follow-up scheduled");
+
+})
+.catch(error => {
+console.error("Followup failed", error);
+});
+
+}
+
+</script>
+
+{% endblock %}

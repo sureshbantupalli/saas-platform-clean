@@ -45,9 +45,37 @@ class Tenant(BaseModel):
         ]
 
     def save(self, *args, **kwargs):
+        is_new = not Tenant.objects.filter(pk=self.pk).exists()
+
         if not self.subdomain:
             self.subdomain = slugify(self.name)
+
         super().save(*args, **kwargs)
+
+        if is_new:
+            self.create_default_stages()
+
+    def create_default_stages(self):
+        from crm.models import LeadStage
+
+        default_stages = [
+            {"name": "New", "order": 1},
+            {"name": "Contacted", "order": 2},
+            {"name": "Demo Done", "order": 3},
+            {"name": "Converted", "order": 4, "is_conversion_stage": True},
+            {"name": "Lost", "order": 5, "is_loss_stage": True},
+        ]
+
+        for stage in default_stages:
+            LeadStage.objects.get_or_create(
+                tenant=self,
+                name=stage["name"],
+                defaults={
+                    "order": stage["order"],
+                    "is_conversion_stage": stage.get("is_conversion_stage", False),
+                    "is_loss_stage": stage.get("is_loss_stage", False),
+                }
+            )
 
     def __str__(self):
         return self.name

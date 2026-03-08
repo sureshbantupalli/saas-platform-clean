@@ -17,6 +17,10 @@ class MemberAdmin(TenantScopedAdmin):
     filter_horizontal = ("branches",)
     exclude = ("created_by",)
 
+    def has_add_permission(self, request):
+        # Prevent manual creation of Member from admin
+        return False
+
     def save_model(self, request, obj, form, change):
         if not change:
             obj.created_by = request.user

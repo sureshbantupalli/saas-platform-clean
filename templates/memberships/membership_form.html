@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2 class="mb-4">Add Membership</h2>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    {{ form.plan.label_tag }}
+                    {{ form.plan }}
+                </div>
+
+                <div class="col-md-6">
+                    {{ form.branch.label_tag }}
+                    {{ form.branch }}
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    {{ form.start_date.label_tag }}
+                    {{ form.start_date }}
+                </div>
+
+                <div class="col-md-6">
+                    {{ form.end_date.label_tag }}
+                    {{ form.end_date }}
+                </div>
+            </div>
+
+            <div class="mb-3">
+                {{ form.status.label_tag }}
+                {{ form.status }}
+            </div>
+
+            <button type="submit" class="btn btn-success">
+                Create Membership
+            </button>
+
+        </form>
+
+    </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "platform/base.html" %}
+
+{% block content %}
+
+<h2 class="mb-4">Tenant Management</h2>
+
+<table class="table table-hover align-middle">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Users</th>
+            <th>Enquiries</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th>Action</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for tenant in tenants %}
+        <tr>
+            <td>{{ tenant.name }}</td>
+            <td>{{ tenant.user_count }}</td>
+            <td>{{ tenant.enquiry_count }}</td>
+
+            <td>
+                {% if tenant.is_active %}
+                    <span class="badge bg-success">Active</span>
+                {% else %}
+                    <span class="badge bg-danger">Inactive</span>
+                {% endif %}
+            </td>
+
+            <td>{{ tenant.created_at }}</td>
+
+            <td>
+                <form method="post" action="{% url 'platform:toggle_tenant_status' tenant.id %}">
+                    {% csrf_token %}
+                    <button type="submit"
+                            class="btn btn-sm {% if tenant.is_active %}btn-danger{% else %}btn-success{% endif %}">
+                        {% if tenant.is_active %}
+                            Deactivate
+                        {% else %}
+                            Activate
+                        {% endif %}
+                    </button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}

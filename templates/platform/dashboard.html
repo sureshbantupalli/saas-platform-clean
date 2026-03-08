@@ -1,0 +1,39 @@
+{% extends "platform/base.html" %}
+
+{% block content %}
+
+<h2 class="mb-4">Platform Dashboard</h2>
+
+<div class="row g-4">
+
+    <div class="col-md-3">
+        <div class="kpi-card">
+            <div class="kpi-title">Total Tenants</div>
+            <div class="kpi-value">{{ total_tenants }}</div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="kpi-card">
+            <div class="kpi-title">Total Users</div>
+            <div class="kpi-value">{{ total_users }}</div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="kpi-card">
+            <div class="kpi-title">Total Enquiries</div>
+            <div class="kpi-value">{{ total_enquiries }}</div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="kpi-card">
+            <div class="kpi-title">Conversion Rate</div>
+            <div class="kpi-value">{{ conversion_rate }}%</div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

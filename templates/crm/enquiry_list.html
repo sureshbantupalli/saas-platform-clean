@@ -1,4 +1,4 @@
-{% extends "crm/base.html" %}
+{% extends "base.html" %}
 
 {% block content %}
 
@@ -8,7 +8,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="mb-0">Enquiries</h2>
 
-        <a href="/admin/crm/enquiry/add/" class="btn btn-success">
+        <a href="{% url 'crm:enquiry_add' %}" class="btn btn-success">
             + Add Enquiry
         </a>
     </div>
@@ -63,7 +63,7 @@
             <!-- Clear Button -->
             {% if request.GET.search or selected_stage or request.GET.assigned %}
             <div class="col-md-2">
-                <a href="{% url 'crm_ui:enquiry_list' %}"
+                <a href="{% url 'crm:enquiry_list' %}"
                    class="btn btn-outline-secondary w-100">
                     Clear
                 </a>
@@ -93,7 +93,7 @@
                     {% for enquiry in enquiries %}
                     <tr>
                         <td>
-                            <a href="{% url 'crm_ui:enquiry_detail' enquiry.pk %}">
+                            <a href="{% url 'crm:enquiry_detail' enquiry.pk %}">
                                 {{ enquiry.full_name }}
                             </a>
                         </td>
@@ -102,7 +102,7 @@
 
                         <td>
                         <form method="post"
-                              action="{% url 'crm_ui:assign_enquiry' enquiry.pk %}"
+                              action="{% url 'crm:assign_enquiry' enquiry.pk %}"
                               class="d-flex gap-2 align-items-center">
 
                             {% csrf_token %}
@@ -128,12 +128,15 @@
                         </td>
 
                         <td>
-                            {% if enquiry.converted_member %}
-                                <span class="badge bg-success">Converted</span>
+                            {% if enquiry.current_stage %}
+                                <span class="badge bg-primary">
+                                    {{ enquiry.current_stage.name }}
+                                </span>
                             {% else %}
-                                <span class="badge bg-warning text-dark">New</span>
+                                <span class="badge bg-secondary">
+                                    None
+                                </span>
                             {% endif %}
-                        </td>
 
                         <td>{{ enquiry.created_at|date:"Y-m-d" }}</td>
                     </tr>

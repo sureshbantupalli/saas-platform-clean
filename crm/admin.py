@@ -1,7 +1,6 @@
 from django.contrib import admin, messages
 from django.urls import path, reverse
 from django.template.response import TemplateResponse
-from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.core.exceptions import ValidationError
 
@@ -70,6 +69,7 @@ class TenantScopedAdmin(admin.ModelAdmin):
 
 @admin.register(LeadStage)
 class LeadStageAdmin(TenantScopedAdmin):
+
     list_display = (
         "name",
         "tenant",
@@ -78,8 +78,12 @@ class LeadStageAdmin(TenantScopedAdmin):
         "is_loss_stage",
         "is_active",
     )
+
     list_filter = ("tenant", "is_active")
+
     ordering = ("tenant", "order")
+
+    search_fields = ("name",)
 
 
 # ============================================================
@@ -88,8 +92,12 @@ class LeadStageAdmin(TenantScopedAdmin):
 
 @admin.register(EnquirySource)
 class EnquirySourceAdmin(TenantScopedAdmin):
+
     list_display = ("name", "tenant", "is_active")
+
     list_filter = ("tenant", "is_active")
+
+    search_fields = ("name",)
 
 
 # ============================================================
@@ -98,12 +106,16 @@ class EnquirySourceAdmin(TenantScopedAdmin):
 
 @admin.register(EnquiryLostReason)
 class EnquiryLostReasonAdmin(TenantScopedAdmin):
+
     list_display = ("name", "tenant", "is_active")
+
     list_filter = ("tenant", "is_active")
+
+    search_fields = ("name",)
 
 
 # ============================================================
-# Enquiry Admin (UPDATED SAFE VERSION)
+# Enquiry Admin
 # ============================================================
 
 @admin.register(Enquiry)
@@ -115,6 +127,7 @@ class EnquiryAdmin(TenantScopedAdmin):
         "full_name",
         "phone",
         "branch",
+        "source",   # ← NEW (Lead source visible)
         "current_stage",
         "assigned_to",
         "next_followup_date",
@@ -122,8 +135,14 @@ class EnquiryAdmin(TenantScopedAdmin):
     )
 
     search_fields = ("full_name", "phone", "email")
+
     autocomplete_fields = ("assigned_to",)
+
     exclude = ("created_by",)
+
+    # --------------------------------------------------------
+    # Redirect to CRM UI after save
+    # --------------------------------------------------------
 
     def response_add(self, request, obj, post_url_continue=None):
         if "_continue" not in request.POST:
@@ -140,6 +159,7 @@ class EnquiryAdmin(TenantScopedAdmin):
     # --------------------------------------------------------
 
     def get_list_display(self, request):
+
         fields = list(self.list_display)
 
         if request.user.is_superuser:
@@ -148,7 +168,8 @@ class EnquiryAdmin(TenantScopedAdmin):
         return tuple(fields)
 
     def get_list_filter(self, request):
-        filters = ["branch", "current_stage"]
+
+        filters = ["branch", "current_stage", "source"]  # ← NEW
 
         if request.user.is_superuser:
             filters.insert(0, "tenant")
@@ -160,6 +181,7 @@ class EnquiryAdmin(TenantScopedAdmin):
     # --------------------------------------------------------
 
     def get_fields(self, request, obj=None):
+
         fields = super().get_fields(request, obj)
 
         if obj is None:
@@ -184,11 +206,13 @@ class EnquiryAdmin(TenantScopedAdmin):
         super().save_model(request, obj, form, change)
 
     # --------------------------------------------------------
-    # 🔥 NEW SAFE CONVERSION ENDPOINT
+    # 🔥 SAFE CONVERSION ENDPOINT
     # --------------------------------------------------------
 
     def get_urls(self):
+
         urls = super().get_urls()
+
         custom_urls = [
             path(
                 "<int:pk>/convert/",
@@ -196,12 +220,30 @@ class EnquiryAdmin(TenantScopedAdmin):
                 name="crm_enquiry_convert",
             ),
         ]
+
         return custom_urls + urls
 
     def convert_enquiry(self, request, pk):
-        enquiry = get_object_or_404(Enquiry, pk=pk)
 
-        # 🔒 Prevent manual access if already converted
+        if not request.user.is_superuser:
+            if not request.user.has_permission("CRM", "convert_enquiry"):
+                messages.error(
+                    request,
+                    "You do not have permission to convert enquiries."
+                )
+                return redirect(
+                    reverse("admin:crm_enquiry_changelist")
+                )
+
+        if request.user.is_superuser:
+            enquiry = get_object_or_404(Enquiry, pk=pk)
+        else:
+            enquiry = get_object_or_404(
+                Enquiry,
+                pk=pk,
+                tenant=request.user.tenant
+            )
+
         if enquiry.converted_member:
             messages.warning(
                 request,
@@ -211,7 +253,6 @@ class EnquiryAdmin(TenantScopedAdmin):
                 reverse("admin:crm_enquiry_change", args=[pk])
             )
 
-        # 🔒 Prevent conversion if not in conversion stage
         if not enquiry.current_stage or not enquiry.current_stage.is_conversion_stage:
             messages.error(
                 request,
@@ -223,9 +264,14 @@ class EnquiryAdmin(TenantScopedAdmin):
 
         try:
             enquiry.convert_to_member(request.user)
-            messages.success(request, "Enquiry successfully converted to Member.")
-        except Exception as e:
-            messages.error(request, str(e))
+
+            messages.success(
+                request,
+                "Enquiry successfully converted to Member."
+            )
+
+        except ValidationError as e:
+            messages.error(request, "; ".join(e.messages))
 
         return redirect(
             reverse("admin:crm_enquiry_change", args=[pk])
@@ -236,17 +282,21 @@ class EnquiryAdmin(TenantScopedAdmin):
     # --------------------------------------------------------
 
     def change_view(self, request, object_id, form_url="", extra_context=None):
+
         extra_context = extra_context or {}
 
         enquiry = Enquiry.objects.filter(pk=object_id).first()
 
-        if (
-            enquiry
-            and not enquiry.converted_member
-            and enquiry.current_stage
-            and enquiry.current_stage.is_conversion_stage
-        ):
-            extra_context["show_convert_button"] = True
+        if enquiry:
+
+            if enquiry.converted_member:
+                return super().change_view(request, object_id, form_url, extra_context)
+
+            if not enquiry.current_stage or not enquiry.current_stage.is_conversion_stage:
+                return super().change_view(request, object_id, form_url, extra_context)
+
+            if request.user.is_superuser or request.user.has_permission("CRM", "convert_enquiry"):
+                extra_context["show_convert_button"] = True
 
         return super().change_view(request, object_id, form_url, extra_context)
 
@@ -255,6 +305,7 @@ class EnquiryAdmin(TenantScopedAdmin):
     # --------------------------------------------------------
 
     def get_readonly_fields(self, request, obj=None):
+
         readonly = list(super().get_readonly_fields(request, obj))
 
         if obj and obj.converted_member:
@@ -269,8 +320,10 @@ class EnquiryAdmin(TenantScopedAdmin):
     # --------------------------------------------------------
 
     def get_queryset(self, request):
+
         if request.user.is_superuser:
             return Enquiry._base_manager.all()
+
         return super().get_queryset(request)
 
     # --------------------------------------------------------
@@ -278,6 +331,7 @@ class EnquiryAdmin(TenantScopedAdmin):
     # --------------------------------------------------------
 
     def changelist_view(self, request, extra_context=None):
+
         extra_context = extra_context or {}
 
         response = super().changelist_view(request, extra_context=extra_context)
@@ -286,12 +340,15 @@ class EnquiryAdmin(TenantScopedAdmin):
             return response
 
         cl = response.context_data.get("cl")
+
         queryset = cl.queryset if cl else self.model.objects.none()
 
         total = queryset.count()
+
         converted = queryset.filter(
             converted_member__isnull=False
         ).count()
+
         lost = queryset.filter(
             current_stage__is_loss_stage=True
         ).count()
@@ -314,13 +371,18 @@ class EnquiryAdmin(TenantScopedAdmin):
 
 @admin.register(EnquiryActivity)
 class EnquiryActivityAdmin(TenantScopedAdmin):
+
     list_display = (
         "enquiry",
         "action_type",
+        "old_value",
+        "new_value",
         "performed_by",
         "created_at",
     )
+
     list_filter = ("action_type", "tenant")
+
     search_fields = ("enquiry__full_name", "enquiry__phone")
 
 
@@ -329,6 +391,7 @@ class EnquiryActivityAdmin(TenantScopedAdmin):
 # ============================================================
 
 def crm_dashboard_view(request):
+
     tenant_id = request.GET.get("tenant_id")
 
     if tenant_id:
@@ -337,8 +400,11 @@ def crm_dashboard_view(request):
         tenant = Tenant.objects.first()
 
     metrics = get_crm_metrics(tenant) if tenant else {}
+
     stale_enquiries = get_stale_enquiries(tenant) if tenant else []
+
     staff_performance = get_staff_performance(tenant) if tenant else []
+
     funnel = get_stage_funnel(tenant) if tenant else []
 
     enquiry_changelist_url = reverse("admin:crm_enquiry_changelist")
@@ -362,7 +428,9 @@ def crm_dashboard_view(request):
 
 
 def get_admin_urls(original_get_urls):
+
     def get_urls():
+
         urls = [
             path(
                 "crm/dashboard/",
@@ -370,7 +438,9 @@ def get_admin_urls(original_get_urls):
                 name="crm_dashboard",
             ),
         ]
+
         return urls + original_get_urls()
+
     return get_urls
 
 

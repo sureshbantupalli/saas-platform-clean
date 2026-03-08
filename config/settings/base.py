@@ -29,6 +29,7 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
 # ==============================
 
 INSTALLED_APPS = [
+    # Django Core
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -36,7 +37,10 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    # Third Party
     'rest_framework',
+
+    # Project Apps
     'apps.core',
     'apps.memberships',
     'apps.accounts',
@@ -45,6 +49,9 @@ INSTALLED_APPS = [
     'apps.authority.apps.AuthorityConfig',
     'members',
     'crm',
+
+    # 🏗 Phase 2 — Platform Control Layer
+    'platform_core',
 ]
 
 MIDDLEWARE = [
@@ -53,6 +60,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
 
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+
+    # Multi-Tenant Middleware (Critical)
     'apps.core.middleware.TenantMiddleware',
 
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -138,17 +147,27 @@ DATE_INPUT_FORMATS = ["%Y-%m-%d"]
 # STATIC FILES
 # ==============================
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATICFILES_DIRS = [
+    BASE_DIR / "static",
+]
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 
 # ==============================
 # AUTHENTICATION
 # ==============================
 
-LOGIN_URL = "/admin/login/"
+LOGIN_URL = "/login/"
+# LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/login/"
 
 AUTH_USER_MODEL = "accounts.User"
 
+
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+]
 
 # ==============================
 # REST FRAMEWORK
@@ -163,6 +182,7 @@ REST_FRAMEWORK = {
     ],
 }
 
+
 # ==============================
 # PRODUCTION SECURITY HARDENING
 # ==============================
@@ -175,6 +195,7 @@ CSRF_COOKIE_HTTPONLY = True
 SESSION_COOKIE_HTTPONLY = True
 
 SECURE_REFERRER_POLICY = "same-origin"
+
 
 # ==============================
 # HTTPS ENFORCEMENT (Production Only)

@@ -39,6 +39,14 @@ class UserManager(DjangoUserManager):
 # =====================================================
 
 class User(AbstractUser):
+    """
+    Extends Django's AbstractUser.
+
+    Important:
+    - We keep is_staff, is_superuser, is_active from AbstractUser.
+    - We DO NOT override is_staff as property.
+    """
+
     username = None
     email = models.EmailField(unique=True)
 
@@ -85,8 +93,6 @@ class User(AbstractUser):
     # -------------------------------------------------
     def save(self, *args, **kwargs):
         """
-        Enforce clean RBAC rules:
-
         Platform admin:
             - No tenant required
             - No role required
@@ -110,18 +116,26 @@ class User(AbstractUser):
         super().save(*args, **kwargs)
 
     # -------------------------------------------------
-    # 🔒 Restrict Django Admin Access
+    # Permission Resolver (RBAC Engine)
     # -------------------------------------------------
-
-    def has_module_perms(self, app_label):
-        return self.is_platform_admin and self.is_active
-
-    def has_perm(self, perm, obj=None):
-        return self.is_platform_admin and self.is_active
-
-    @property
-    def is_staff(self):
+    def has_permission(self, module, action):
         """
-        Only platform admins are treated as staff for Django Admin.
+        Checks if user has given module + action permission.
+        Platform admins always return True.
         """
-        return self.is_platform_admin
+
+        # Platform admin bypass
+        if self.is_platform_admin or self.is_superuser:
+            return True
+
+        if not self.role:
+            return False
+
+        from apps.authority.models import RolePermission
+
+        return RolePermission.objects.filter(
+            role=self.role,
+            permission_action__module=module,
+            permission_action__action=action,
+            is_allowed=True
+        ).exists()

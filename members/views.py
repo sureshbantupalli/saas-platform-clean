@@ -62,7 +62,7 @@ def member_list(request):
 # Member Detail
 # ==============================
 
-@require_permission("members", "view")
+@require_permission("MEMBERS", "view_member")
 def member_detail(request, pk):
 
     member = MemberService.get_by_id(request.user, pk)

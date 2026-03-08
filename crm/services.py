@@ -60,6 +60,15 @@ def change_enquiry_stage(enquiry, new_stage, user):
         "enquiry_id": enquiry.id
     }
 
+def ensure_enquiry_not_converted(enquiry):
+    """
+    Prevent lifecycle changes after enquiry conversion.
+    """
+    if enquiry.converted_member is not None:
+        raise ValidationError(
+            "This enquiry has already been converted to a member and cannot be modified."
+        )
+
 def check_duplicate_phone(tenant, phone, exclude_enquiry_id=None):
     """
     Soft duplicate detection.

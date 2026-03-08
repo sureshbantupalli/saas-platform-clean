@@ -221,7 +221,7 @@
 
                         <td class="text-end">
                             <a href="{% url 'member_detail' member.id %}" class="btn btn-sm btn-outline-primary">View</a>
-                            <a href="{% url 'member_update' member.id %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                            <a href="{% url 'members:member_update' member.id %}" class="btn btn-sm btn-outline-secondary">Edit</a>
                             <a href="{% url 'member_delete' member.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
                         </td>
                     </tr>

@@ -1,23 +1,54 @@
 from django.db import models, transaction
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.utils import timezone
+from datetime import timedelta
 
 
 class LeadStage(models.Model):
+
+    STAGE_TYPE_CHOICES = [
+        ("NEW", "New"),
+        ("CONTACTED", "Contacted"),
+        ("DEMO", "Demo"),
+        ("CONVERTED", "Converted"),
+        ("LOST", "Lost"),
+        ("CUSTOM", "Custom"),
+    ]
+
     tenant = models.ForeignKey(
         "core.Tenant",
         on_delete=models.CASCADE,
         related_name="lead_stages"
     )
+
     name = models.CharField(max_length=100)
+
     order = models.PositiveIntegerField(default=0)
+
     color = models.CharField(max_length=20, blank=True)
 
+    # NEW FIELD (Safe addition)
+    stage_type = models.CharField(
+        max_length=20,
+        choices=STAGE_TYPE_CHOICES,
+        default="CUSTOM"
+    )
+
+    # NEW FIELD (Controls Kanban visibility)
+    show_in_pipeline = models.BooleanField(
+        default=True,
+        help_text="Whether this stage should appear in the Kanban pipeline"
+    )
+
     is_conversion_stage = models.BooleanField(default=False)
+
     is_loss_stage = models.BooleanField(default=False)
+
     is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -25,6 +56,7 @@ class LeadStage(models.Model):
         unique_together = ("tenant", "name")
 
     def clean(self):
+
         if self.is_conversion_stage and self.is_loss_stage:
             raise ValidationError(
                 "Stage cannot be both conversion and loss stage."
@@ -35,6 +67,7 @@ class LeadStage(models.Model):
                 tenant=self.tenant,
                 is_conversion_stage=True
             ).exclude(pk=self.pk)
+
             if existing.exists():
                 raise ValidationError(
                     "Only one conversion stage allowed per tenant."
@@ -45,6 +78,7 @@ class LeadStage(models.Model):
                 tenant=self.tenant,
                 is_loss_stage=True
             ).exclude(pk=self.pk)
+
             if existing.exists():
                 raise ValidationError(
                     "Only one loss stage allowed per tenant."
@@ -55,12 +89,15 @@ class LeadStage(models.Model):
 
 
 class EnquirySource(models.Model):
+
     tenant = models.ForeignKey(
         "core.Tenant",
         on_delete=models.CASCADE,
         related_name="enquiry_sources"
     )
+
     name = models.CharField(max_length=100)
+
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -71,12 +108,15 @@ class EnquirySource(models.Model):
 
 
 class EnquiryLostReason(models.Model):
+
     tenant = models.ForeignKey(
         "core.Tenant",
         on_delete=models.CASCADE,
         related_name="lost_reasons"
     )
+
     name = models.CharField(max_length=150)
+
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -101,10 +141,13 @@ class Enquiry(models.Model):
     )
 
     full_name = models.CharField(max_length=200)
+
     phone = models.CharField(max_length=20)
+
     email = models.EmailField(blank=True, null=True)
 
     interested_course = models.CharField(max_length=200, blank=True)
+
     notes = models.TextField(blank=True)
 
     source = models.ForeignKey(
@@ -137,7 +180,6 @@ class Enquiry(models.Model):
         blank=True
     )
 
-    # 🔥 UPGRADED TO OneToOneField (true conversion integrity)
     converted_member = models.OneToOneField(
         "members.Member",
         on_delete=models.SET_NULL,
@@ -157,48 +199,121 @@ class Enquiry(models.Model):
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
+
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+
         verbose_name = "Enquiry"
         verbose_name_plural = "Enquiries"
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tenant", "phone"],
+                name="unique_enquiry_phone_per_tenant"
+            )
+        ]
+
         indexes = [
             models.Index(fields=["phone"]),
             models.Index(fields=["created_at"]),
         ]
 
-    # =============================
-    # 🔒 VALIDATION LOGIC
-    # =============================
+    # ==================================
+    # LEAD TEMPERATURE ENGINE
+    # ==================================
+
+    @property
+    def lead_temperature(self):
+
+        today = timezone.now().date()
+
+        if not self.next_followup_date:
+            return "cold"
+
+        if self.next_followup_date <= today:
+            return "hot"
+
+        if self.next_followup_date <= today + timedelta(days=2):
+            return "warm"
+
+        return "cold"
+
+    @property
+    def temperature_label(self):
+
+        if self.lead_temperature == "hot":
+            return "🔥 Hot"
+
+        if self.lead_temperature == "warm":
+            return "🟡 Warm"
+
+        return "❄ Cold"
+
+    @property
+    def lead_age_days(self):
+
+        today = timezone.now().date()
+
+        return (today - self.created_at.date()).days
+
+    @property
+    def lead_priority(self):
+        """
+        Calculates priority score for the lead based on
+        follow-up urgency and lead aging.
+        """
+
+        score = 0
+
+        # Follow-up urgency
+        if self.next_followup_date:
+            today = timezone.now().date()
+
+            if self.next_followup_date < today:
+                score += 5  # overdue follow-up
+            elif self.next_followup_date == today:
+                score += 3  # follow-up today
+
+        # Lead aging
+        if hasattr(self, "lead_age_days"):
+            if self.lead_age_days >= 5:
+                score += 3
+            elif self.lead_age_days >= 3:
+                score += 1
+
+        return score
+
+    # ==================================
+    # VALIDATION
+    # ==================================
 
     def clean(self):
 
-        # Lost stage validation
         if self.current_stage and self.current_stage.is_loss_stage:
             if not self.lost_reason:
                 raise ValidationError(
                     {"lost_reason": "Lost reason is required when stage is marked as Lost."}
                 )
 
-        # Conversion stage validation
         if self.current_stage and self.current_stage.is_conversion_stage:
             if not self.phone:
                 raise ValidationError(
                     {"phone": "Phone number is required before converting to Member."}
                 )
 
-        # Prevent stage change after conversion
         if self.pk:
             original = Enquiry.objects.filter(pk=self.pk).first()
+
             if original and original.converted_member:
                 if self.current_stage != original.current_stage:
                     raise ValidationError(
                         "Cannot change stage after enquiry has been converted."
                     )
 
-    # =============================
-    # 🔥 CONVERSION ENGINE (NEW)
-    # =============================
+    # ==================================
+    # CONVERSION ENGINE
+    # ==================================
 
     def convert_to_member(self, user):
 
@@ -221,14 +336,12 @@ class Enquiry(models.Model):
                 phone=self.phone,
             )
 
-            # Assign branch (M2M)
             member.branches.add(self.branch)
 
-            # Link back to enquiry
             self.converted_member = member
+
             self.save(update_fields=["converted_member"])
 
-            # Log activity
             EnquiryActivity.objects.create(
                 tenant=self.tenant,
                 enquiry=self,
@@ -239,17 +352,45 @@ class Enquiry(models.Model):
 
         return member
 
+    # ==================================
+    # SAVE HOOK
+    # ==================================
+
     def save(self, *args, **kwargs):
+
         self.full_clean()
+
         is_new = self.pk is None
+        old_stage = None
+
+        if not is_new:
+            try:
+                old_stage = Enquiry.objects.get(pk=self.pk).current_stage
+            except Enquiry.DoesNotExist:
+                pass
+
         super().save(*args, **kwargs)
 
         if is_new:
+
             EnquiryActivity.objects.create(
                 tenant=self.tenant,
                 enquiry=self,
                 action_type="CREATED",
                 performed_by=self.created_by
+            )
+
+        elif old_stage != self.current_stage:
+
+            acting_user = getattr(self, "_acting_user", None)
+
+            EnquiryActivity.objects.create(
+                tenant=self.tenant,
+                enquiry=self,
+                action_type="STAGE_CHANGED",
+                performed_by=acting_user,
+                old_value=old_stage.name if old_stage else None,
+                new_value=self.current_stage.name if self.current_stage else None,
             )
 
     def __str__(self):
@@ -289,14 +430,14 @@ class EnquiryActivity(models.Model):
     )
 
     old_value = models.TextField(blank=True, null=True)
+
     new_value = models.TextField(blank=True, null=True)
+
     notes = models.TextField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = "Enquiry Activity"
-        verbose_name_plural = "Enquiry Activities"
         ordering = ["-created_at"]
 
     def __str__(self):
