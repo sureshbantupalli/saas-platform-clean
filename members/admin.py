@@ -1,59 +1,185 @@
 from django.contrib import admin, messages
+from django import forms
+
 from .models import Member
 from crm.models import Enquiry, EnquiryActivity
 from crm.admin import TenantScopedAdmin
+from apps.core.models import Branch
 
+
+# -------------------------------------------------
+# Custom Admin Form (forces branch filtering)
+# -------------------------------------------------
+
+class MemberAdminForm(forms.ModelForm):
+
+    class Meta:
+        model = Member
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        request = kwargs.pop("request", None)
+
+        super().__init__(*args, **kwargs)
+
+        if request:
+
+            # Superadmin sees all branches
+            if request.user.is_superuser:
+                self.fields["branches"].queryset = Branch.objects.all()
+
+            else:
+                tenant = getattr(request.user, "tenant", None)
+
+                if tenant:
+                    self.fields["branches"].queryset = Branch.objects.filter(
+                        tenant=tenant
+                    )
+                else:
+                    self.fields["branches"].queryset = Branch.objects.none()
+
+
+# -------------------------------------------------
+# Member Admin
+# -------------------------------------------------
 
 @admin.register(Member)
 class MemberAdmin(TenantScopedAdmin):
+
+    form = MemberAdminForm
+
     list_display = (
         "first_name",
         "last_name",
         "email",
         "tenant",
     )
+
     list_filter = ("tenant",)
-    search_fields = ("first_name", "last_name", "email")
+
+    search_fields = (
+        "first_name",
+        "last_name",
+        "email",
+    )
+
     filter_horizontal = ("branches",)
+
     exclude = ("created_by",)
 
+    # -------------------------------------------------
+    # Branch filtering for filter_horizontal widget
+    # -------------------------------------------------
+
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+
+        if db_field.name == "branches":
+
+            if request.user.is_superuser:
+                kwargs["queryset"] = Branch.objects.all()
+
+            elif getattr(request.user, "tenant", None):
+                kwargs["queryset"] = Branch.objects.filter(
+                    tenant=request.user.tenant
+                )
+
+            else:
+                kwargs["queryset"] = Branch.objects.none()
+
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
+
+    # -------------------------------------------------
+    # Inject request into form
+    # -------------------------------------------------
+
+    def get_form(self, request, obj=None, **kwargs):
+
+        form = super().get_form(request, obj, **kwargs)
+
+        class FormWithRequest(form):
+            def __new__(cls, *args, **kw):
+                kw["request"] = request
+                return form(*args, **kw)
+
+        return FormWithRequest
+
+    # -------------------------------------------------
+    # Prevent manual member creation
+    # -------------------------------------------------
+
     def has_add_permission(self, request):
-        # Prevent manual creation of Member from admin
         return False
 
+    # -------------------------------------------------
+    # Queryset filtering
+    # -------------------------------------------------
+
+    def get_queryset(self, request):
+
+        if request.user.is_superuser:
+            return Member._base_manager.all()
+
+        tenant = getattr(request.user, "tenant", None)
+
+        if tenant:
+            return Member._base_manager.filter(tenant=tenant)
+
+        return Member._base_manager.none()
+
+    # -------------------------------------------------
+    # Hide tenant field for tenant users
+    # -------------------------------------------------
+
+    def get_fields(self, request, obj=None):
+
+        fields = super().get_fields(request, obj)
+
+        if not request.user.is_superuser:
+            fields = [f for f in fields if f != "tenant"]
+
+        return fields
+
+    # -------------------------------------------------
+    # Save member
+    # -------------------------------------------------
+
     def save_model(self, request, obj, form, change):
+
+        if not request.user.is_superuser:
+            obj.tenant = request.user.tenant
+
         if not change:
             obj.created_by = request.user
 
         super().save_model(request, obj, form, change)
 
+    # -------------------------------------------------
+    # CRM Conversion Logic
+    # -------------------------------------------------
+
     def save_related(self, request, form, formsets, change):
-        """
-        Called after save_model and after m2m relationships are saved.
-        Safe place to modify ManyToMany fields.
-        """
+
         super().save_related(request, form, formsets, change)
 
         enquiry_id = request.GET.get("from_enquiry")
 
         if enquiry_id:
+
             try:
+
                 enquiry = Enquiry.objects.get(id=enquiry_id)
 
-                # Prevent double linking
                 if enquiry.converted_member:
                     return
 
                 member = form.instance
 
-                # Link enquiry → member
                 enquiry.converted_member = member
                 enquiry.save(update_fields=["converted_member"])
 
-                # 🔥 Auto-assign branch properly
-                member.branches.add(enquiry.branch)
+                if enquiry.branch:
+                    member.branches.add(enquiry.branch)
 
-                # Log conversion activity
                 EnquiryActivity.objects.create(
                     tenant=enquiry.tenant,
                     enquiry=enquiry,
@@ -70,114 +196,15 @@ class MemberAdmin(TenantScopedAdmin):
             except Enquiry.DoesNotExist:
                 pass
 
-    # -----------------------------------
-    # Link Member Back To Enquiry
-    # -----------------------------------
-    def save_model(self, request, obj, form, change):
-
-        is_new = obj.pk is None
-
-        super().save_model(request, obj, form, change)
-
-        # Only run on new member creation
-        if is_new:
-            enquiry_id = request.GET.get("from_enquiry")
-
-            if enquiry_id:
-                from crm.models import Enquiry
-
-                enquiry = Enquiry.objects.filter(
-                    pk=enquiry_id,
-                    tenant=obj.tenant
-                ).first()
-
-                if enquiry and not enquiry.converted_member:
-                    enquiry.converted_member = obj
-                    enquiry.save(update_fields=["converted_member"])
-
-    # -----------------------------------
-    # Enforce Tenant Filtering Explicitly
-    # -----------------------------------
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-
-        if request.user.is_superuser:
-            return qs
-
-        if hasattr(request.user, "tenant") and request.user.tenant:
-            return qs.filter(tenant=request.user.tenant)
-
-        return qs.none()
-
-    def get_queryset(self, request):
-        print("USER:", request.user, "SUPERUSER:", request.user.is_superuser)
-        print("USER TENANT:", getattr(request.user, "tenant", None))
-
-        qs = super().get_queryset(request)
-
-        if request.user.is_superuser:
-            print("Returning ALL")
-            return qs
-
-        if hasattr(request.user, "tenant") and request.user.tenant:
-            print("Filtering by:", request.user.tenant)
-            return qs.filter(tenant=request.user.tenant)
-
-        print("Returning NONE")
-        return qs.none()
-    
-    def get_exclude(self, request, obj=None):
-        exclude = list(super().get_exclude(request, obj) or [])
-
-        if not request.user.is_superuser:
-            if "tenant" not in exclude:
-                exclude.append("tenant")
-
-        return exclude
-
-    def save_model(self, request, obj, form, change):
-        if not request.user.is_superuser:
-            obj.tenant = request.user.tenant
-
-        if not change:
-            obj.created_by = request.user
-
-        super().save_model(request, obj, form, change)
+    # -------------------------------------------------
+    # Remove tenant column for tenant users
+    # -------------------------------------------------
 
     def get_list_display(self, request):
+
         fields = list(super().get_list_display(request))
 
-        if not request.user.is_superuser:
-            if "tenant" in fields:
-                fields.remove("tenant")
+        if not request.user.is_superuser and "tenant" in fields:
+            fields.remove("tenant")
 
         return tuple(fields)
-
-    def formfield_for_manytomany(self, db_field, request, **kwargs):
-        if db_field.name == "branches":
-            if not request.user.is_superuser:
-                kwargs["queryset"] = db_field.remote_field.model.objects.filter(
-                    tenant=request.user.tenant
-                )
-
-        return super().formfield_for_manytomany(db_field, request, **kwargs)
-
-    def get_queryset(self, request):
-        if request.user.is_superuser:
-            return Member._base_manager.all()
-
-        return super().get_queryset(request)
-
-    def get_fields(self, request, obj=None):
-        fields = super().get_fields(request, obj)
-
-        if not request.user.is_superuser:
-            fields = [f for f in fields if f != "tenant"]
-
-        return fields
-
-    def save_model(self, request, obj, form, change):
-        if not request.user.is_superuser:
-            obj.tenant = request.user.tenant
-
-        super().save_model(request, obj, form, change)

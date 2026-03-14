@@ -15,6 +15,7 @@ class UserManager(DjangoUserManager):
         return self.get(email=email)
 
     def create_user(self, email, password=None, **extra_fields):
+
         if not email:
             raise ValueError("Users must have an email address")
 
@@ -23,9 +24,11 @@ class UserManager(DjangoUserManager):
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
+
         return user
 
     def create_superuser(self, email, password=None, **extra_fields):
+
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("is_active", True)
@@ -40,15 +43,27 @@ class UserManager(DjangoUserManager):
 
 class User(AbstractUser):
     """
-    Extends Django's AbstractUser.
+    Custom User Model for Multi-Tenant SaaS Platform.
 
-    Important:
-    - We keep is_staff, is_superuser, is_active from AbstractUser.
-    - We DO NOT override is_staff as property.
+    Design Principles:
+    ------------------
+    Platform Admin:
+        - is_platform_admin = True
+        - tenant = NULL
+        - role = NULL
+
+    Tenant Staff:
+        - tenant required
+        - role required
+        - role must belong to same tenant
     """
 
     username = None
-    email = models.EmailField(unique=True)
+
+    email = models.EmailField(
+        unique=True,
+        db_index=True
+    )
 
     # -----------------------------
     # Tenant Association
@@ -75,7 +90,10 @@ class User(AbstractUser):
     # -----------------------------
     # Platform Admin Flag
     # -----------------------------
-    is_platform_admin = models.BooleanField(default=False)
+    is_platform_admin = models.BooleanField(
+        default=False,
+        help_text="Indicates platform-level administrator."
+    )
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
@@ -84,14 +102,23 @@ class User(AbstractUser):
 
     class Meta:
         db_table = "users"
+        indexes = [
+            models.Index(fields=["email"]),
+            models.Index(fields=["tenant"]),
+        ]
 
     def __str__(self):
-        return self.email
+
+        if self.tenant:
+            return f"{self.email} ({self.tenant.name})"
+
+        return f"{self.email} (Platform Admin)"
 
     # -------------------------------------------------
     # RBAC Integrity Enforcement
     # -------------------------------------------------
     def save(self, *args, **kwargs):
+
         """
         Platform admin:
             - No tenant required
@@ -104,6 +131,7 @@ class User(AbstractUser):
         """
 
         if not self.is_platform_admin:
+
             if not self.tenant:
                 raise ValueError("Tenant user must belong to a tenant.")
 
@@ -112,6 +140,9 @@ class User(AbstractUser):
 
             if self.role.tenant_id != self.tenant_id:
                 raise ValueError("Role must belong to the same tenant.")
+
+            # Safety: tenant users should never be superusers
+            self.is_superuser = False
 
         super().save(*args, **kwargs)
 

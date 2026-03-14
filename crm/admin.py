@@ -45,14 +45,6 @@ class TenantScopedAdmin(admin.ModelAdmin):
 
         super().save_model(request, obj, form, change)
 
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if not request.user.is_superuser:
-            if hasattr(db_field.remote_field.model, "tenant"):
-                kwargs["queryset"] = db_field.remote_field.model.objects.filter(
-                    tenant=request.user.tenant
-                )
-        return super().formfield_for_foreignkey(db_field, request, **kwargs)
-
     def get_exclude(self, request, obj=None):
         exclude = list(super().get_exclude(request, obj) or [])
 
@@ -62,6 +54,37 @@ class TenantScopedAdmin(admin.ModelAdmin):
 
         return exclude
 
+    # ---------------------------------------------------
+    # Filter ForeignKey fields by tenant
+    # ---------------------------------------------------
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+
+        if hasattr(db_field.remote_field.model, "tenant"):
+
+            if not request.user.is_superuser and hasattr(request.user, "tenant"):
+
+                kwargs["queryset"] = db_field.remote_field.model.base_objects.filter(
+                    tenant=request.user.tenant
+                )
+
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    # ---------------------------------------------------
+    # Filter ManyToMany fields by tenant
+    # ---------------------------------------------------
+
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+
+        if hasattr(db_field.remote_field.model, "tenant"):
+
+            if not request.user.is_superuser and hasattr(request.user, "tenant"):
+
+                kwargs["queryset"] = db_field.remote_field.model.base_objects.filter(
+                    tenant=request.user.tenant
+                )
+
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
 
 # ============================================================
 # Lead Stage Admin

@@ -40,17 +40,26 @@ INSTALLED_APPS = [
     # Third Party
     'rest_framework',
 
+    # ==============================
     # Project Apps
-    'apps.core',
-    'apps.memberships',
-    'apps.accounts',
-    'apps.lifecycles',
-    'apps.monitoring',
+    # ==============================
+
+    'apps.core.apps.CoreConfig',
+    'apps.accounts.apps.AccountsConfig',
+    'apps.memberships.apps.MembershipsConfig',
+    'apps.sessions.apps.PlatformSessionsConfig',
+    'apps.lifecycles.apps.LifecyclesConfig',
+    'apps.monitoring.apps.MonitoringConfig',
+    'apps.tenants.apps.TenantsConfig',
     'apps.authority.apps.AuthorityConfig',
+
+    # Legacy / domain modules
     'members',
     'crm',
 
-    # 🏗 Phase 2 — Platform Control Layer
+    # ==============================
+    # Phase 2 — Platform Control Layer
+    # ==============================
     'platform_core',
 ]
 

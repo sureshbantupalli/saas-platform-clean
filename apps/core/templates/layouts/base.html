@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <title>SaaS Platform</title>
+
+    <style>
+
+        body{
+            margin:0;
+            font-family:Arial;
+            background:#f5f7fa;
+        }
+
+        .sidebar{
+            width:220px;
+            height:100vh;
+            position:fixed;
+            background:#2c3e50;
+            color:white;
+            padding-top:20px;
+        }
+
+        .sidebar h2{
+            padding-left:20px;
+        }
+
+        .sidebar a{
+            display:block;
+            color:white;
+            padding:12px 20px;
+            text-decoration:none;
+        }
+
+        .sidebar a:hover{
+            background:#34495e;
+        }
+
+        .main{
+            margin-left:220px;
+            padding:30px;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<div class="sidebar">
+
+    <h2>Platform</h2>
+
+    <a href="/dashboard/">Dashboard</a>
+    <a href="/sessions/list/">Sessions</a>
+    <a href="/members/">Members</a>
+    <a href="/memberships/">Memberships</a>
+    <a href="/monitoring/">Monitoring</a>
+
+</div>
+
+
+<div class="main">
+
+{% block content %}
+{% endblock %}
+
+</div>
+
+</body>
+
+</html>

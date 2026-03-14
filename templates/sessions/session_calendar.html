@@ -1,0 +1,59 @@
+{% extends "platform/base.html" %}
+
+{% block title %}Session Calendar{% endblock %}
+
+{% block content %}
+
+<h2>Upcoming Sessions</h2>
+
+<div class="card mt-4">
+  <div class="card-body">
+
+```
+<table class="table table-striped">
+
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>Session</th>
+      <th>Start Time</th>
+      <th>Capacity</th>
+      <th>Bookings</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+
+  <tbody>
+
+    {% for instance in instances %}
+
+    <tr>
+      <td>{{ instance.session_date }}</td>
+      <td>
+          <a href="/sessions/instance/{{ instance.id }}/">
+          {{ instance.schedule.template.name }}
+          </a>
+      </td>
+      <td>{{ instance.start_time }}</td>
+      <td>{{ instance.capacity }}</td>
+      <td>{{ instance.bookings.count }}</td>
+      <td>{{ instance.status }}</td>
+    </tr>
+
+    {% empty %}
+
+    <tr>
+      <td colspan="6">No upcoming sessions.</td>
+    </tr>
+
+    {% endfor %}
+
+  </tbody>
+
+</table>
+```
+
+  </div>
+</div>
+
+{% endblock %}

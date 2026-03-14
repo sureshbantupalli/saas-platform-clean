@@ -1,0 +1,123 @@
+{% extends "platform/base.html" %}
+
+{% block title %}Session Detail{% endblock %}
+
+{% block content %}
+
+<h2>Session Detail</h2>
+
+<div class="card mt-4">
+  <div class="card-body">
+
+```
+<h4>{{ instance.schedule.template.name }}</h4>
+
+<p>
+  Date: {{ instance.session_date }} <br>
+  Time: {{ instance.start_time }} <br>
+  Capacity: {{ instance.capacity }}
+</p>
+```
+
+  </div>
+</div>
+
+<div class="card mt-4">
+  <div class="card-body">
+
+```
+<h5>Bookings</h5>
+
+<table class="table table-striped">
+
+  <thead>
+    <tr>
+      <th>Member</th>
+      <th>Status</th>
+      <th>Source</th>
+    </tr>
+  </thead>
+
+  <tbody>
+
+    {% for booking in bookings %}
+
+    <tr>
+      <td>
+        {% if booking.member %}
+          {{ booking.member }}
+        {% else %}
+          {{ booking.guest_name }}
+        {% endif %}
+      </td>
+
+      <td>{{ booking.status }}</td>
+      <td>{{ booking.booking_source }}</td>
+    </tr>
+
+    {% empty %}
+
+    <tr>
+      <td colspan="3">No bookings yet.</td>
+    </tr>
+
+    {% endfor %}
+
+  </tbody>
+
+</table>
+```
+
+  </div>
+</div>
+
+<div class="card mt-4">
+  <div class="card-body">
+
+```
+<h5>Attendance</h5>
+
+<table class="table table-striped">
+
+  <thead>
+    <tr>
+      <th>Member</th>
+      <th>Status</th>
+      <th>Marked By</th>
+    </tr>
+  </thead>
+
+  <tbody>
+
+    {% for record in attendance %}
+
+    <tr>
+      <td>
+        {% if record.member %}
+          {{ record.member }}
+        {% else %}
+          {{ record.guest_name }}
+        {% endif %}
+      </td>
+
+      <td>{{ record.status }}</td>
+      <td>{{ record.attendance_source }}</td>
+    </tr>
+
+    {% empty %}
+
+    <tr>
+      <td colspan="3">No attendance recorded.</td>
+    </tr>
+
+    {% endfor %}
+
+  </tbody>
+
+</table>
+```
+
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,1 @@
+# Tenant admin is registered in apps.core.admin

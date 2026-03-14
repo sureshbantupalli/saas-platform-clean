@@ -1,0 +1,53 @@
+{% extends "platform/base.html" %}
+
+{% block title %}Members{% endblock %}
+
+{% block content %}
+
+<h2>Members</h2>
+
+<div class="card mt-4">
+    <div class="card-body">
+
+```
+    <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+        <h5>Member List</h5>
+        <a href="#" class="btn btn-primary">Add Member</a>
+    </div>
+
+    <table class="table table-striped">
+
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Membership</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+            {% for member in members %}
+            <tr>
+                <td>{{ member.name }}</td>
+                <td>{{ member.email }}</td>
+                <td>{{ member.membership }}</td>
+                <td>{{ member.status }}</td>
+                <td>
+                    <a href="#">View</a>
+                </td>
+            </tr>
+            {% endfor %}
+
+        </tbody>
+
+    </table>
+
+</div>
+```
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,1 @@
+# Tenant model is defined in apps.core.models

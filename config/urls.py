@@ -7,14 +7,14 @@ from django.urls import path, include
 from django.views.generic import RedirectView
 from django.urls import reverse_lazy
 
-# 🔐 Custom Auth Views
+# Custom Auth Views
 from apps.accounts.views import login_view, logout_view
 
-# 🔥 Existing Test Views
+# Test Views
 from apps.core.views import test_create_member, view_member
 from apps.core.views_test import test_ui
 
-# 🔥 DRF Router Setup
+# DRF Router Setup
 from rest_framework.routers import DefaultRouter
 from members.api import MemberViewSet
 from apps.memberships.views import MembershipViewSet
@@ -35,10 +35,7 @@ router.register(r"memberships", MembershipViewSet, basename="api-memberships")
 
 urlpatterns = [
 
-    # ======================================
     # Root → Monitoring Dashboard
-    # ======================================
-
     path(
         "",
         RedirectView.as_view(
@@ -48,37 +45,31 @@ urlpatterns = [
         name="root_redirect"
     ),
 
-    # ======================================
-    # Monitoring App
-    # ======================================
+    # Core Dashboard
+    path(
+        "",
+        include("apps.core.urls")
+    ),
 
+    # Monitoring App
     path(
         "monitoring/",
         include("apps.monitoring.urls")
     ),
 
-    # ======================================
     # Test UI
-    # ======================================
-
     path(
         "test-ui/",
         test_ui
     ),
 
-    # ======================================
     # Django Admin
-    # ======================================
-
     path(
         "admin/",
         admin.site.urls
     ),
 
-    # ======================================
     # Authentication
-    # ======================================
-
     path(
         "login/",
         login_view,
@@ -91,78 +82,68 @@ urlpatterns = [
         name="logout"
     ),
 
-    # ======================================
     # CRM Module
-    # ======================================
-
     path(
         "crm/",
         include("crm.urls")
     ),
 
-    # ======================================
     # Platform Control Layer
-    # ======================================
-
     path(
         "platform/",
         include("platform_core.urls")
     ),
 
-    # ======================================
     # Members (HTML App)
-    # ======================================
-
     path(
         "members/",
         include(("members.urls", "members"), namespace="members")
     ),
 
-    # ======================================
-    # Memberships (HTML UI)
-    # ======================================
+    # Sessions (HTML UI)
+    path(
+        "sessions/",
+        include("apps.sessions.urls")
+    ),
 
+    # Memberships (HTML UI)
     path(
         "memberships/",
         include("apps.memberships.urls")
     ),
 
-    # ======================================
     # RBAC Test Endpoint
-    # ======================================
-
     path(
         "test-create/",
         test_create_member,
         name="test_create_member"
     ),
 
-    # ======================================
     # Scoped Member View Test
-    # ======================================
-
     path(
         "members/<uuid:member_id>/",
         view_member,
         name="view_member"
     ),
 
-    # ======================================
     # Authority / RBAC
-    # ======================================
-
     path(
         "authority/",
         include("apps.authority.urls")
     ),
 
-    # ======================================
+    # ==========================
     # API Layer (DRF)
-    # ======================================
+    # ==========================
 
     path(
         "api/",
         include(router.urls)
     ),
 
+    # Sessions API
+    path(
+        "api/sessions/",
+        include("apps.sessions.urls")
+    ),
 ]

@@ -19,6 +19,9 @@ class BaseModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # ✅ Soft Delete Support
+    is_deleted = models.BooleanField(default=False)
+
     class Meta:
         abstract = True
 
@@ -28,11 +31,22 @@ class BaseModel(models.Model):
 # =====================================================
 
 class Tenant(BaseModel):
-    name = models.CharField(max_length=255, unique=True)
-    subdomain = models.SlugField(max_length=100, unique=True)
-    is_active = models.BooleanField(default=True)
 
-    # ✅ ADD THIS
+    name = models.CharField(
+        max_length=255,
+        unique=True
+    )
+
+    subdomain = models.SlugField(
+        max_length=100,
+        unique=True
+    )
+
+    # Used by billing / subscription system later
+    is_active = models.BooleanField(
+        default=True
+    )
+
     grace_days = models.PositiveIntegerField(
         default=0,
         help_text="Number of grace days after membership final end date"
@@ -40,22 +54,32 @@ class Tenant(BaseModel):
 
     class Meta:
         db_table = "tenants"
+
         indexes = [
             models.Index(fields=["subdomain"]),
         ]
 
     def save(self, *args, **kwargs):
+
+        # Detect new tenant creation
         is_new = not Tenant.objects.filter(pk=self.pk).exists()
 
+        # Auto-generate subdomain if not provided
         if not self.subdomain:
             self.subdomain = slugify(self.name)
 
         super().save(*args, **kwargs)
 
+        # Automatically create CRM stages
         if is_new:
             self.create_default_stages()
 
+    # =====================================================
+    # Default CRM Pipeline Creation
+    # =====================================================
+
     def create_default_stages(self):
+
         from crm.models import LeadStage
 
         default_stages = [
@@ -79,7 +103,8 @@ class Tenant(BaseModel):
 
     def __str__(self):
         return self.name
-        
+
+
 # =====================================================
 # Tenant Scoped QuerySet
 # =====================================================
@@ -87,13 +112,20 @@ class Tenant(BaseModel):
 class TenantScopedQuerySet(models.QuerySet):
 
     def for_user(self, user):
+
         if user.is_platform_admin:
             return self
 
         if not user.tenant:
-            raise PermissionDenied("User does not belong to any tenant.")
+            raise PermissionDenied(
+                "User does not belong to any tenant."
+            )
 
         return self.filter(tenant=user.tenant)
+
+    # Hide soft deleted records
+    def active(self):
+        return self.filter(is_deleted=False)
 
 
 # =====================================================
@@ -103,16 +135,29 @@ class TenantScopedQuerySet(models.QuerySet):
 class TenantScopedManager(models.Manager):
 
     def get_queryset(self):
-        queryset = TenantScopedQuerySet(self.model, using=self._db)
+
+        queryset = TenantScopedQuerySet(
+            self.model,
+            using=self._db
+        )
+
         current_tenant = get_current_tenant()
 
+        # Auto apply tenant filter if context exists
         if current_tenant is not None:
-            return queryset.filter(tenant=current_tenant)
+            return queryset.filter(
+                tenant=current_tenant,
+                is_deleted=False
+            )
 
         return queryset.none()
 
     def for_user(self, user):
-        return TenantScopedQuerySet(self.model, using=self._db).for_user(user)
+
+        return TenantScopedQuerySet(
+            self.model,
+            using=self._db
+        ).for_user(user).filter(is_deleted=False)
 
 
 # =====================================================
@@ -120,32 +165,51 @@ class TenantScopedManager(models.Manager):
 # =====================================================
 
 class TenantAwareModel(BaseModel):
+
     tenant = models.ForeignKey(
         Tenant,
         on_delete=models.CASCADE,
         related_name="%(class)ss"
     )
 
-    objects = TenantScopedManager()
-    scoped = TenantScopedManager()
+    # Default manager (safe for admin / M2M validation)
     base_objects = models.Manager()
+    objects = base_objects
+
+    # Tenant-scoped manager used explicitly in code
+    scoped = TenantScopedManager()
 
     class Meta:
         abstract = True
 
     def save(self, *args, **kwargs):
+
+        # -------------------------------------------------
+        # Assign tenant automatically for new records
+        # -------------------------------------------------
         if not self.pk:
+
             if self.tenant_id is None:
+
                 current_tenant = get_current_tenant()
+
                 if current_tenant is None:
                     raise ValueError(
                         "Tenant must be explicitly set or available in context."
                     )
+
                 self.tenant = current_tenant
+
         else:
-            original = self.__class__.base_objects.filter(pk=self.pk).first()
+
+            original = self.__class__.base_objects.filter(
+                pk=self.pk
+            ).first()
+
             if original and original.tenant_id != self.tenant_id:
-                raise ValueError("Tenant cannot be changed once set.")
+                raise ValueError(
+                    "Tenant cannot be changed once set."
+                )
 
         super().save(*args, **kwargs)
 
@@ -156,16 +220,32 @@ class TenantAwareModel(BaseModel):
 
 class Branch(TenantAwareModel):
 
-    name = models.CharField(max_length=150)
-    address = models.TextField(blank=True)
-    phone = models.CharField(max_length=20, blank=True)
-    email = models.EmailField(blank=True)
+    name = models.CharField(
+        max_length=150
+    )
 
-    is_active = models.BooleanField(default=True)
+    address = models.TextField(
+        blank=True
+    )
+
+    phone = models.CharField(
+        max_length=20,
+        blank=True
+    )
+
+    email = models.EmailField(
+        blank=True
+    )
+
+    is_active = models.BooleanField(
+        default=True
+    )
 
     class Meta:
         db_table = "branches"
+
         ordering = ["name"]
+
         constraints = [
             models.UniqueConstraint(
                 fields=["tenant", "name"],

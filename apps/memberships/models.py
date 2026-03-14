@@ -52,9 +52,11 @@ class Membership(TenantAwareModel):
         related_name="memberships"
     )
 
+    # Snapshot of plan name (important for history)
     plan_name = models.CharField(max_length=120)
 
     start_date = models.DateField()
+
     end_date = models.DateField()
 
     status = models.CharField(
@@ -62,10 +64,6 @@ class Membership(TenantAwareModel):
         choices=STATUS_CHOICES,
         default="active"
     )
-
-    # ------------------------------
-    # Pricing
-    # ------------------------------
 
     base_amount = models.DecimalField(
         max_digits=10,
@@ -88,7 +86,8 @@ class Membership(TenantAwareModel):
 
     fee_amount = models.DecimalField(
         max_digits=10,
-        decimal_places=2
+        decimal_places=2,
+        default=0
     )
 
     auto_renew = models.BooleanField(default=False)
@@ -102,10 +101,6 @@ class Membership(TenantAwareModel):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # =====================================================
-    # Meta
-    # =====================================================
-
     class Meta:
         ordering = ["-created_at"]
         constraints = [
@@ -116,39 +111,45 @@ class Membership(TenantAwareModel):
             )
         ]
 
-    # =====================================================
+    # -----------------------------------------------------
     # Validation
-    # =====================================================
+    # -----------------------------------------------------
 
     def clean(self):
-        from django.core.exceptions import ValidationError
 
-        # Ensure required relationships exist before using them
         if not self.member_id or not self.branch_id:
             return
 
-        # Ensure branch belongs to member
+        # Ensure member belongs to selected branch
         if not self.member.branches.filter(id=self.branch_id).exists():
             raise ValidationError(
                 "Selected branch is not assigned to this member."
             )
 
-    # =====================================================
-    # Save Override
-    # =====================================================
+        # Ensure tenant matches branch
+        if self.branch:
+            self.tenant = self.branch.tenant
+
+    # -----------------------------------------------------
+    # Save Logic
+    # -----------------------------------------------------
 
     def save(self, *args, **kwargs):
 
-        # Tenant auto-assignment
-        if not self.tenant_id:
-            from apps.core.tenant_context import get_current_tenant
-            current_tenant = get_current_tenant()
-            if current_tenant:
-                self.tenant = current_tenant
+        # Ensure tenant from branch
+        if self.branch:
+            self.tenant = self.branch.tenant
 
-        # ------------------------------
-        # Pricing Logic
-        # ------------------------------
+        # -----------------------------------------
+        # Copy Plan Name Snapshot
+        # -----------------------------------------
+
+        if self.plan:
+            self.plan_name = self.plan.name
+
+        # -----------------------------------------
+        # Discount Normalization
+        # -----------------------------------------
 
         if self.discount_type == "NONE":
             self.discount_value = 0
@@ -156,30 +157,38 @@ class Membership(TenantAwareModel):
         if self.discount_value in [None, ""]:
             self.discount_value = 0
 
+        # -----------------------------------------
+        # Fee Calculation
+        # -----------------------------------------
+
         if self.plan:
+
             self.base_amount = self.plan.price
 
             if self.discount_type == "NONE":
                 self.fee_amount = self.base_amount
 
             elif self.discount_type == "FIXED":
+
                 self.fee_amount = max(
                     self.base_amount - self.discount_value,
                     0
                 )
 
             elif self.discount_type == "PERCENTAGE":
+
                 discount_amount = (
                     self.base_amount * self.discount_value / 100
                 )
+
                 self.fee_amount = max(
                     self.base_amount - discount_amount,
                     0
                 )
 
-        # ------------------------------
+        # -----------------------------------------
         # End Date Calculation
-        # ------------------------------
+        # -----------------------------------------
 
         if self.plan and self.start_date:
 
@@ -198,17 +207,15 @@ class Membership(TenantAwareModel):
             elif cycle == "YEARLY":
                 self.end_date = self.start_date + relativedelta(years=interval)
 
-        # Validation
         self.full_clean()
 
-        # Lifecycle sync
         self.sync_status_with_lifecycle()
 
         super().save(*args, **kwargs)
 
-    # =====================================================
-    # Lifecycle Intelligence
-    # =====================================================
+    # -----------------------------------------------------
+    # Final Expiry Calculation
+    # -----------------------------------------------------
 
     @property
     def final_end_date(self):
@@ -232,16 +239,27 @@ class Membership(TenantAwareModel):
             days=extension_days + freeze_days + correction_days
         )
 
+    # -----------------------------------------------------
+    # Grace Period
+    # -----------------------------------------------------
+
     @property
     def effective_expiry_date(self):
+
         if not self.final_end_date:
             return None
 
         grace = self.tenant.grace_days if self.tenant else 0
+
         return self.final_end_date + timedelta(days=grace)
+
+    # -----------------------------------------------------
+    # Lifecycle Status
+    # -----------------------------------------------------
 
     @property
     def lifecycle_status(self):
+
         today = timezone.now().date()
 
         if not self.final_end_date:
@@ -255,15 +273,11 @@ class Membership(TenantAwareModel):
 
         return "EXPIRED"
 
-    # =====================================================
-    # Status Sync
-    # =====================================================
+    # -----------------------------------------------------
+    # Sync Status
+    # -----------------------------------------------------
 
     def sync_status_with_lifecycle(self):
-        """
-        Status is lifecycle-driven,
-        except when manually paused or cancelled.
-        """
 
         if self.status in ["paused", "cancelled"]:
             return
@@ -301,6 +315,7 @@ class MembershipAdjustment(TenantAwareModel):
     )
 
     days = models.IntegerField()
+
     remarks = models.TextField()
 
     created_by = models.ForeignKey(
@@ -324,18 +339,18 @@ class MembershipAdjustment(TenantAwareModel):
 
 class MembershipPlan(TenantAwareModel):
 
+    PLAN_TYPE_CHOICES = [
+        ("DURATION", "Duration"),
+        ("CLASS_PACK", "Class Pack"),
+        ("UNLIMITED", "Unlimited"),
+    ]
+
     BILLING_CYCLE_CHOICES = [
         ("DAILY", "Daily"),
         ("WEEKLY", "Weekly"),
         ("MONTHLY", "Monthly"),
         ("YEARLY", "Yearly"),
         ("CUSTOM", "Custom"),
-    ]
-
-    DURATION_TYPE_CHOICES = [
-        ("FIXED_PERIOD", "Fixed Period"),
-        ("OPEN_ENDED", "Open Ended"),
-        ("CUSTOM_DATE_RANGE", "Custom Date Range"),
     ]
 
     branch = models.ForeignKey(
@@ -345,6 +360,15 @@ class MembershipPlan(TenantAwareModel):
     )
 
     name = models.CharField(max_length=150)
+
+    description = models.TextField(blank=True)
+
+    plan_type = models.CharField(
+        max_length=20,
+        choices=PLAN_TYPE_CHOICES,
+        default="DURATION"
+    )
+
     price = models.DecimalField(max_digits=10, decimal_places=2)
 
     billing_cycle_type = models.CharField(
@@ -354,23 +378,90 @@ class MembershipPlan(TenantAwareModel):
 
     billing_interval = models.PositiveIntegerField(default=1)
 
-    duration_type = models.CharField(
-        max_length=30,
-        choices=DURATION_TYPE_CHOICES
+    class_count = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Used only for CLASS_PACK memberships"
     )
 
-    duration_value = models.PositiveIntegerField(
-        null=True,
-        blank=True
+    is_template = models.BooleanField(
+        default=True,
+        help_text="Reusable plan template"
     )
 
     allow_custom_dates = models.BooleanField(default=False)
+
     auto_renew_default = models.BooleanField(default=False)
+
     is_active = models.BooleanField(default=True)
 
     class Meta:
         unique_together = ("tenant", "branch", "name")
         ordering = ["name"]
 
+    def clean(self):
+
+        if self.branch:
+            self.tenant = self.branch.tenant
+
+        if self.plan_type == "CLASS_PACK" and not self.class_count:
+            raise ValidationError(
+                "Class pack plans require class_count."
+            )
+
+        if self.plan_type != "CLASS_PACK":
+            self.class_count = None
+
+    def save(self, *args, **kwargs):
+
+        if self.branch:
+            self.tenant = self.branch.tenant
+
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.name} ({self.branch.name})"
+
+class MembershipUsage(TenantAwareModel):
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False
+    )
+
+    membership = models.ForeignKey(
+        "memberships.Membership",
+        on_delete=models.CASCADE,
+        related_name="usages"
+    )
+
+    session_instance = models.ForeignKey(
+        "platform_sessions.SessionInstance",
+        on_delete=models.CASCADE,
+        related_name="membership_usages"
+    )
+
+    attendance = models.ForeignKey(
+        "platform_sessions.Attendance",
+        on_delete=models.CASCADE,
+        related_name="membership_usages"
+    )
+
+    used_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    def __str__(self):
+        return f"{self.membership} → {self.session_instance}"
+
+    class Meta:
+        unique_together = (
+            "membership",
+            "session_instance",
+        )

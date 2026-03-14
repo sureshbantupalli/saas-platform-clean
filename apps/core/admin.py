@@ -8,9 +8,22 @@ from .models import Tenant, Branch
 
 @admin.register(Tenant)
 class TenantAdmin(admin.ModelAdmin):
-    list_display = ("name", "subdomain", "is_active", "created_at")
-    search_fields = ("name", "subdomain")
-    list_filter = ("is_active",)
+
+    list_display = (
+        "name",
+        "subdomain",
+        "is_active",
+        "created_at",
+    )
+
+    search_fields = (
+        "name",
+        "subdomain",
+    )
+
+    list_filter = (
+        "is_active",
+    )
 
 
 # =====================================================
@@ -19,17 +32,40 @@ class TenantAdmin(admin.ModelAdmin):
 
 @admin.register(Branch)
 class BranchAdmin(admin.ModelAdmin):
-    list_display = ("name", "tenant", "is_active", "created_at")
-    search_fields = ("name",)
-    list_filter = ("tenant", "is_active")
+
+    list_display = (
+        "name",
+        "tenant",
+        "is_active",
+        "created_at",
+    )
+
+    search_fields = (
+        "name",
+    )
+
+    list_filter = (
+        "tenant",
+        "is_active",
+    )
+
+    # -------------------------------------------------
+    # Bypass tenant scoped manager for platform admin
+    # -------------------------------------------------
 
     def get_queryset(self, request):
+
         if request.user.is_superuser:
-            return Branch._base_manager.all()
+            return Branch.base_objects.all()
 
         return super().get_queryset(request)
 
+    # -------------------------------------------------
+    # Hide tenant field for tenant users
+    # -------------------------------------------------
+
     def get_fields(self, request, obj=None):
+
         fields = super().get_fields(request, obj)
 
         if not request.user.is_superuser:
@@ -37,7 +73,12 @@ class BranchAdmin(admin.ModelAdmin):
 
         return fields
 
+    # -------------------------------------------------
+    # Auto assign tenant
+    # -------------------------------------------------
+
     def save_model(self, request, obj, form, change):
+
         if not request.user.is_superuser:
             obj.tenant = request.user.tenant
 

@@ -1,0 +1,39 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+<h1>Tenant Dashboard</h1>
+
+<h2>Session Metrics</h2>
+
+<div>
+    <p>Total Sessions: <span id="total_sessions"></span></p>
+    <p>Total Capacity: <span id="total_capacity"></span></p>
+    <p>Total Bookings: <span id="total_bookings"></span></p>
+    <p>Utilization: <span id="utilization"></span>%</p>
+</div>
+
+
+<script>
+
+fetch("/api/sessions/dashboard/session-metrics/")
+.then(res => res.json())
+.then(data => {
+
+    document.getElementById("total_sessions").innerText =
+        data.total_sessions
+
+    document.getElementById("total_capacity").innerText =
+        data.total_capacity
+
+    document.getElementById("total_bookings").innerText =
+        data.total_bookings
+
+    document.getElementById("utilization").innerText =
+        data.utilization_percent
+
+})
+
+</script>
+
+{% endblock %}

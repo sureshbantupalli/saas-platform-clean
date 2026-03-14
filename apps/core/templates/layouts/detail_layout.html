@@ -1,0 +1,34 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+<h1>{{ title }}</h1>
+
+<table border="1" cellpadding="8" cellspacing="0">
+
+    {% for label, value in fields %}
+
+    <tr>
+        <th align="left">{{ label }}</th>
+        <td>{{ value }}</td>
+    </tr>
+
+    {% endfor %}
+
+</table>
+
+<br>
+
+<a href="{{ edit_url }}">
+    <button>Edit</button>
+</a>
+
+<br><br>
+
+<a href="{{ delete_url }}">
+    <button style="background-color:red;color:white;">
+        Delete
+    </button>
+</a>
+
+{% endblock %}

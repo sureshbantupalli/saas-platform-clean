@@ -1,26 +1,28 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views import View
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404, redirect
 from django.http import HttpResponseForbidden
+from django.db.models import Count
 
 from apps.accounts.models import User
 from crm.models import Enquiry
 
-from django.db.models import Count
-
 # Adjust Tenant import if needed
+
 try:
     from apps.core.models import Tenant
-except:
+except ImportError:
     from members.models import Tenant
 
-
 class PlatformDashboardView(LoginRequiredMixin, View):
-    template_name = "platform/dashboard.html"
+
+
+    template_name = "platform/dashboard/dashboard.html"
 
     def get(self, request):
-        if not request.user.is_platform_admin:
-            return HttpResponseForbidden("You are not allowed here.")
+
+        if not getattr(request.user, "is_platform_admin", False):
+            return HttpResponseForbidden("Tenant users cannot access platform control.")
 
         total_tenants = Tenant.objects.count()
         total_users = User.objects.count()
@@ -40,12 +42,15 @@ class PlatformDashboardView(LoginRequiredMixin, View):
 
         return render(request, self.template_name, context)
 
+
 class TenantListView(LoginRequiredMixin, View):
+
     template_name = "platform/tenant_list.html"
 
     def get(self, request):
-        if not request.user.is_platform_admin:
-            return HttpResponseForbidden("You are not allowed here.")
+
+        if not getattr(request.user, "is_platform_admin", False):
+            return HttpResponseForbidden("Tenant users cannot access platform control.")
 
         tenants = (
             Tenant.objects
@@ -59,17 +64,17 @@ class TenantListView(LoginRequiredMixin, View):
 
         return render(request, self.template_name, context)
 
-from django.shortcuts import get_object_or_404, redirect
-
 
 class ToggleTenantStatusView(LoginRequiredMixin, View):
 
+
     def post(self, request, tenant_id):
-        if not request.user.is_platform_admin:
-            return HttpResponseForbidden("You are not allowed here.")
+
+        if not getattr(request.user, "is_platform_admin", False):
+            return HttpResponseForbidden("Tenant users cannot access platform control.")
 
         tenant = get_object_or_404(Tenant, id=tenant_id)
         tenant.is_active = not tenant.is_active
         tenant.save()
 
-        return redirect("platform_tenants")
+        return redirect("platform:tenants")
