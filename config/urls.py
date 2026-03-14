@@ -146,4 +146,10 @@ urlpatterns = [
         "api/sessions/",
         include("apps.sessions.urls")
     ),
+
+    # ⭐ NEW: Dashboard Widgets API
+    path(
+        "api/dashboard/",
+        include("apps.dashboard.api.urls")
+    ),
 ]

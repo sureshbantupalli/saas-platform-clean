@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'apps.monitoring.apps.MonitoringConfig',
     'apps.tenants.apps.TenantsConfig',
     'apps.authority.apps.AuthorityConfig',
+    'apps.dashboard.apps.DashboardConfig',   # ✅ FIXED
 
     # Legacy / domain modules
     'members',
@@ -168,15 +169,16 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # ==============================
 
 LOGIN_URL = "/login/"
-# LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/login/"
 
 AUTH_USER_MODEL = "accounts.User"
 
+TENANT_MODEL = "tenants.Tenant"
 
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
 ]
+
 
 # ==============================
 # REST FRAMEWORK
