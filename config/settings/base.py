@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 # Load environment variables from .env
 load_dotenv()
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
@@ -47,31 +46,52 @@ INSTALLED_APPS = [
     'apps.core.apps.CoreConfig',
     'apps.accounts.apps.AccountsConfig',
     'apps.memberships.apps.MembershipsConfig',
-    'apps.sessions.apps.PlatformSessionsConfig',
+
+    # ✅ Session Engine
+    'apps.platform_sessions.apps.PlatformSessionsConfig',
+
     'apps.lifecycles.apps.LifecyclesConfig',
     'apps.monitoring.apps.MonitoringConfig',
     'apps.tenants.apps.TenantsConfig',
     'apps.authority.apps.AuthorityConfig',
-    'apps.dashboard.apps.DashboardConfig',   # ✅ FIXED
+    'apps.dashboard.apps.DashboardConfig',
 
+    # ==============================
+    # Booking + Payments Engine
+    # ==============================
+
+    'apps.bookings',
+    'apps.payments',
+    'apps.attendance',
+
+    # ==============================
     # Legacy / domain modules
+    # ==============================
+
     'members',
     'crm',
 
     # ==============================
-    # Phase 2 — Platform Control Layer
+    # Platform Control Layer
     # ==============================
+
     'platform_core',
 ]
+
+
+# ==============================
+# MIDDLEWARE (✅ FIXED ORDER)
+# ==============================
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
 
+    # ✅ Authentication FIRST
     'django.contrib.auth.middleware.AuthenticationMiddleware',
 
-    # Multi-Tenant Middleware (Critical)
+    # ✅ Tenant AFTER authentication (ONLY ONCE)
     'apps.core.middleware.TenantMiddleware',
 
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -79,7 +99,13 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+
 ROOT_URLCONF = 'config.urls'
+
+
+# ==============================
+# TEMPLATES
+# ==============================
 
 TEMPLATES = [
     {
@@ -97,6 +123,7 @@ TEMPLATES = [
     },
 ]
 
+
 WSGI_APPLICATION = 'config.wsgi.application'
 
 
@@ -105,13 +132,13 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # ==============================
 
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME"),
-        "USER": os.getenv("DB_USER"),
-        "PASSWORD": os.getenv("DB_PASSWORD"),
-        "HOST": os.getenv("DB_HOST"),
-        "PORT": os.getenv("DB_PORT"),
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'saas_db',
+        'USER': 'postgres',
+        'PASSWORD': 'postgres123',
+        'HOST': '127.0.0.1',
+        'PORT': '5433',
     }
 }
 
@@ -121,18 +148,10 @@ DATABASES = {
 # ==============================
 
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
 
@@ -141,7 +160,6 @@ AUTH_PASSWORD_VALIDATORS = [
 # ==============================
 
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'Asia/Kolkata'
 
 USE_I18N = True
@@ -158,9 +176,7 @@ DATE_INPUT_FORMATS = ["%Y-%m-%d"]
 # ==============================
 
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [
-    BASE_DIR / "static",
-]
+STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 
@@ -172,7 +188,6 @@ LOGIN_URL = "/login/"
 LOGOUT_REDIRECT_URL = "/login/"
 
 AUTH_USER_MODEL = "accounts.User"
-
 TENANT_MODEL = "tenants.Tenant"
 
 AUTHENTICATION_BACKENDS = [

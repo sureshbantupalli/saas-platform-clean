@@ -1,8 +1,17 @@
 from django.db import models
 from django.utils import timezone
+from apps.core.models import TenantAwareModel
 
 
-class LifecycleRun(models.Model):
+class LifecycleRun(TenantAwareModel):
+
+    # ✅ TEMP override (important)
+    tenant = models.ForeignKey(
+        "core.Tenant",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
 
     class Status(models.TextChoices):
         RUNNING = "RUNNING", "Running"
@@ -38,6 +47,7 @@ class LifecycleRun(models.Model):
     notes = models.TextField(blank=True)
 
     class Meta:
+        db_table = "lifecycle_runs"
         ordering = ["-started_at"]
 
     def __str__(self):

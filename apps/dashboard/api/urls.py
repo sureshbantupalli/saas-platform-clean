@@ -1,7 +1,6 @@
 from django.urls import path
-
-from .views import DashboardWidgetsAPIView
+from apps.dashboard.views import WidgetDataView
 
 urlpatterns = [
-    path("widgets/", DashboardWidgetsAPIView.as_view(), name="dashboard-widgets"),
+    path("widgets/<str:widget_key>/", WidgetDataView.as_view(), name="dashboard-widgets"),
 ]

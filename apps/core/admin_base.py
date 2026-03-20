@@ -1,4 +1,5 @@
 from django.contrib import admin
+from apps.core.tenant_context import get_current_tenant
 
 
 # =========================================================
@@ -7,73 +8,80 @@ from django.contrib import admin
 #
 # PURPOSE
 # -------
-# This mixin centralizes common SaaS admin behavior used across
-# multiple Django admin classes.
+# Centralizes SaaS admin behavior:
 #
-# Why this file exists:
-# - Our models use TenantScopedQuerySet which automatically filters
-#   data by tenant.
-# - Django Admin must bypass that filtering for platform admins.
-#
-# This mixin ensures:
-#   ✓ Platform admins see ALL tenants
-#   ✓ Tenant users see only their tenant
-#   ✓ Tenant is automatically assigned when saving objects
-#
-# Usage:
-#
-#     from apps.core.admin_base import PlatformAdminMixin
-#
-#     @admin.register(SomeModel)
-#     class SomeModelAdmin(PlatformAdminMixin):
-#         model = SomeModel
-#
-# This prevents duplicating tenant logic in every admin file.
+#   ✓ Platform admins → full access
+#   ✓ Tenant context → filtered access
+#   ✓ Auto tenant assignment on save
 #
 # IMPORTANT:
 # ----------
-# Tenant staff DO NOT access Django Admin in our SaaS architecture.
-# Django Admin is strictly used by PLATFORM administrators.
-#
-# Tenant users interact with the system through the SaaS UI.
-#
+# Django Admin is used ONLY by platform admins.
+# Tenant users interact via SaaS UI (not admin).
 # =========================================================
 
 
 class PlatformAdminMixin(admin.ModelAdmin):
 
-    # Child admin classes must define their model
-    model = None
+    model = None  # Must be defined in child admin
 
     # -----------------------------------------------------
-    # Bypass TenantScopedQuerySet for Admin
+    # Queryset Control
     # -----------------------------------------------------
-
     def get_queryset(self, request):
 
-        # Use base_objects to bypass tenant filtering
+        # Always start with base_objects (no auto filtering)
         qs = self.model.base_objects.all()
 
         user = request.user
 
-        # Platform admins can see everything
+        # -------------------------------------------------
+        # 👑 Platform Admin → Full Access
+        # -------------------------------------------------
         if user.is_superuser or getattr(user, "is_platform_admin", False):
             return qs
 
-        # Tenant users see only their tenant data
-        if user.tenant:
-            return qs.filter(tenant=user.tenant)
+        # -------------------------------------------------
+        # 🏢 Tenant Context → Filtered Access
+        # -------------------------------------------------
+        tenant = get_current_tenant()
 
-        return qs
+        if tenant:
+            return qs.filter(tenant=tenant)
+
+        # -------------------------------------------------
+        # 🚫 No Tenant → No Data
+        # -------------------------------------------------
+        return qs.none()
 
     # -----------------------------------------------------
-    # Auto Assign Tenant
+    # Save Logic (Auto Assign Tenant)
     # -----------------------------------------------------
-
     def save_model(self, request, obj, form, change):
 
-        # If model has branch → derive tenant automatically
+        # -------------------------------------------------
+        # Auto-assign tenant if not set
+        # -------------------------------------------------
+        if hasattr(obj, "tenant") and not obj.tenant_id:
+            tenant = get_current_tenant()
+            if tenant:
+                obj.tenant = tenant
+
+        # -------------------------------------------------
+        # If object has branch → enforce tenant consistency
+        # -------------------------------------------------
         if hasattr(obj, "branch") and obj.branch:
             obj.tenant = obj.branch.tenant
 
         super().save_model(request, obj, form, change)
+
+    def get_fields(self, request, obj=None):
+        fields = super().get_fields(request, obj)
+
+        tenant = get_current_tenant()
+
+        # Hide tenant field when tenant context exists
+        if tenant:
+            fields = [f for f in fields if f != "tenant"]
+
+        return fields

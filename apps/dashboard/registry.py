@@ -24,3 +24,11 @@ def get_widget(widget_key):
     Retrieve widget class by key.
     """
     return WIDGET_REGISTRY.get(widget_key)
+
+
+# 🔥 IMPORTANT: Import all widgets here so they auto-register
+# (because decorator executes on import)
+
+from apps.dashboard.widgets.upcoming_sessions import UpcomingSessionsWidget  # noqa
+from apps.dashboard.widgets.session_utilization import SessionUtilizationWidget  # noqa
+from apps.dashboard.widgets.revenue_today import RevenueTodayWidget  # noqa

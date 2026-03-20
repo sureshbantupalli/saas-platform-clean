@@ -5,6 +5,7 @@ from rest_framework import filters
 from .serializers import MemberSerializer
 from apps.core.drf_permissions import MemberPermission
 from members.services.member_service import MemberService
+from members.models import Member
 
 
 class MemberViewSet(ModelViewSet):
@@ -17,7 +18,14 @@ class MemberViewSet(ModelViewSet):
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        return MemberService.get_queryset(self.request.user)
+        queryset = MemberService.get_queryset(self.request.user)
+
+        # 🔥 FIX: Ensure it's always a QuerySet
+        if isinstance(queryset, list):
+            ids = [obj.id for obj in queryset]
+            queryset = Member.objects.filter(id__in=ids)
+
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(

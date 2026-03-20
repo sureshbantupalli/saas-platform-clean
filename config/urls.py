@@ -100,12 +100,6 @@ urlpatterns = [
         include(("members.urls", "members"), namespace="members")
     ),
 
-    # Sessions (HTML UI)
-    path(
-        "sessions/",
-        include("apps.sessions.urls")
-    ),
-
     # Memberships (HTML UI)
     path(
         "memberships/",
@@ -141,15 +135,28 @@ urlpatterns = [
         include(router.urls)
     ),
 
-    # Sessions API
-    path(
-        "api/sessions/",
-        include("apps.sessions.urls")
-    ),
-
-    # ⭐ NEW: Dashboard Widgets API
+    # ⭐ Dashboard Widgets API
     path(
         "api/dashboard/",
         include("apps.dashboard.api.urls")
     ),
+
+    # ==========================
+    # ✅ Booking APIs
+    # ==========================
+
+    path(
+        "api/bookings/",
+        include("apps.bookings.api.urls")
+    ),
+
+    # ==========================
+    # ✅ NEW: Attendance APIs
+    # ==========================
+
+    path(
+        "api/attendance/",
+        include("apps.attendance.urls")
+    ),
+
 ]

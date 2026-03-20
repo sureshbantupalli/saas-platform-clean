@@ -42,7 +42,6 @@ class Tenant(BaseModel):
         unique=True
     )
 
-    # Used by billing / subscription system later
     is_active = models.BooleanField(
         default=True
     )
@@ -61,16 +60,27 @@ class Tenant(BaseModel):
 
     def save(self, *args, **kwargs):
 
-        # Detect new tenant creation
-        is_new = not Tenant.objects.filter(pk=self.pk).exists()
+        is_new = self._state.adding  # ✅ better than DB query
 
-        # Auto-generate subdomain if not provided
+        # ---------------------------------------------
+        # Generate unique subdomain safely
+        # ---------------------------------------------
         if not self.subdomain:
-            self.subdomain = slugify(self.name)
+            base_slug = slugify(self.name)
+            slug = base_slug
+            counter = 1
+
+            while Tenant.objects.filter(subdomain=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+
+            self.subdomain = slug
 
         super().save(*args, **kwargs)
 
-        # Automatically create CRM stages
+        # ---------------------------------------------
+        # Create default CRM stages (only once)
+        # ---------------------------------------------
         if is_new:
             self.create_default_stages()
 
@@ -104,6 +114,8 @@ class Tenant(BaseModel):
     def __str__(self):
         return self.name
 
+    def __repr__(self):
+        return f"<Tenant {self.id} - {self.name}>"
 
 # =====================================================
 # Tenant Scoped QuerySet
@@ -164,6 +176,8 @@ class TenantScopedManager(models.Manager):
 # Tenant Aware Base Model
 # =====================================================
 
+from apps.core.managers.tenant_manager import TenantManager
+
 class TenantAwareModel(BaseModel):
 
     tenant = models.ForeignKey(
@@ -172,11 +186,13 @@ class TenantAwareModel(BaseModel):
         related_name="%(class)ss"
     )
 
-    # Default manager (safe for admin / M2M validation)
+    # ✅ Safe default manager (no filtering)
     base_objects = models.Manager()
-    objects = base_objects
 
-    # Tenant-scoped manager used explicitly in code
+    # 🔥 NEW: Tenant-safe default manager
+    objects = TenantManager()
+
+    # Optional advanced scoped manager (keep yours)
     scoped = TenantScopedManager()
 
     class Meta:
@@ -212,8 +228,6 @@ class TenantAwareModel(BaseModel):
                 )
 
         super().save(*args, **kwargs)
-
-
 # =====================================================
 # Branch Model
 # =====================================================

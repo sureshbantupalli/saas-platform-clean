@@ -19,6 +19,13 @@ class SessionType(models.Model):
 
     is_one_to_one = models.BooleanField(default=False)
 
+    # 🔥 NEW: Pricing Field
+    price = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=0
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -234,11 +241,8 @@ class Booking(TenantAwareModel):
             return f"{self.member} - {self.session_instance}"
         return f"{self.guest_name} - {self.session_instance}"
 
-    # Correct SaaS Capacity Logic
-
     def save(self, *args, **kwargs):
 
-        # Allow manual changes for terminal states
         if self.status not in [
             Booking.STATUS_CANCELLED,
             Booking.STATUS_ATTENDED,

@@ -1,14 +1,10 @@
 class BaseWidget:
-    """
-    Base class for all dashboard widgets.
-    """
-
     key = None
-    title = None
+    name = None
 
-    def get_data(self, tenant, branch=None):
-        """
-        Return widget data.
-        Must be implemented by child classes.
-        """
-        raise NotImplementedError("Widget must implement get_data()")
+    def __init__(self, request):
+        self.request = request
+        self.tenant = getattr(request, "tenant", None)
+
+    def get_data(self):
+        raise NotImplementedError("Each widget must implement get_data method")

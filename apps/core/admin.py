@@ -1,9 +1,10 @@
 from django.contrib import admin
 from .models import Tenant, Branch
+from .admin_base import PlatformAdminMixin
 
 
 # =====================================================
-# Tenant Admin
+# Tenant Admin (Platform Level Only)
 # =====================================================
 
 @admin.register(Tenant)
@@ -27,11 +28,13 @@ class TenantAdmin(admin.ModelAdmin):
 
 
 # =====================================================
-# Branch Admin
+# Branch Admin (Tenant-Aware)
 # =====================================================
 
 @admin.register(Branch)
-class BranchAdmin(admin.ModelAdmin):
+class BranchAdmin(PlatformAdminMixin):
+
+    model = Branch
 
     list_display = (
         "name",
@@ -48,38 +51,3 @@ class BranchAdmin(admin.ModelAdmin):
         "tenant",
         "is_active",
     )
-
-    # -------------------------------------------------
-    # Bypass tenant scoped manager for platform admin
-    # -------------------------------------------------
-
-    def get_queryset(self, request):
-
-        if request.user.is_superuser:
-            return Branch.base_objects.all()
-
-        return super().get_queryset(request)
-
-    # -------------------------------------------------
-    # Hide tenant field for tenant users
-    # -------------------------------------------------
-
-    def get_fields(self, request, obj=None):
-
-        fields = super().get_fields(request, obj)
-
-        if not request.user.is_superuser:
-            fields = [f for f in fields if f != "tenant"]
-
-        return fields
-
-    # -------------------------------------------------
-    # Auto assign tenant
-    # -------------------------------------------------
-
-    def save_model(self, request, obj, form, change):
-
-        if not request.user.is_superuser:
-            obj.tenant = request.user.tenant
-
-        super().save_model(request, obj, form, change)
