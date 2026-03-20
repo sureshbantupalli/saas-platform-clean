@@ -45,7 +45,6 @@ class Booking(TenantAwareModel):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
-    # ✅ Correct (we will use this)
     member = models.ForeignKey(
         "members.Member",
         on_delete=models.CASCADE,
@@ -68,30 +67,3 @@ class Booking(TenantAwareModel):
 
     def __str__(self):
         return f"{self.member} → {self.session}"
-
-
-class Attendance(TenantAwareModel):
-
-    class Status(models.TextChoices):
-        PRESENT = "PRESENT", "Present"
-        ABSENT = "ABSENT", "Absent"
-        CANCELLED = "CANCELLED", "Cancelled"
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-
-    booking = models.ForeignKey(
-        Booking,
-        on_delete=models.CASCADE,
-        related_name="attendances"
-    )
-
-    status = models.CharField(
-        max_length=20,
-        choices=Status.choices,
-        default=Status.PRESENT
-    )
-
-    marked_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"{self.booking} - {self.status}"

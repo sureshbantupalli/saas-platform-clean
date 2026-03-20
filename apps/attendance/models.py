@@ -1,6 +1,6 @@
 import uuid
 from django.db import models
-from apps.core.models import BaseModel
+from apps.core.models import TenantAwareModel, Tenant
 from members.models import Member
 from apps.bookings.models import Booking
 from django.contrib.auth import get_user_model
@@ -8,7 +8,8 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 
-class Attendance(BaseModel):
+class Attendance(TenantAwareModel):  # ✅ CHANGED
+
     ATTENDANCE_TYPE_CHOICES = [
         ("session", "Session Based"),
         ("walkin", "Walk-in"),
@@ -23,6 +24,13 @@ class Attendance(BaseModel):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    # ✅ ADD THIS (CRITICAL FIX)
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name="attendances"
+    )
 
     # Who is this attendance for
     member = models.ForeignKey(

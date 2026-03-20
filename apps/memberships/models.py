@@ -444,7 +444,7 @@ class MembershipUsage(TenantAwareModel):
     )
 
     attendance = models.ForeignKey(
-        "platform_sessions.Attendance",
+        "attendance.Attendance",  # ✅ CORRECT
         on_delete=models.CASCADE,
         related_name="membership_usages"
     )

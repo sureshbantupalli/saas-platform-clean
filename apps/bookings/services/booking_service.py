@@ -2,8 +2,10 @@ import uuid
 from django.shortcuts import get_object_or_404
 
 from apps.bookings.models import Booking
-from apps.platform_sessions.models import SessionInstance, Attendance
+from apps.platform_sessions.models import SessionInstance
+from apps.attendance.models import Attendance
 from members.models import Member
+from datetime import date
 
 
 def create_booking(*, tenant, data):
@@ -19,7 +21,7 @@ def create_booking(*, tenant, data):
     print("Member ID:", member_id)
     print("Schedule ID:", schedule_id)
 
-    # ✅ Get Session FIRST (important)
+    # ✅ Get Session FIRST
     session = get_object_or_404(
         SessionInstance,
         id=schedule_id,
@@ -28,7 +30,7 @@ def create_booking(*, tenant, data):
 
     print("Session Found:", session.id, session.tenant_id)
 
-    # ✅ Get Member WITH tenant check
+    # ✅ Get Member
     member = get_object_or_404(
         Member,
         id=member_id,
@@ -37,7 +39,7 @@ def create_booking(*, tenant, data):
 
     print("Member Found:", member.id, member.tenant_id)
 
-    # 🚨 HARD VALIDATION (VERY IMPORTANT)
+    # 🚨 HARD VALIDATION
     if member.tenant_id != session.tenant_id:
         raise ValueError(
             f"Tenant mismatch: Member({member.tenant_id}) != Session({session.tenant_id})"
@@ -84,7 +86,7 @@ def cancel_booking(booking: Booking):
     return booking
 
 
-# ✅ FINAL DEBUG + FIX VERSION
+# ✅ FINAL FIXED VERSION (CLEAN)
 def mark_bulk_attendance(*, tenant, booking_ids, status):
 
     # 🔥 Convert to UUID
@@ -94,38 +96,28 @@ def mark_bulk_attendance(*, tenant, booking_ids, status):
     print("Incoming booking_ids:", booking_ids)
     print("API Tenant:", tenant)
 
-    all_bookings = Booking.objects.all()
-    print("Total bookings in DB:", all_bookings.count())
-
-    print("All booking IDs in DB:",
-          list(Booking.objects.values_list("id", flat=True)))
-
-    print("All booking tenant IDs:",
-          list(Booking.objects.values_list("tenant_id", flat=True)))
-
-    # 🔥 Try tenant-safe filter FIRST (recommended)
+    # ✅ Always use tenant-safe queryset
     bookings = Booking.objects.filter(
         id__in=booking_ids,
         tenant=tenant
     )
-    print("Matched bookings (with tenant):", bookings.count())
 
-    # ❌ If still not found → debug fallback
-    if not bookings.exists():
-        bookings = Booking.objects.filter(id__in=booking_ids)
-        print("Matched bookings (without tenant):", bookings.count())
+    print("Matched bookings:", bookings.count())
 
-    # ❌ Still not found
     if not bookings.exists():
-        raise ValueError(
-            f"No valid bookings found. DB count: {all_bookings.count()}"
-        )
+        raise ValueError("No valid bookings found for this tenant.")
+
+    # 🔥 CRITICAL FIX: ensure real model instances (no lazy issues)
+    bookings = list(bookings)
 
     # ✅ Create attendance
     for booking in bookings:
         Attendance.objects.create(
             tenant=tenant,
             booking=booking,
+            member_id=booking.user_id,              # ✅ important
+            attendance_type="session",          # ✅ required
+            session_date=booking.session.start_time.date(),  # ✅ BEST SOURCE
             status=status
         )
 

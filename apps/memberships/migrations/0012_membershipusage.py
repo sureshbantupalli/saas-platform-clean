@@ -12,6 +12,7 @@ class Migration(migrations.Migration):
         ('core', '0006_alter_branch_managers'),
         ('memberships', '0011_alter_membership_managers_and_more'),
         ('platform_sessions', '0001_initial'),
+        ('attendance', '0001_initial'),  # ✅ IMPORTANT ADD
     ]
 
     operations = [
@@ -23,10 +24,31 @@ class Migration(migrations.Migration):
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ('used_at', models.DateTimeField(auto_now_add=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('attendance', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='membership_usages', to='platform_sessions.attendance')),
-                ('membership', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='usages', to='memberships.membership')),
-                ('session_instance', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='membership_usages', to='platform_sessions.sessioninstance')),
-                ('tenant', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='core.tenant')),
+
+                # ✅ FIXED FIELD
+                ('attendance', models.ForeignKey(
+                    'attendance.attendance',
+                    on_delete=django.db.models.deletion.CASCADE,
+                    related_name='membership_usages'
+                )),
+
+                ('membership', models.ForeignKey(
+                    on_delete=django.db.models.deletion.CASCADE,
+                    related_name='usages',
+                    to='memberships.membership'
+                )),
+
+                ('session_instance', models.ForeignKey(
+                    on_delete=django.db.models.deletion.CASCADE,
+                    related_name='membership_usages',
+                    to='platform_sessions.sessioninstance'
+                )),
+
+                ('tenant', models.ForeignKey(
+                    on_delete=django.db.models.deletion.CASCADE,
+                    related_name='%(class)ss',
+                    to='core.tenant'
+                )),
             ],
             options={
                 'unique_together': {('membership', 'session_instance')},

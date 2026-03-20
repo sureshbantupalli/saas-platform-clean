@@ -2,10 +2,8 @@ from django.contrib import admin
 from .models import (
     SessionType,
     SessionInstance,
-    Attendance,
+    Booking
 )
-
-# ❌ REMOVE Booking from here (wrong app)
 
 
 @admin.register(SessionType)
@@ -18,9 +16,6 @@ class SessionInstanceAdmin(admin.ModelAdmin):
     list_display = ("session_type", "start_time", "end_time", "capacity", "tenant")
 
 
-# ❌ Booking removed from this app
-
-
-@admin.register(Attendance)
-class AttendanceAdmin(admin.ModelAdmin):
-    list_display = ("booking", "status", "tenant", "marked_at")
+@admin.register(Booking)
+class BookingAdmin(admin.ModelAdmin):
+    list_display = ("member", "session", "status", "tenant", "booked_at")
