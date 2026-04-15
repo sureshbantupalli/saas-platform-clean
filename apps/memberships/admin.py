@@ -17,46 +17,30 @@ class MembershipAdminForm(forms.ModelForm):
         fields = "__all__"
 
     def __init__(self, *args, **kwargs):
-
         super().__init__(*args, **kwargs)
 
-        # -------------------------------------------------
-        # Always show all branches in admin (platform tool)
-        # -------------------------------------------------
-
+        # Always show all branches
         self.fields["branch"].queryset = Branch.base_objects.all()
 
-        # -------------------------------------------------
-        # Default: show all active plans
-        # -------------------------------------------------
-
+        # Default plans
         self.fields["plan"].queryset = MembershipPlan.base_objects.filter(
             is_active=True
         )
 
         branch_id = None
 
-        # -------------------------------------------------
-        # Case 1 — Editing existing membership
-        # -------------------------------------------------
-
+        # Editing existing
         if self.instance.pk and self.instance.branch_id:
             branch_id = self.instance.branch_id
 
-        # -------------------------------------------------
-        # Case 2 — Branch selected in form
-        # -------------------------------------------------
-
+        # From form selection
         elif "branch" in self.data:
             try:
                 branch_id = self.data.get("branch")
             except (ValueError, TypeError):
                 pass
 
-        # -------------------------------------------------
         # Filter plans by branch
-        # -------------------------------------------------
-
         if branch_id:
             self.fields["plan"].queryset = MembershipPlan.base_objects.filter(
                 branch_id=branch_id,
@@ -69,7 +53,6 @@ class MembershipAdminForm(forms.ModelForm):
 # =========================================================
 
 class MembershipAdjustmentInline(admin.TabularInline):
-
     model = MembershipAdjustment
     extra = 0
 
@@ -125,10 +108,9 @@ class MembershipAdmin(admin.ModelAdmin):
 
     inlines = [MembershipAdjustmentInline]
 
-    # -----------------------------------------------------
-    # Readonly calculated fields
-    # -----------------------------------------------------
-
+    # ======================================================
+    # ✅ SINGLE CLEAN readonly_fields (FIXED)
+    # ======================================================
     def get_readonly_fields(self, request, obj=None):
 
         readonly = [
@@ -139,15 +121,21 @@ class MembershipAdmin(admin.ModelAdmin):
             "formatted_final_end_date",
         ]
 
+        # Lock tenant after creation
         if obj:
             readonly.append("tenant")
+
+            # 🔥 LOCK SESSION FIELDS (CRITICAL)
+            readonly.extend([
+                "total_sessions",
+                "remaining_sessions",
+            ])
 
         return readonly
 
     # -----------------------------------------------------
     # Display calculated end date
     # -----------------------------------------------------
-
     def formatted_end_date(self, obj):
         return obj.end_date.strftime("%Y-%m-%d") if obj.end_date else "-"
 
@@ -156,7 +144,6 @@ class MembershipAdmin(admin.ModelAdmin):
     # -----------------------------------------------------
     # Display final expiry date
     # -----------------------------------------------------
-
     def formatted_final_end_date(self, obj):
         return obj.final_end_date.strftime("%Y-%m-%d") if obj.final_end_date else "-"
 
@@ -165,7 +152,6 @@ class MembershipAdmin(admin.ModelAdmin):
     # -----------------------------------------------------
     # Save logic
     # -----------------------------------------------------
-
     def save_model(self, request, obj, form, change):
 
         if not obj.created_by:
@@ -174,16 +160,21 @@ class MembershipAdmin(admin.ModelAdmin):
         if obj.branch:
             obj.tenant = obj.branch.tenant
 
-        # Snapshot plan name (important for historical tracking)
+        # Snapshot plan name
         if obj.plan:
             obj.plan_name = obj.plan.name
+
+        # 🔥 AUTO SET SESSIONS (POWER FEATURE)
+        if not change and obj.plan and obj.plan.plan_type == "CLASS_PACK":
+            if obj.plan.class_count:
+                obj.total_sessions = obj.plan.class_count
+                obj.remaining_sessions = obj.plan.class_count
 
         super().save_model(request, obj, form, change)
 
     # -----------------------------------------------------
     # Save inline adjustments
     # -----------------------------------------------------
-
     def save_formset(self, request, form, formset, change):
 
         instances = formset.save(commit=False)
@@ -234,9 +225,21 @@ class MembershipPlanAdmin(PlatformAdminMixin):
     search_fields = ("name",)
 
     # ------------------------------------------------
+    # AUTO SET TENANT
+    # ------------------------------------------------
+    def save_model(self, request, obj, form, change):
+
+        if obj.branch:
+            obj.tenant = obj.branch.tenant
+
+        elif not obj.tenant and getattr(request.user, "tenant", None):
+            obj.tenant = request.user.tenant
+
+        super().save_model(request, obj, form, change)
+
+    # ------------------------------------------------
     # Filter branch dropdown
     # ------------------------------------------------
-
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
 
         if db_field.name == "branch":

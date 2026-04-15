@@ -55,8 +55,8 @@ class TenantMiddleware:
                         status=403
                     )
 
-                # 🚫 Block tenant user from Django admin
-                if request.path.startswith("/admin/"):
+                # 🚫 Block tenant user from Django admin (ALLOW SUPERUSER)
+                if request.path.startswith("/admin/") and not user.is_superuser:
                     return HttpResponse(
                         "<h3>Access Denied</h3><p>Tenant users cannot access admin panel.</p>",
                         status=403

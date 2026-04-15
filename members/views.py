@@ -1,11 +1,22 @@
 from django.shortcuts import render, redirect
 from django.http import HttpResponseForbidden, Http404
 from django.core.paginator import Paginator
+from django.views.decorators.csrf import ensure_csrf_cookie  # ✅ NEW
+from django.middleware.csrf import get_token
 
 from .forms import MemberForm
 from apps.core.permissions import require_permission
 from members.services.member_service import MemberService
 
+
+# ==============================
+# ✅ NEW: Member Create UI (API-based)
+# ==============================
+
+@ensure_csrf_cookie   # 🔥 CRITICAL FIX (CSRF cookie will be set)
+def member_create_ui(request):
+    get_token(request)   # 🔥 FORCE GENERATE TOKEN
+    return render(request, "members/add_member.html")
 
 # ==============================
 # Member List
@@ -33,7 +44,7 @@ def member_list(request):
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
-    # 📊 KPI Summary (based on full filtered list)
+    # 📊 KPI Summary
     kpis = MemberService.get_kpis(members_queryset)
 
     # 🔥 Expiring Soon KPI Count
@@ -49,7 +60,7 @@ def member_list(request):
         "status_filter": status_filter,
         "kpis": kpis,
         "expiring_soon": expiring_soon,
-        "expiring_filter": expiring_filter,  # used for UI highlighting later
+        "expiring_filter": expiring_filter,
     }
 
     return render(
@@ -58,11 +69,12 @@ def member_list(request):
         context
     )
 
+
 # ==============================
 # Member Detail
 # ==============================
 
-@require_permission("MEMBERS", "view_member")
+@require_permission("members", "view_member")
 def member_detail(request, pk):
 
     member = MemberService.get_by_id(request.user, pk)
@@ -78,7 +90,7 @@ def member_detail(request, pk):
 
 
 # ==============================
-# Member Create
+# Member Create (Form-based CRM)
 # ==============================
 
 @require_permission("members", "create")
@@ -97,7 +109,7 @@ def member_create(request):
             member.save()
             form.save_m2m()
 
-            return redirect("member_list")
+            return redirect("members:member_list")
 
     else:
         form = MemberForm(
@@ -164,7 +176,7 @@ def member_delete(request, pk):
 
     if request.method == "POST":
         MemberService.soft_delete(member)
-        return redirect("member_list")
+        return redirect("members:member_list")
 
     return render(
         request,

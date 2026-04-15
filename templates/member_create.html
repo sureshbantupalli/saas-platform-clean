@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add Member</title>
+
+    <!-- 🔥 ADD THIS LINE -->
+    <meta name="csrf-token" content="{{ csrf_token }}">
+
+    <style>
+        body {
+            font-family: Arial;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            width: 400px;
+            border-radius: 5px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+        }
+
+        button {
+            margin-top: 15px;
+            padding: 10px;
+            width: 100%;
+            background: green;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+
+        .success {
+            color: green;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Add Member</h2>
+
+<div class="card">
+
+    <input type="text" id="first_name" placeholder="First Name" />
+    <input type="text" id="last_name" placeholder="Last Name" />
+    <input type="text" id="phone" placeholder="Phone Number" />
+
+    <button onclick="createMember()">Save Member</button>
+
+    <div id="message"></div>
+
+</div>
+
+<script>
+
+// ✅ CORRECT CSRF FUNCTION (FIXED VERSION)
+function getCSRFToken() {
+    let token = null;
+
+    // ✅ Try cookie first
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        cookie = cookie.trim();
+        if (cookie.startsWith('csrftoken=')) {
+            token = decodeURIComponent(cookie.substring('csrftoken='.length));
+        }
+    }
+
+    // 🔥 FALLBACK → meta tag
+    if (!token) {
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) {
+            token = meta.getAttribute("content");
+        }
+    }
+
+    console.log("CSRF TOKEN:", token);
+    return token;
+}
+
+function createMember() {
+
+    const first_name = document.getElementById("first_name").value;
+    const last_name = document.getElementById("last_name").value;
+    const phone = document.getElementById("phone").value;
+
+    const csrfToken = getCSRFToken();
+
+    console.log("CSRF TOKEN:", csrfToken); // DEBUG
+
+    document.getElementById("message").innerHTML = "";
+
+    fetch("/api/members/", {
+        method: "POST",
+        credentials: "same-origin",   // 🔥 VERY IMPORTANT
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrfToken
+        },
+        body: JSON.stringify({
+            first_name,
+            last_name,
+            phone
+        })
+    })
+    .then(async res => {
+        let data = {};
+
+        try {
+            data = await res.json();
+        } catch {}
+
+        if (res.ok) {
+            document.getElementById("message").innerHTML =
+                "<div class='success'>✅ Member created successfully!</div>";
+
+            document.getElementById("first_name").value = "";
+            document.getElementById("last_name").value = "";
+            document.getElementById("phone").value = "";
+        } else {
+            document.getElementById("message").innerHTML =
+                "<div class='error'>❌ " + JSON.stringify(data) + "</div>";
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        document.getElementById("message").innerHTML =
+            "<div class='error'>❌ Network / CSRF error</div>";
+    });
+}
+
+</script>
+
+</body>
+</html>

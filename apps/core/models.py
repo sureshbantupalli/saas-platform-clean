@@ -268,4 +268,6 @@ class Branch(TenantAwareModel):
         ]
 
     def __str__(self):
+        if self.tenant:
+            return f"{self.name} ({self.tenant.name})"
         return self.name

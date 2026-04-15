@@ -4,6 +4,7 @@ from django.shortcuts import get_object_or_404
 from apps.authority.decorators import require_permission
 from members.models import Member
 
+from django.shortcuts import render
 
 # --------------------------------------------------
 # Simple Permission Test (Create Member)
@@ -50,3 +51,6 @@ def tenant_dashboard(request):
         request,
         "core/tenant_dashboard.html"
     )
+
+def member_create_ui(request):
+    return render(request, "member_create.html")

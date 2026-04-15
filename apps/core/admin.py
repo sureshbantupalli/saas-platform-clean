@@ -32,9 +32,7 @@ class TenantAdmin(admin.ModelAdmin):
 # =====================================================
 
 @admin.register(Branch)
-class BranchAdmin(PlatformAdminMixin):
-
-    model = Branch
+class BranchAdmin(admin.ModelAdmin):
 
     list_display = (
         "name",
@@ -43,11 +41,16 @@ class BranchAdmin(PlatformAdminMixin):
         "created_at",
     )
 
-    search_fields = (
-        "name",
-    )
+    search_fields = ("name",)
 
-    list_filter = (
-        "tenant",
+    list_filter = ("tenant", "is_active")
+
+    # 🔥 VERY IMPORTANT
+    fields = (
+        "tenant",   # <-- ADD THIS
+        "name",
+        "address",
+        "phone",
+        "email",
         "is_active",
     )

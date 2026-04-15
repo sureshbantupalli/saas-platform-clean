@@ -92,6 +92,22 @@ class Membership(TenantAwareModel):
 
     auto_renew = models.BooleanField(default=False)
 
+    # -----------------------------------------
+    # Session Tracking (for Class Pack Plans)
+    # -----------------------------------------
+
+    total_sessions = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Total sessions purchased (for class-pack memberships)"
+    )
+
+    remaining_sessions = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Remaining sessions (auto-decrement on attendance)"
+    )
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -185,6 +201,17 @@ class Membership(TenantAwareModel):
                     self.base_amount - discount_amount,
                     0
                 )
+
+        # -----------------------------------------
+        # Initialize Session Counts (Class Pack)
+        # -----------------------------------------
+
+        if self.plan and self.plan.plan_type == "CLASS_PACK":
+            if self.total_sessions is None:
+                self.total_sessions = self.plan.class_count
+
+            if self.remaining_sessions is None:
+                self.remaining_sessions = self.plan.class_count
 
         # -----------------------------------------
         # End Date Calculation

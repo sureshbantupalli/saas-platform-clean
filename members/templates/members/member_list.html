@@ -6,7 +6,7 @@
 <div class="container-fluid">
 
     <!-- Page Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
 
         <div>
             <h2 class="fw-bold mb-0">Members</h2>
@@ -23,7 +23,7 @@
     <!-- KPI Cards -->
     <div class="row g-3 mb-4">
 
-        <!-- TOTAL -->
+        {% comment %} TOTAL {% endcomment %}
         <div class="col-md-2">
             <a href="{% url 'members:member_list' %}" class="text-decoration-none">
                 <div class="card shadow-sm border-0 text-center p-3
@@ -38,7 +38,7 @@
             </a>
         </div>
 
-        <!-- ACTIVE -->
+        {% comment %} ACTIVE {% endcomment %}
         <div class="col-md-2">
             <a href="?status=ACTIVE{% if search_query %}&q={{ search_query }}{% endif %}" class="text-decoration-none">
                 <div class="card shadow-sm border-0 text-center p-3 border-start border-4 border-success
@@ -53,7 +53,7 @@
             </a>
         </div>
 
-        <!-- PAUSED -->
+        {% comment %} PAUSED {% endcomment %}
         <div class="col-md-2">
             <a href="?status=PAUSED{% if search_query %}&q={{ search_query }}{% endif %}" class="text-decoration-none">
                 <div class="card shadow-sm border-0 text-center p-3 border-start border-4 border-warning
@@ -68,7 +68,7 @@
             </a>
         </div>
 
-        <!-- EXPIRED -->
+        {% comment %} EXPIRED {% endcomment %}
         <div class="col-md-2">
             <a href="?status=EXPIRED{% if search_query %}&q={{ search_query }}{% endif %}" class="text-decoration-none">
                 <div class="card shadow-sm border-0 text-center p-3 border-start border-4 border-danger
@@ -83,7 +83,7 @@
             </a>
         </div>
 
-        <!-- NO PLAN -->
+        {% comment %} NO PLAN {% endcomment %}
         <div class="col-md-2">
             <a href="?status=NO_PLAN{% if search_query %}&q={{ search_query }}{% endif %}" class="text-decoration-none">
                 <div class="card shadow-sm border-0 text-center p-3 border-start border-4 border-secondary
@@ -98,7 +98,7 @@
             </a>
         </div>
 
-        <!-- EXPIRING -->
+        {% comment %} EXPIRING {% endcomment %}
         <div class="col-md-2">
             <a href="?expiring=1{% if search_query %}&q={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}" class="text-decoration-none">
                 <div class="card shadow-sm border-0 text-center p-3 border-start border-4 border-danger
@@ -198,33 +198,19 @@
                         <td>{{ member.phone|default:"-" }}</td>
 
                         <td>
-
-                            {% if member.display_status == "ACTIVE" %}
-                                <span class="badge bg-success">Active</span>
-
-                            {% elif member.display_status == "PAUSED" %}
-                                <span class="badge bg-warning text-dark">Paused</span>
-
-                            {% elif member.display_status == "EXPIRED" %}
-                                <span class="badge bg-danger">Expired</span>
-
-                            {% elif member.display_status == "CANCELLED" %}
-                                <span class="badge bg-dark">Cancelled</span>
-
-                            {% elif member.display_status == "NO_PLAN" %}
-                                <span class="badge bg-secondary">No Plan</span>
-
-                            {% else %}
-                                <span class="badge bg-light text-dark border">
-                                    {{ member.display_status }}
-                                </span>
-
-                            {% endif %}
-
+                            <span class="badge
+                                {% if member.display_status == "ACTIVE" %}bg-success
+                                {% elif member.display_status == "PAUSED" %}bg-warning text-dark
+                                {% elif member.display_status == "EXPIRED" %}bg-danger
+                                {% elif member.display_status == "CANCELLED" %}bg-dark
+                                {% elif member.display_status == "NO_PLAN" %}bg-secondary
+                                {% else %}bg-light text-dark border
+                                {% endif %}">
+                                {{ member.display_status }}
+                            </span>
                         </td>
 
                         <td>
-
                             {% for branch in member.branches.all %}
                                 <span class="badge bg-light text-dark border">
                                     {{ branch.name }}
@@ -232,7 +218,6 @@
                             {% empty %}
                                 -
                             {% endfor %}
-
                         </td>
 
                         <td>

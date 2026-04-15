@@ -3,6 +3,7 @@ from django.db import models
 from apps.core.models import TenantAwareModel
 from apps.platform_sessions.models import SessionInstance
 from apps.core.models import Tenant
+from members.models import Member
 
 
 class Booking(TenantAwareModel):
@@ -26,7 +27,11 @@ class Booking(TenantAwareModel):
         related_name="booking_entries"
     )
 
-    user_id = models.UUIDField()
+    member = models.ForeignKey(
+        Member,
+        on_delete=models.CASCADE,
+        related_name="bookings"
+    )
 
     status = models.CharField(
         max_length=20,

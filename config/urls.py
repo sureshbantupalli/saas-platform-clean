@@ -135,14 +135,14 @@ urlpatterns = [
         include(router.urls)
     ),
 
-    # ⭐ Dashboard Widgets API
+    # Dashboard Widgets API
     path(
         "api/dashboard/",
         include("apps.dashboard.api.urls")
     ),
 
     # ==========================
-    # ✅ Booking APIs
+    # Booking APIs
     # ==========================
 
     path(
@@ -151,7 +151,7 @@ urlpatterns = [
     ),
 
     # ==========================
-    # ✅ NEW: Attendance APIs
+    # ✅ Attendance APIs (DRF + UI APIs)
     # ==========================
 
     path(
@@ -159,4 +159,12 @@ urlpatterns = [
         include("apps.attendance.urls")
     ),
 
+    # ==========================
+    # ✅ Attendance UI Routes
+    # ==========================
+
+    path(
+        "attendance/",
+        include("apps.attendance.urls")
+    ),
 ]

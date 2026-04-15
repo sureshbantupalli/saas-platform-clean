@@ -154,7 +154,7 @@ class SessionInstance(TenantAwareModel):
         unique_together = ("schedule", "session_date", "start_time")
 
     def __str__(self):
-        return f"{self.schedule.template.name} - {self.session_date} {self.start_time}"
+        return f"{self.schedule.template.name} ({self.session_date} {self.start_time.strftime('%H:%M')})"
 
 
 class Booking(TenantAwareModel):

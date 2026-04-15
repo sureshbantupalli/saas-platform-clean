@@ -6,7 +6,7 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env
+# Load environment variables
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -16,11 +16,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # SECURITY SETTINGS
 # ==============================
 
-SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
 
-DEBUG = os.getenv("DEBUG") == "True"
-
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
+DEBUG = True
+ALLOWED_HOSTS = ["*"]
 
 
 # ==============================
@@ -28,7 +27,6 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
 # ==============================
 
 INSTALLED_APPS = [
-    # Django Core
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -36,65 +34,43 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    # Third Party
     'rest_framework',
-
-    # ==============================
-    # Project Apps
-    # ==============================
 
     'apps.core.apps.CoreConfig',
     'apps.accounts.apps.AccountsConfig',
     'apps.memberships.apps.MembershipsConfig',
-
-    # ✅ Session Engine
     'apps.platform_sessions.apps.PlatformSessionsConfig',
-
     'apps.lifecycles.apps.LifecyclesConfig',
     'apps.monitoring.apps.MonitoringConfig',
     'apps.tenants.apps.TenantsConfig',
     'apps.authority.apps.AuthorityConfig',
     'apps.dashboard.apps.DashboardConfig',
 
-    # ==============================
-    # Booking + Payments Engine
-    # ==============================
-
     'apps.bookings',
     'apps.payments',
     'apps.attendance',
 
-    # ==============================
-    # Legacy / domain modules
-    # ==============================
-
     'members',
     'crm',
-
-    # ==============================
-    # Platform Control Layer
-    # ==============================
 
     'platform_core',
 ]
 
 
 # ==============================
-# MIDDLEWARE (✅ FIXED ORDER)
+# MIDDLEWARE (CORRECT ORDER)
 # ==============================
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+
     'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',   # ✅ BEFORE auth
 
-    # ✅ Authentication FIRST
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-
-    # ✅ Tenant AFTER authentication (ONLY ONCE)
     'apps.core.middleware.TenantMiddleware',
 
-    'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -115,7 +91,7 @@ TEMPLATES = [
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.debug',
-                'django.template.context_processors.request',
+                'django.template.context_processors.request',  # IMPORTANT
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
             ],
@@ -128,7 +104,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 
 # ==============================
-# DATABASE CONFIGURATION
+# DATABASE
 # ==============================
 
 DATABASES = {
@@ -163,12 +139,7 @@ LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Asia/Kolkata'
 
 USE_I18N = True
-USE_L10N = False
 USE_TZ = True
-
-DATE_FORMAT = "Y-m-d"
-SHORT_DATE_FORMAT = "Y-m-d"
-DATE_INPUT_FORMATS = ["%Y-%m-%d"]
 
 
 # ==============================
@@ -181,7 +152,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 
 # ==============================
-# AUTHENTICATION
+# AUTH
 # ==============================
 
 LOGIN_URL = "/login/"
@@ -210,24 +181,22 @@ REST_FRAMEWORK = {
 
 
 # ==============================
-# PRODUCTION SECURITY HARDENING
+# SECURITY (DEV SAFE)
 # ==============================
 
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 
-CSRF_COOKIE_HTTPONLY = True
+# 🔥 IMPORTANT FIXES
+CSRF_COOKIE_HTTPONLY = False   # ✅ MUST BE FALSE
 SESSION_COOKIE_HTTPONLY = True
+
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+SECURE_SSL_REDIRECT = False
 
 SECURE_REFERRER_POLICY = "same-origin"
 
-
-# ==============================
-# HTTPS ENFORCEMENT (Production Only)
-# ==============================
-
-if not DEBUG:
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SECURE_SSL_REDIRECT = True
+# Optional safety
+CSRF_TRUSTED_ORIGINS = ["http://127.0.0.1:8000"]

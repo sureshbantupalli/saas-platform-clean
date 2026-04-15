@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Attendance</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        input, select {
+            width: 300px;
+            padding: 10px;
+            font-size: 16px;
+        }
+
+        .result-item {
+            background: white;
+            padding: 8px;
+            margin-top: 5px;
+            cursor: pointer;
+            border: 1px solid #ddd;
+        }
+
+        .card {
+            background: white;
+            padding: 15px;
+            margin-top: 20px;
+            width: 300px;
+            border-radius: 5px;
+        }
+
+        .btn {
+            padding: 10px;
+            background: green;
+            color: white;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .btn:disabled {
+            background: gray;
+        }
+
+        .mode-switch {
+            margin-bottom: 20px;
+        }
+
+        .success {
+            display:none;
+            background:#d4edda;
+            color:#155724;
+            padding:10px;
+            margin-top:10px;
+            border-radius:5px;
+        }
+    </style>
+</head>
+
+<body>
+
+<form method="post" style="display:none;">
+    {% csrf_token %}
+</form>
+
+<h2>Attendance</h2>
+
+<div class="mode-switch">
+    <label>
+        <input type="radio" name="mode" value="walkin" checked onchange="switchMode()"> Walk-in
+    </label>
+
+    <label style="margin-left: 20px;">
+        <input type="radio" name="mode" value="session" onchange="switchMode()"> Session
+    </label>
+</div>
+
+<!-- WALK-IN -->
+<div id="walkin-section">
+
+    <input type="text" id="search" placeholder="Search member..." />
+    <div id="results"></div>
+
+    <div id="member-card" class="card" style="display:none;">
+        <h3 id="name"></h3>
+        <p id="phone"></p>
+
+        <p id="plan">Plan: -</p>
+        <p id="sessions">Remaining Sessions: -</p>
+
+        <button id="markBtn" class="btn" onclick="markAttendance()">Mark Present</button>
+        <p id="warning" style="color:red; display:none;">No sessions remaining</p>
+
+        <!-- ✅ MOVED INSIDE CARD -->
+        <div id="successMsg" class="success">
+            Attendance marked successfully
+        </div>
+    </div>
+
+</div>
+
+<!-- SESSION -->
+<div id="session-section" style="display:none;">
+    <h3>Select Session</h3>
+    <select id="sessionSelect">
+        <option value="">-- Select Session --</option>
+    </select>
+    <div id="session-members"></div>
+</div>
+
+<script>
+
+let selectedMemberId = null;
+
+/* =========================
+   CSRF
+========================= */
+function getCSRFToken() {
+    const name = "csrftoken";
+    const cookies = document.cookie.split(";");
+
+    for (let cookie of cookies) {
+        cookie = cookie.trim();
+        if (cookie.startsWith(name + "=")) {
+            return cookie.substring(name.length + 1);
+        }
+    }
+    return null;
+}
+
+/* =========================
+   MODE SWITCH
+========================= */
+function switchMode() {
+    const mode = document.querySelector('input[name="mode"]:checked').value;
+
+    document.getElementById("walkin-section").style.display = mode === "walkin" ? "block" : "none";
+    document.getElementById("session-section").style.display = mode === "session" ? "block" : "none";
+
+    if (mode === "session") loadSessions();
+}
+
+/* =========================
+   SEARCH
+========================= */
+document.getElementById("search").addEventListener("input", function() {
+
+    const query = this.value;
+
+    fetch(`/attendance/api/search-members/?q=${query}`, {
+        credentials: "include"
+    })
+    .then(res => res.json())
+    .then(data => {
+
+        let html = "";
+
+        data.forEach(m => {
+            html += `
+                <div class="result-item"
+                     onclick='selectMember(${JSON.stringify(m)})'>
+                     ${m.name} (${m.phone || 'No phone'})
+                </div>
+            `;
+        });
+
+        document.getElementById("results").innerHTML = html;
+    });
+});
+
+/* =========================
+   SELECT MEMBER
+========================= */
+function selectMember(member) {
+
+    selectedMemberId = member.id;
+
+    document.getElementById("member-card").style.display = "block";
+
+    document.getElementById("name").innerText = member.name;
+    document.getElementById("phone").innerText = member.phone;
+
+    document.getElementById("plan").innerText = "Plan: " + member.plan;
+    document.getElementById("sessions").innerText = "Remaining Sessions: " + member.remaining_sessions;
+
+    const btn = document.getElementById("markBtn");
+    const warning = document.getElementById("warning");
+
+    if (member.remaining_sessions <= 0) {
+        btn.disabled = true;
+        warning.style.display = "block";
+    } else {
+        btn.disabled = false;
+        warning.style.display = "none";
+    }
+
+    document.getElementById("results").innerHTML = "";
+}
+
+/* =========================
+   MARK ATTENDANCE
+========================= */
+async function markAttendance() {
+
+    if (!selectedMemberId) {
+        alert("Please select a member first");
+        return;
+    }
+
+    const res = await fetch('/attendance/api/mark-attendance/', {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCSRFToken()
+        },
+        body: JSON.stringify({
+            member_id: selectedMemberId,
+            attendance_type: "walkin"
+        })
+    });
+
+    const data = await res.json();
+
+    if (data.message) {
+
+        const msg = document.getElementById("successMsg");
+        msg.style.display = "block";
+
+        setTimeout(() => {
+            msg.style.display = "none";
+        }, 2000);
+
+        let sessionsText = document.getElementById("sessions").innerText;
+        let current = parseInt(sessionsText.replace("Remaining Sessions: ", ""));
+
+        let updated = Math.max(current - 1, 0);
+
+        document.getElementById("sessions").innerText = "Remaining Sessions: " + updated;
+
+        const btn = document.getElementById("markBtn");
+        const warning = document.getElementById("warning");
+
+        if (updated <= 0) {
+            btn.disabled = true;
+            warning.style.display = "block";
+        }
+
+    } else {
+        alert("❌ " + JSON.stringify(data));
+    }
+}
+
+/* =========================
+   LOAD SESSIONS
+========================= */
+function loadSessions() {
+
+    fetch("/attendance/api/bookings/")
+    .then(res => res.json())
+    .then(data => {
+
+        let html = '<option value="">-- Select Session --</option>';
+
+        data.forEach(session => {
+            html += `<option value="${session.id}">${session.name || 'Session'}</option>`;
+        });
+
+        document.getElementById("sessionSelect").innerHTML = html;
+    });
+}
+
+/* =========================
+   LOAD SESSION MEMBERS
+========================= */
+document.getElementById("sessionSelect").addEventListener("change", function() {
+
+    const bookingId = this.value;
+    if (!bookingId) return;
+
+    fetch(`/attendance/api/sessions/${bookingId}/members/`)
+    .then(res => res.json())
+    .then(data => {
+
+        let html = "<h4>Members</h4>";
+
+        data.members.forEach(m => {
+            html += `
+                <div class="card">
+                    <b>${m.name}</b>
+                    <button class="btn" onclick="markSessionAttendance('${bookingId}', '${m.id}')">
+                        Mark Present
+                    </button>
+                </div>
+            `;
+        });
+
+        document.getElementById("session-members").innerHTML = html;
+    });
+});
+
+/* =========================
+   MARK SESSION ATTENDANCE
+========================= */
+function markSessionAttendance(bookingId, memberId) {
+
+    fetch("/attendance/api/mark-attendance/", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCSRFToken()
+        },
+        credentials: "include",
+        body: JSON.stringify({
+            member_id: memberId,
+            booking_id: bookingId,
+            attendance_type: "session"
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.message) {
+            alert("✅ Session attendance marked!");
+        } else {
+            alert(data.error);
+        }
+    });
+}
+
+</script>
+
+</body>
+</html>
