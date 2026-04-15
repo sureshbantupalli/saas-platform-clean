@@ -43,3 +43,31 @@ Thumbs.db
 # Misc
 # ------------------------------
 lifecycle_log.txt
+
+# ------------------------------
+# Migrations (optional - keep if team project)
+# ------------------------------
+# Comment this if you want migrations in repo
+# */migrations/*
+# !*/migrations/__init__.py
+
+# ------------------------------
+# PostgreSQL dump files
+# ------------------------------
+*.sql
+
+# ------------------------------
+# PyCharm / JetBrains
+# ------------------------------
+*.iml
+
+# ------------------------------
+# Coverage / testing
+# ------------------------------
+.coverage
+htmlcov/
+
+# ------------------------------
+# Node (future frontend)
+# ------------------------------
+node_modules/

@@ -99,10 +99,10 @@ class Attendance(TenantAwareModel):
         from apps.memberships.models import Membership
 
         # ✅ Enforce booking only for session-based attendance
-        if self.attendance_type == "session" and not self.booking:
-            raise ValidationError({
-                "__all__": "Booking is required for session-based attendance."
-            })
+        #if self.attendance_type == "session" and not self.booking:
+            #raise ValidationError({
+                #"__all__": "Booking is required for session-based attendance."
+            #})
 
         # Only validate for present members
         if self.status != "present" or not self.member:

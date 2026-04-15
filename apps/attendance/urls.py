@@ -1,6 +1,9 @@
 from django.urls import path
-from . import views
 
+# APIs
+from .api import BulkMarkAttendanceAPI, AttendanceHistoryAPI
+
+# UI Views
 from .views import (
     BulkAttendanceAPIView,
     attendance_ui,
@@ -8,33 +11,40 @@ from .views import (
     mark_attendance_ui,
     list_bookings,
     booking_detail,
-    get_session_members,   # ✅ ADD THIS
+    get_session_members,
 )
 
 urlpatterns = [
 
-    # ==========================
-    # EXISTING API (DO NOT TOUCH)
-    # ==========================
-    path("bulk/", BulkAttendanceAPIView.as_view(), name="bulk-attendance"),
+    # =====================================================
+    # 🔥 CORE ATTENDANCE APIs
+    # =====================================================
+    path("bulk-mark/", BulkMarkAttendanceAPI.as_view(), name="bulk-attendance"),
+    path("history/", AttendanceHistoryAPI.as_view(), name="attendance-history"),
 
-    # ==========================
-    # UI ROUTES
-    # ==========================
+
+    # =====================================================
+    # 🖥️ UI ROUTES
+    # =====================================================
     path("ui/", attendance_ui, name="attendance_ui"),
 
-    # ==========================
-    # WALK-IN APIs
-    # ==========================
+
+    # =====================================================
+    # 🚶 WALK-IN APIs
+    # =====================================================
     path("api/search-members/", search_members, name="search_members"),
     path("api/mark-attendance/", mark_attendance_ui, name="mark_attendance_ui"),
 
-    # ==========================
-    # 🔥 SESSION APIs (NEW)
-    # ==========================
+
+    # =====================================================
+    # 📅 SESSION / BOOKING APIs
+    # =====================================================
     path("api/bookings/", list_bookings, name="list_bookings"),
     path("api/bookings/<uuid:booking_id>/", booking_detail, name="booking_detail"),
 
-    # ✅ FIXED LINE (NO views. prefix)
-    path("api/sessions/<uuid:session_id>/members/", get_session_members, name="session_members"),
+    path(
+        "api/sessions/<uuid:session_id>/members/",
+        get_session_members,
+        name="session_members"
+    ),
 ]
