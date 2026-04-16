@@ -13,21 +13,21 @@ def booking_list(request):
     tenant = request.user.tenant
 
     bookings = (
-        Booking.base_objects
+        Booking.objects
         .filter(tenant=tenant)
         .select_related("member", "session__session_type")
         .order_by("-created_at")
     )
 
     sessions = (
-        SessionInstance.base_objects
+        SessionInstance.objects
         .filter(tenant=tenant)
         .select_related("session_type")
         .order_by("start_time")
     )
 
     members = (
-        Member.base_objects
+        Member.objects
         .filter(tenant=tenant, is_deleted=False)
         .order_by("first_name")
     )

@@ -1,11 +1,17 @@
+import logging
+
 from members.models import Member
 from apps.attendance.models import Attendance
 from apps.memberships.services.policy_service import validate_member_for_attendance
 
+logger = logging.getLogger(__name__)
+
 
 def bulk_mark_attendance(session, member_ids, tenant, marked_by=None):
     """
-    Bulk attendance marking service (FINAL FIXED VERSION)
+    Mark attendance for multiple members in a session.
+    Validates membership policy for each member before marking.
+    Returns a dict with 'success' and 'failed' lists.
     """
 
     success = []
@@ -15,56 +21,26 @@ def bulk_mark_attendance(session, member_ids, tenant, marked_by=None):
 
     for member in members:
 
-        # =========================================================
-        # 1. Validate policy
-        # =========================================================
         result = validate_member_for_attendance(member, session)
 
         if not result["allowed"]:
-            failed.append({
-                "member_id": str(member.id),
-                "reason": result["reason"]
-            })
+            failed.append({"member_id": str(member.id), "reason": result["reason"]})
             continue
 
         membership = result.get("membership")
 
-        # =========================================================
-        # 2. Extract session date
-        # =========================================================
         session_date = session.start_time.date()
 
-        # =========================================================
-        # 3. Prevent duplicate attendance
-        # =========================================================
-        existing = Attendance.objects.filter(
-            member=member,
-            session_date=session_date,
-            tenant=tenant
-        ).exists()
-
-        if existing:
-            failed.append({
-                "member_id": str(member.id),
-                "reason": "Already marked for this session"
-            })
+        if Attendance.objects.filter(member=member, session_date=session_date, tenant=tenant).exists():
+            failed.append({"member_id": str(member.id), "reason": "Already marked for this session"})
             continue
 
-        # =========================================================
-        # 4. Validate class pack usage
-        # =========================================================
         if membership and hasattr(membership.plan, "plan_type"):
             if membership.plan.plan_type == "CLASS_PACK":
                 if membership.remaining_sessions is not None and membership.remaining_sessions <= 0:
-                    failed.append({
-                        "member_id": str(member.id),
-                        "reason": "No remaining sessions"
-                    })
+                    failed.append({"member_id": str(member.id), "reason": "No remaining sessions"})
                     continue
 
-        # =========================================================
-        # 5. CREATE ATTENDANCE (🔥 FIX HERE)
-        # =========================================================
         Attendance.objects.create(
             member=member,
             tenant=tenant,
@@ -73,12 +49,11 @@ def bulk_mark_attendance(session, member_ids, tenant, marked_by=None):
             check_in_time=session.start_time,
         )
 
-        success.append({
-            "member_id": str(member.id),
-            "status": "marked"
-        })
+        success.append({"member_id": str(member.id), "status": "marked"})
 
-    return {
-        "success": success,
-        "failed": failed
-    }
+    logger.info(
+        "Bulk attendance complete for session %s: %d marked, %d failed",
+        session.id, len(success), len(failed)
+    )
+
+    return {"success": success, "failed": failed}

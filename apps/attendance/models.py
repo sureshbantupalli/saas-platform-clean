@@ -1,11 +1,15 @@
+import logging
 import uuid
+
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.contrib.auth import get_user_model
+
 from apps.core.models import TenantAwareModel, Tenant
 from members.models import Member
 from apps.bookings.models import Booking
-from django.contrib.auth import get_user_model
 
+logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
@@ -92,19 +96,12 @@ class Attendance(TenantAwareModel):
     def __str__(self):
         return f"{self.attendance_type} - {self.session_date}"
 
-    # ==============================
-    # ✅ VALIDATION (UPDATED)
-    # ==============================
     def clean(self):
         from apps.memberships.models import Membership
 
-        # ✅ Enforce booking only for session-based attendance
-        #if self.attendance_type == "session" and not self.booking:
-            #raise ValidationError({
-                #"__all__": "Booking is required for session-based attendance."
-            #})
+        # Booking is intentionally optional even for session-based attendance
+        # to support walk-ins and retroactive marking by staff.
 
-        # Only validate for present members
         if self.status != "present" or not self.member:
             return
 
@@ -116,29 +113,21 @@ class Attendance(TenantAwareModel):
         if not membership:
             return
 
-        # ✅ Only check session limits for CLASS_PACK
         if membership.plan.plan_type == "CLASS_PACK":
             if membership.remaining_sessions is None or membership.remaining_sessions <= 0:
                 raise ValidationError({
                     "__all__": "No remaining sessions. Cannot mark attendance."
                 })
 
-    # ==============================
-    # 🔥 CORE LOGIC (UNCHANGED)
-    # ==============================
     def save(self, *args, **kwargs):
         is_new = not Attendance.objects.filter(pk=self.pk).exists()
 
-        # ✅ Call clean() before saving (IMPORTANT)
         self.clean()
-
         super().save(*args, **kwargs)
 
-        # Only process for new attendance
         if not is_new:
             return
 
-        # Only for present members
         if self.status != "present" or not self.member:
             return
 
@@ -149,23 +138,18 @@ class Attendance(TenantAwareModel):
             status="active"
         ).order_by("-start_date").first()
 
-        print("========== DEBUG ==========")
-        print("Attendance Member:", self.member)
-        print("Membership Found:", membership)
-
         if not membership:
-            print("No active membership found")
-            print("===========================")
+            logger.debug("No active membership for member %s — skipping session decrement", self.member_id)
             return
 
-        print("Remaining BEFORE:", membership.remaining_sessions)
-
-        # ✅ ONLY apply to CLASS_PACK
         if membership.plan.plan_type == "CLASS_PACK":
             if membership.remaining_sessions is not None and membership.remaining_sessions > 0:
+                before = membership.remaining_sessions
                 membership.remaining_sessions -= 1
                 membership.save()
-
-                print("Remaining AFTER:", membership.remaining_sessions)
+                logger.info(
+                    "Session decremented for member %s: %d → %d",
+                    self.member_id, before, membership.remaining_sessions
+                )
 
         print("===========================")

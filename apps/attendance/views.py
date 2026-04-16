@@ -1,5 +1,5 @@
-from django.urls import path
-from . import views
+import json
+
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.shortcuts import render
 from django.http import JsonResponse
@@ -10,10 +10,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
-import json
-
 from members.models import Member
 from apps.bookings.models import Booking
+from apps.memberships.models import Membership
 from .models import Attendance
 from .serializers import BulkAttendanceSerializer
 
@@ -34,8 +33,6 @@ def attendance_ui(request):
 def search_members(request):
     query = request.GET.get("q", "")
     tenant = request.user.tenant
-
-    from apps.memberships.models import Membership
 
     members = Member.objects.filter(
         tenant=tenant
@@ -260,24 +257,16 @@ from django.views.decorators.http import require_GET
 def get_session_members(request, session_id):
     tenant = request.user.tenant
 
-    bookings = Booking.objects.filter(
-        tenant=tenant,
-        session_id=session_id
+    bookings = (
+        Booking.objects
+        .filter(tenant=tenant, session_id=session_id)
+        .select_related("member")
     )
 
-    members = []
+    members = [
+        {"id": str(b.member.id), "name": f"{b.member.first_name} {b.member.last_name}"}
+        for b in bookings
+        if b.member is not None
+    ]
 
-    for b in bookings:
-        try:
-            member = Member.objects.get(id=b.member_id)
-
-            members.append({
-                "id": str(member.id),
-                "name": f"{member.first_name} {member.last_name}"
-            })
-        except Member.DoesNotExist:
-            continue
-
-    return JsonResponse({
-        "members": members
-    })
+    return JsonResponse({"members": members})
