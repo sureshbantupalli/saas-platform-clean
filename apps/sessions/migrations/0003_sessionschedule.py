@@ -10,7 +10,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('core', '0006_alter_branch_managers'),
-        ('platform_sessions', '0002_sessiontemplate'),
+        ('gym_sessions', '0002_sessiontemplate'),
     ]
 
     operations = [

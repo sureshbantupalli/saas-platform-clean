@@ -68,9 +68,8 @@ def bulk_mark_attendance(session, member_ids, tenant, marked_by=None):
         Attendance.objects.create(
             member=member,
             tenant=tenant,
+            attendance_type="session",
             session_date=session_date,
-
-            # 🔥 IMPORTANT FIX (was .time() before)
             check_in_time=session.start_time,
         )
 

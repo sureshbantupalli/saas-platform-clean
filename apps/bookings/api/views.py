@@ -117,7 +117,7 @@ class ListBookingsAPI(APIView):
         data = [
             {
                 "id": str(b.id),
-                "member_id": str(b.user_id),
+                "member_id": str(b.member_id),
                 "schedule_id": str(b.session_id),
                 "status": b.status,
                 "date": str(b.booking_date),

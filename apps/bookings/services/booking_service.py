@@ -1,16 +1,19 @@
 import uuid
 from django.shortcuts import get_object_or_404
+from django.db import transaction
 
 from apps.bookings.models import Booking
 from apps.platform_sessions.models import SessionInstance
 from apps.attendance.models import Attendance
 from members.models import Member
-from datetime import date
 
 
 def create_booking(*, tenant, data):
     """
-    Final working booking logic aligned with your models
+    FINAL BOOKING ENGINE:
+    - Capacity aware
+    - Waitlist support
+    - Tenant safe
     """
 
     member_id = data.get("member_id")
@@ -21,11 +24,11 @@ def create_booking(*, tenant, data):
     print("Member ID:", member_id)
     print("Schedule ID:", schedule_id)
 
-    # ✅ Get Session FIRST
+    # ✅ Get Session (tenant-safe)
     session = get_object_or_404(
         SessionInstance,
         id=schedule_id,
-        tenant=tenant
+        tenant_id=tenant.id
     )
 
     print("Session Found:", session.id, session.tenant_id)
@@ -34,7 +37,7 @@ def create_booking(*, tenant, data):
     member = get_object_or_404(
         Member,
         id=member_id,
-        tenant=tenant
+        tenant_id=tenant.id
     )
 
     print("Member Found:", member.id, member.tenant_id)
@@ -47,11 +50,29 @@ def create_booking(*, tenant, data):
 
     # ✅ Prevent duplicate booking
     if Booking.objects.filter(
-        user_id=member.id,
-        session=session,
-        tenant=tenant
+        member_id=member.id,
+        session_id=session.id,
+        tenant_id=tenant.id
     ).exists():
         raise ValueError("Booking already exists")
+
+    # 🔥 COUNT CONFIRMED BOOKINGS
+    confirmed_count = Booking.objects.filter(
+        session=session,
+        tenant=tenant,
+        status=Booking.Status.CONFIRMED
+    ).count()
+
+    print("Confirmed Count:", confirmed_count)
+    print("Session Capacity:", session.capacity)
+
+    # 🔥 DECIDE STATUS
+    if confirmed_count < session.capacity:
+        booking_status = Booking.Status.CONFIRMED
+        print("✅ Booking CONFIRMED")
+    else:
+        booking_status = Booking.Status.WAITLISTED
+        print("⏳ Booking WAITLISTED")
 
     # ✅ Extract date & time
     booking_date = session.start_time.date()
@@ -59,13 +80,13 @@ def create_booking(*, tenant, data):
 
     # ✅ Create booking
     booking = Booking.objects.create(
-        tenant=tenant,
-        user_id=member.id,
-        session=session,
+        tenant_id=tenant.id,
+        member_id=member.id,
+        session_id=session.id,   # 🔥 FIXED
         booking_date=booking_date,
         booking_time=booking_time,
         price=0,
-        status=Booking.Status.CONFIRMED,
+        status=booking_status,
     )
 
     print("✅ Booking Created:", booking.id)
@@ -80,26 +101,54 @@ def confirm_booking(booking: Booking):
     return booking
 
 
+@transaction.atomic
 def cancel_booking(booking: Booking):
+    """
+    Cancel booking + promote from waitlist
+    """
+
+    print("\n===== CANCEL BOOKING DEBUG =====")
+
+    session = booking.session
+
+    # ✅ Cancel current booking
     booking.status = Booking.Status.CANCELLED
     booking.save()
+
+    print(f"❌ Booking Cancelled: {booking.id}")
+
+    # 🔥 FIND NEXT WAITLISTED USER
+    next_booking = Booking.objects.filter(
+        session=session,
+        tenant=booking.tenant,
+        status=Booking.Status.WAITLISTED
+    ).order_by("created_at").first()
+
+    # 🔥 PROMOTE
+    if next_booking:
+        next_booking.status = Booking.Status.CONFIRMED
+        next_booking.save()
+
+        print(f"🚀 Promoted from waitlist: {next_booking.id}")
+    else:
+        print("No waitlisted users")
+
+    print("===== END CANCEL DEBUG =====\n")
+
     return booking
 
 
-# ✅ FINAL FIXED VERSION (CLEAN)
 def mark_bulk_attendance(*, tenant, booking_ids, status):
 
-    # 🔥 Convert to UUID
     booking_ids = [uuid.UUID(str(bid)) for bid in booking_ids]
 
     print("\n===== BULK ATTENDANCE DEBUG =====")
     print("Incoming booking_ids:", booking_ids)
     print("API Tenant:", tenant)
 
-    # ✅ Always use tenant-safe queryset
     bookings = Booking.objects.filter(
         id__in=booking_ids,
-        tenant=tenant
+        tenant_id=tenant.id
     )
 
     print("Matched bookings:", bookings.count())
@@ -107,17 +156,15 @@ def mark_bulk_attendance(*, tenant, booking_ids, status):
     if not bookings.exists():
         raise ValueError("No valid bookings found for this tenant.")
 
-    # 🔥 CRITICAL FIX: ensure real model instances (no lazy issues)
     bookings = list(bookings)
 
-    # ✅ Create attendance
     for booking in bookings:
         Attendance.objects.create(
-            tenant=tenant,
+            tenant_id=tenant.id,
             booking=booking,
-            member_id=booking.user_id,              # ✅ important
-            attendance_type="session",          # ✅ required
-            session_date=booking.session.start_time.date(),  # ✅ BEST SOURCE
+            member_id=booking.member_id,   # ✅ FIXED
+            attendance_type="session",
+            session_date=booking.session.start_time.date(),
             status=status
         )
 

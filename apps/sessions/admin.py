@@ -1,8 +1,4 @@
 from django.contrib import admin
-from .models import Session
-
-admin.site.register(Session)
-
 from .models import (
     SessionType,
     SessionTemplate,
@@ -11,7 +7,6 @@ from .models import (
     Booking,
     Attendance,
 )
-
 from apps.sessions.services.booking_service import cancel_booking
 
 

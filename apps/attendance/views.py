@@ -147,12 +147,11 @@ def booking_detail(request, booking_id):
     except Booking.DoesNotExist:
         return JsonResponse({"error": "Booking not found"}, status=404)
 
-    # ⚠️ IMPORTANT: adjust if your relation name is different
-    members = Member.objects.filter(id=booking.user_id)
+    members = Member.objects.filter(id=booking.member_id)
 
     data = {
         "id": str(booking.id),
-        "name": booking.name,
+        "session": str(booking.session),
         "members": [
             {
                 "id": str(m.id),
@@ -270,7 +269,7 @@ def get_session_members(request, session_id):
 
     for b in bookings:
         try:
-            member = Member.objects.get(id=b.user_id)
+            member = Member.objects.get(id=b.member_id)
 
             members.append({
                 "id": str(member.id),

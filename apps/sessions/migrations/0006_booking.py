@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
     dependencies = [
         ('core', '0006_alter_branch_managers'),
         ('members', '0004_alter_member_branches'),
-        ('platform_sessions', '0005_alter_sessioninstance_unique_together'),
+        ('gym_sessions', '0005_alter_sessioninstance_unique_together'),
     ]
 
     operations = [

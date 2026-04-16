@@ -110,6 +110,12 @@ class SessionSchedule(TenantAwareModel):
 
 class SessionInstance(TenantAwareModel):
 
+    tenant = models.ForeignKey(
+        "core.Tenant",
+        on_delete=models.CASCADE,
+        related_name="gym_sessioninstances"
+    )
+
     STATUS_SCHEDULED = "scheduled"
     STATUS_CANCELLED = "cancelled"
     STATUS_COMPLETED = "completed"
@@ -263,6 +269,12 @@ class Booking(TenantAwareModel):
 
 
 class Attendance(TenantAwareModel):
+
+    tenant = models.ForeignKey(
+        "core.Tenant",
+        on_delete=models.CASCADE,
+        related_name="gym_attendances"
+    )
 
     STATUS_PRESENT = "present"
     STATUS_ABSENT = "absent"

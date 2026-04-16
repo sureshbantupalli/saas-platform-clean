@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">Bookings</h4>
+</div>
+
+<!-- =============================== -->
+<!-- Create Booking Form -->
+<!-- =============================== -->
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header fw-semibold">New Booking</div>
+    <div class="card-body">
+        <form method="POST" action="{% url 'bookings:booking_create' %}" class="row g-3">
+            {% csrf_token %}
+
+            <div class="col-md-5">
+                <label class="form-label">Member</label>
+                <select name="member_id" class="form-select" required>
+                    <option value="">— Select Member —</option>
+                    {% for m in members %}
+                        <option value="{{ m.id }}">{{ m.first_name }} {{ m.last_name }}</option>
+                    {% empty %}
+                        <option disabled>No members found</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-5">
+                <label class="form-label">Session</label>
+                <select name="schedule_id" class="form-select" required>
+                    <option value="">— Select Session —</option>
+                    {% for s in sessions %}
+                        <option value="{{ s.id }}">
+                            {{ s.session_type.name }} — {{ s.start_time|date:"d M Y, H:i" }}
+                            (cap: {{ s.capacity }})
+                        </option>
+                    {% empty %}
+                        <option disabled>No sessions found</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Book</button>
+            </div>
+
+        </form>
+    </div>
+</div>
+
+<!-- =============================== -->
+<!-- Bookings Table -->
+<!-- =============================== -->
+
+<div class="card shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">All Bookings</span>
+        <span class="badge bg-secondary">{{ bookings|length }}</span>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Member</th>
+                    <th>Session</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for b in bookings %}
+                <tr>
+                    <td>{{ b.member.first_name }} {{ b.member.last_name }}</td>
+                    <td>{{ b.session.session_type.name }}</td>
+                    <td>{{ b.booking_date }}</td>
+                    <td>
+                        {% if b.status == "CONFIRMED" %}
+                            <span class="badge bg-success">Confirmed</span>
+                        {% elif b.status == "WAITLISTED" %}
+                            <span class="badge bg-warning text-dark">Waitlisted</span>
+                        {% elif b.status == "CANCELLED" %}
+                            <span class="badge bg-secondary">Cancelled</span>
+                        {% elif b.status == "PENDING" %}
+                            <span class="badge bg-info text-dark">Pending</span>
+                        {% else %}
+                            <span class="badge bg-light text-dark">{{ b.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if b.status != "CANCELLED" %}
+                        <form method="POST" action="{% url 'bookings:booking_cancel' b.id %}"
+                              onsubmit="return confirm('Cancel this booking?')">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
+                        </form>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-4">No bookings yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

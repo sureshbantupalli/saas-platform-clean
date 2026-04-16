@@ -1,5 +1,7 @@
 from django.urls import path
 
+app_name = "sessions"
+
 from .views import (
 
     # Existing UI views
@@ -32,22 +34,26 @@ urlpatterns = [
 
     path(
         "templates/",
-        session_templates_list
+        session_templates_list,
+        name="session_templates_list"
     ),
 
     path(
         "schedules/",
-        session_schedules_list
+        session_schedules_list,
+        name="session_schedules_list"
     ),
 
     path(
         "calendar/",
-        session_calendar
+        session_calendar,
+        name="session_calendar"
     ),
 
     path(
         "instance/<uuid:instance_id>/",
-        session_instance_detail
+        session_instance_detail,
+        name="session_instance_detail"
     ),
 
     # =========================================================

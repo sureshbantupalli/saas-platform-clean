@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'apps.bookings',
     'apps.payments',
     'apps.attendance',
+    'apps.sessions',
 
     'members',
     'crm',

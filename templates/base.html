@@ -112,29 +112,73 @@
 </div>
 
 <!-- =============================== -->
-<!-- Monitoring (Platform Admin Only) -->
-<!-- =============================== -->
-
-{% if request.user.is_platform_admin %}
-
-<div class="sidebar-section">Monitoring</div>
-
-<a href="{% url 'monitoring:lifecycle_dashboard' %}"
-   class="{% if '/monitoring/' in request.path %}active{% endif %}">
-    Lifecycle Monitoring
-</a>
-
-{% endif %}
-
-<!-- =============================== -->
 <!-- Members -->
 <!-- =============================== -->
 
 <div class="sidebar-section">Members</div>
 
 <a href="{% url 'members:member_list' %}"
-   class="{% if '/members/' in request.path %}active{% endif %}">
-    Members
+   class="{% if request.path == '/members/' or request.path|slice:':9' == '/members/' and '/members/add' not in request.path %}active{% endif %}">
+    All Members
+</a>
+
+<a href="{% url 'members:member_create' %}"
+   class="{% if '/members/create' in request.path %}active{% endif %}">
+    + Add Member
+</a>
+
+<!-- =============================== -->
+<!-- Memberships -->
+<!-- =============================== -->
+
+<div class="sidebar-section">Memberships</div>
+
+<a href="{% url 'membership_add' %}"
+   class="{% if '/memberships/' in request.path %}active{% endif %}">
+    Add Membership
+</a>
+
+<!-- =============================== -->
+<!-- Sessions -->
+<!-- =============================== -->
+
+<div class="sidebar-section">Sessions</div>
+
+<a href="{% url 'sessions:session_calendar' %}"
+   class="{% if '/sessions/calendar' in request.path %}active{% endif %}">
+    Calendar
+</a>
+
+<a href="{% url 'sessions:session_templates_list' %}"
+   class="{% if '/sessions/templates' in request.path %}active{% endif %}">
+    Templates
+</a>
+
+<a href="{% url 'sessions:session_schedules_list' %}"
+   class="{% if '/sessions/schedules' in request.path %}active{% endif %}">
+    Schedules
+</a>
+
+<!-- =============================== -->
+<!-- Bookings -->
+<!-- =============================== -->
+
+<div class="sidebar-section">Bookings</div>
+
+<a href="{% url 'bookings:booking_list' %}"
+   class="{% if '/bookings/' in request.path %}active{% endif %}">
+    Bookings
+</a>
+
+<!-- =============================== -->
+<!-- Attendance -->
+<!-- =============================== -->
+
+<div class="sidebar-section">Attendance</div>
+
+<a href="{% url 'attendance_ui' %}"
+   class="{% if '/attendance/ui' in request.path %}active{% endif %}">
+    Mark Attendance
 </a>
 
 <!-- =============================== -->
@@ -159,14 +203,29 @@
 </a>
 
 <!-- =============================== -->
-<!-- Reports -->
+<!-- Platform Admin Only -->
 <!-- =============================== -->
 
-<div class="sidebar-section">Reports</div>
+{% if request.user.is_platform_admin %}
 
-<a href="{% url 'crm:dashboard' %}">
-    Analytics
+<div class="sidebar-section">Platform</div>
+
+<a href="{% url 'monitoring:lifecycle_dashboard' %}"
+   class="{% if '/monitoring/' in request.path %}active{% endif %}">
+    Lifecycle Monitor
 </a>
+
+<a href="/platform/dashboard/"
+   class="{% if '/platform/dashboard' in request.path %}active{% endif %}">
+    Platform Dashboard
+</a>
+
+<a href="/platform/tenants/"
+   class="{% if '/platform/tenants' in request.path %}active{% endif %}">
+    Tenants
+</a>
+
+{% endif %}
 
 </div>
 

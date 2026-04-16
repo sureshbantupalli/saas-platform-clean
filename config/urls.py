@@ -142,6 +142,24 @@ urlpatterns = [
     ),
 
     # ==========================
+    # Bookings UI
+    # ==========================
+
+    path(
+        "bookings/",
+        include("apps.bookings.urls")
+    ),
+
+    # ==========================
+    # Sessions UI
+    # ==========================
+
+    path(
+        "sessions/",
+        include("apps.sessions.urls")
+    ),
+
+    # ==========================
     # Booking APIs
     # ==========================
 

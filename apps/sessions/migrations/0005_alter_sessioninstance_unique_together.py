@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('platform_sessions', '0004_sessioninstance'),
+        ('gym_sessions', '0004_sessioninstance'),
     ]
 
     operations = [

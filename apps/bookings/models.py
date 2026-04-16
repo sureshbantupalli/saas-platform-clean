@@ -11,6 +11,7 @@ class Booking(TenantAwareModel):
         PENDING = "PENDING", "Pending"
         CONFIRMED = "CONFIRMED", "Confirmed"
         CANCELLED = "CANCELLED", "Cancelled"
+        WAITLISTED = "WAITLISTED", "Waitlisted"
 
     # ✅ Override tenant to avoid reverse accessor clash
     tenant = models.ForeignKey(
