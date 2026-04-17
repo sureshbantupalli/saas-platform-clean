@@ -52,9 +52,10 @@ Every tenant-scoped model inherits from `TenantAwareModel` (`apps/core/models.py
 
 `User` → `Role` → `RolePermission` → `PermissionAction`
 
-- `PermissionAction`: Global permission definitions in `module:action` format
+- `PermissionAction`: Global permission definitions in `module:action` format (e.g., `attendance:create`, `crm:convert`, `membership:assign`). Two fields: `module` and `action` — no entity tier.
 - `RolePermission`: Maps roles to permitted actions with scope (`ANY` or `OWN`)
 - Tenant staff must have both a tenant and a role; platform admins have neither
+- Check permissions via `RBACService.has_permission(user, module, action)` or the `@require_permission(module, action)` decorator
 
 ### Membership Lifecycle
 
@@ -70,8 +71,12 @@ Every tenant-scoped model inherits from `TenantAwareModel` (`apps/core/models.py
 SessionType → SessionInstance → Booking → Attendance
 ```
 
-- `SessionInstance`: A specific scheduled occurrence with capacity limits
-- `Booking`: Member reservation (pending → confirmed → cancelled)
+Two session apps coexist with distinct roles — do not conflate them:
+
+- **`apps/platform_sessions`** (app label: `platform_sessions`): The platform's shared session data layer. `SessionType` and `SessionInstance` here are what `apps/bookings`, `apps/attendance`, and `apps/dashboard` all import and reference. Lightweight model.
+- **`apps/sessions`** (app label: `gym_sessions`): The schedule management system. Owns `SessionTemplate` → `SessionSchedule` → `SessionInstance` with auto-generation via signals. Has its own internal `Booking` and `Attendance` models used only within this app. Route: `/sessions/`.
+
+- `Booking`: Member reservation (booked → waitlisted → cancelled/attended/no_show). Capacity enforced on save.
 - `Attendance`: Marks presence; `present` status auto-decrements `remaining_sessions` and validates active membership
 
 ### Key Apps
@@ -83,13 +88,14 @@ SessionType → SessionInstance → Booking → Attendance
 | `apps/authority` | Roles and permission matrix |
 | `apps/tenants` | `Tenant` model and tenant services |
 | `apps/memberships` | `MembershipPlan`, `Membership`, usage tracking |
-| `apps/platform_sessions` | `SessionType`, `SessionInstance` |
+| `apps/platform_sessions` | Shared session data layer: `SessionType`, `SessionInstance`, `Booking` — imported by bookings/attendance/dashboard |
+| `apps/sessions` | Schedule management UI: `SessionTemplate` → `SessionSchedule` → `SessionInstance` (app label: `gym_sessions`) |
 | `apps/bookings` | `Booking` model and booking service |
 | `apps/attendance` | Attendance engine (bulk API, session codes, location) |
 | `apps/lifecycles` | Automated membership status management |
 | `apps/dashboard` | Widget engine aggregating data across modules |
-| `crm` | `Lead`, `Deal`, `LeadStage` CRM pipeline |
-| `members` | `Member` model (the person, separate from `User`) |
+| `crm` | `Lead`, `Deal`, `LeadStage` CRM pipeline — root-level app (predates `apps/` convention, intentional) |
+| `members` | `Member` model (the person, separate from `User`) — root-level app (predates `apps/` convention, intentional) |
 | `platform_core` | Platform-admin-only management layer |
 
 ### API Layer
