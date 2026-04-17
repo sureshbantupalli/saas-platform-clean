@@ -21,7 +21,7 @@ def create_booking(*, tenant, data):
     member_id = data.get("member_id")
     schedule_id = data.get("schedule_id")
 
-    session = get_object_or_404(SessionInstance, id=schedule_id, tenant_id=tenant.id)
+    session = get_object_or_404(SessionInstance.base_objects, id=schedule_id, tenant_id=tenant.id)
     member = get_object_or_404(Member, id=member_id, tenant_id=tenant.id)
 
     if member.tenant_id != session.tenant_id:
@@ -30,14 +30,14 @@ def create_booking(*, tenant, data):
             f"session belongs to {session.tenant_id}"
         )
 
-    if Booking.objects.filter(
+    if Booking.base_objects.filter(
         member_id=member.id,
         session_id=session.id,
         tenant_id=tenant.id
     ).exists():
         raise ValueError("Booking already exists for this member and session.")
 
-    confirmed_count = Booking.objects.filter(
+    confirmed_count = Booking.base_objects.filter(
         session=session,
         tenant=tenant,
         status=Booking.Status.CONFIRMED
@@ -86,7 +86,7 @@ def cancel_booking(booking: Booking):
     logger.info("Booking cancelled: %s", booking.id)
 
     next_booking = (
-        Booking.objects
+        Booking.base_objects
         .filter(session=session, tenant=booking.tenant, status=Booking.Status.WAITLISTED)
         .order_by("created_at")
         .first()
@@ -104,7 +104,7 @@ def mark_bulk_attendance(*, tenant, booking_ids, status):
 
     booking_ids = [uuid.UUID(str(bid)) for bid in booking_ids]
 
-    bookings = Booking.objects.filter(id__in=booking_ids, tenant_id=tenant.id)
+    bookings = Booking.base_objects.filter(id__in=booking_ids, tenant_id=tenant.id)
 
     if not bookings.exists():
         raise ValueError("No valid bookings found for this tenant.")

@@ -38,10 +38,6 @@ class MemberService:
             .prefetch_related("branches")
         )
 
-        # 🔐 RBAC restriction
-        if not user.is_platform_admin:
-            queryset = queryset.filter(created_by=user)
-
         # 🔍 Search filter
         if search_query:
             queryset = queryset.filter(
@@ -176,9 +172,6 @@ class MemberService:
                 is_deleted=False
             )
         except Member.DoesNotExist:
-            return None
-
-        if not user.is_platform_admin and member.created_by != user:
             return None
 
         member.display_status = MemberService._derive_status(member)

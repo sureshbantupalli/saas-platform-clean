@@ -27,7 +27,7 @@ class Migration(migrations.Migration):
                 ('is_active', models.BooleanField(default=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('template', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='schedules', to='platform_sessions.sessiontemplate')),
+                ('template', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='schedules', to='gym_sessions.sessiontemplate')),
                 ('tenant', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='core.tenant')),
             ],
             options={

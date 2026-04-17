@@ -2,46 +2,107 @@
 
 {% block content %}
 
-<h2 class="mb-4">Add Membership</h2>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold mb-0">
+        {% if member %}
+            Add Membership — {{ member.first_name }} {{ member.last_name }}
+        {% else %}
+            Add Membership
+        {% endif %}
+    </h2>
 
-<div class="card shadow-sm">
-    <div class="card-body">
+    {% if member %}
+        <a href="{% url 'members:member_detail' member.id %}" class="btn btn-outline-secondary">
+            Back to Member
+        </a>
+    {% else %}
+        <a href="{% url 'members:member_list' %}" class="btn btn-outline-secondary">
+            Back to Members
+        </a>
+    {% endif %}
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-4">
 
         <form method="post">
             {% csrf_token %}
 
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    {{ form.plan.label_tag }}
-                    {{ form.plan }}
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {% for error in form.non_field_errors %}
+                        {{ error }}
+                    {% endfor %}
                 </div>
+            {% endif %}
 
-                <div class="col-md-6">
-                    {{ form.branch.label_tag }}
-                    {{ form.branch }}
-                </div>
-            </div>
-
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    {{ form.start_date.label_tag }}
-                    {{ form.start_date }}
-                </div>
-
-                <div class="col-md-6">
-                    {{ form.end_date.label_tag }}
-                    {{ form.end_date }}
-                </div>
-            </div>
-
+            {% if not member %}
             <div class="mb-3">
-                {{ form.status.label_tag }}
+                <label class="form-label fw-semibold">Member</label>
+                {{ form.member }}
+                {% if form.member.errors %}
+                    <div class="text-danger small mt-1">{{ form.member.errors.0 }}</div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Plan</label>
+                    {{ form.plan }}
+                    {% if form.plan.errors %}
+                        <div class="text-danger small mt-1">{{ form.plan.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Branch</label>
+                    {{ form.branch }}
+                    {% if form.branch.errors %}
+                        <div class="text-danger small mt-1">{{ form.branch.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Start Date</label>
+                    {{ form.start_date }}
+                    {% if form.start_date.errors %}
+                        <div class="text-danger small mt-1">{{ form.start_date.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">End Date</label>
+                    {{ form.end_date }}
+                    {% if form.end_date.errors %}
+                        <div class="text-danger small mt-1">{{ form.end_date.errors.0 }}</div>
+                    {% endif %}
+                    <small class="text-muted">Auto-calculated from plan. Override only if needed.</small>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label fw-semibold">Status</label>
                 {{ form.status }}
             </div>
 
-            <button type="submit" class="btn btn-success">
-                Create Membership
-            </button>
+            <div class="d-flex justify-content-between">
+                {% if member %}
+                    <a href="{% url 'members:member_detail' member.id %}" class="btn btn-outline-secondary">
+                        Cancel
+                    </a>
+                {% else %}
+                    <a href="{% url 'members:member_list' %}" class="btn btn-outline-secondary">
+                        Cancel
+                    </a>
+                {% endif %}
+
+                <button type="submit" class="btn btn-success px-5">
+                    Create Membership
+                </button>
+            </div>
 
         </form>
 

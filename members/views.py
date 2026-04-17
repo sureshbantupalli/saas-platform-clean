@@ -147,7 +147,7 @@ def member_update(request, pk):
             member.save()
             form.save_m2m()
 
-            return redirect("member_detail", pk=member.pk)
+            return redirect("members:member_detail", pk=member.pk)
 
     else:
         form = MemberForm(
