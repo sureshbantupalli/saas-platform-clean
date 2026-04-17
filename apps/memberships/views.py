@@ -1,12 +1,12 @@
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Prefetch
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
-from django.views.generic import CreateView
-from django.urls import reverse
-from django.shortcuts import get_object_or_404
+from django.views.generic import CreateView, UpdateView
+from django.urls import reverse, reverse_lazy
+from django.shortcuts import get_object_or_404, redirect, render
 from django import forms
 
 from .models import Membership, MembershipPlan
@@ -14,6 +14,7 @@ from .serializers import MembershipSerializer
 
 from members.models import Member
 from apps.core.models import Branch
+from apps.core.permissions import require_permission
 
 
 # ==============================================
@@ -62,10 +63,10 @@ class MembershipForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         if tenant:
-            self.fields["branch"].queryset = Branch.objects.filter(
+            self.fields["branch"].queryset = Branch.base_objects.filter(
                 tenant=tenant, is_active=True, is_deleted=False
             )
-            self.fields["plan"].queryset = MembershipPlan.objects.filter(
+            self.fields["plan"].queryset = MembershipPlan.base_objects.filter(
                 tenant=tenant, is_active=True
             )
         else:
@@ -98,7 +99,7 @@ class MembershipFormWithMember(MembershipForm):
         if tenant:
             self.fields["member"].queryset = Member.objects.filter(
                 tenant=tenant, is_deleted=False
-            ).order_by("first_name", "last_name")
+            ).order_by("first_name", "last_name")  # Member uses plain Manager, no TenantManager
 
         self.fields["member"].widget.attrs["class"] = "form-select"
 
@@ -152,3 +153,142 @@ class MembershipCreateView(CreateView):
         ctx = super().get_context_data(**kwargs)
         ctx["member"] = self.member
         return ctx
+
+
+# ==============================================
+# Membership Plan Form
+# ==============================================
+
+class MembershipPlanForm(forms.ModelForm):
+
+    class Meta:
+        model = MembershipPlan
+        fields = [
+            "name",
+            "branch",
+            "plan_type",
+            "price",
+            "billing_cycle_type",
+            "billing_interval",
+            "class_count",
+            "description",
+            "allow_custom_dates",
+            "auto_renew_default",
+            "is_active",
+        ]
+        widgets = {
+            "description": forms.Textarea(attrs={"rows": 3, "class": "form-control"}),
+        }
+
+    def __init__(self, *args, tenant=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if tenant:
+            self.fields["branch"].queryset = Branch.base_objects.filter(
+                tenant=tenant, is_active=True, is_deleted=False
+            )
+        else:
+            self.fields["branch"].queryset = Branch.objects.none()
+
+        for name, field in self.fields.items():
+            if name in ("allow_custom_dates", "auto_renew_default", "is_active"):
+                field.widget.attrs.setdefault("class", "form-check-input")
+            elif not isinstance(field.widget, forms.Textarea):
+                field.widget.attrs.setdefault("class", "form-control")
+
+        self.fields["class_count"].required = False
+        self.fields["class_count"].help_text = "Number of sessions included (Class Pack only)"
+
+    def clean(self):
+        cleaned = super().clean()
+        plan_type = cleaned.get("plan_type")
+        class_count = cleaned.get("class_count")
+
+        if plan_type == "CLASS_PACK" and not class_count:
+            self.add_error("class_count", "Class count is required for Class Pack plans.")
+
+        return cleaned
+
+
+# ==============================================
+# Membership Plan Views
+# ==============================================
+
+@login_required
+def plan_list(request):
+    tenant = request.user.tenant
+
+    plans = MembershipPlan.base_objects.filter(
+        tenant=tenant
+    ).select_related("branch").order_by("branch__name", "name")
+
+    branch_filter = request.GET.get("branch", "")
+    active_filter = request.GET.get("active", "")
+
+    if branch_filter:
+        plans = plans.filter(branch_id=branch_filter)
+
+    if active_filter == "1":
+        plans = plans.filter(is_active=True)
+    elif active_filter == "0":
+        plans = plans.filter(is_active=False)
+
+    branches = Branch.objects.filter(tenant=tenant, is_active=True, is_deleted=False)
+
+    context = {
+        "plans": plans,
+        "branches": branches,
+        "branch_filter": branch_filter,
+        "active_filter": active_filter,
+    }
+    return render(request, "memberships/plan_list.html", context)
+
+
+@login_required
+def plan_create(request):
+    tenant = request.user.tenant
+
+    if request.method == "POST":
+        form = MembershipPlanForm(request.POST, tenant=tenant)
+        if form.is_valid():
+            plan = form.save(commit=False)
+            plan.tenant = tenant
+            plan.save()
+            messages.success(request, f'Plan "{plan.name}" created successfully.')
+            return redirect("plan_list")
+    else:
+        form = MembershipPlanForm(tenant=tenant)
+
+    return render(request, "memberships/plan_form.html", {"form": form, "action": "Create"})
+
+
+@login_required
+def plan_edit(request, pk):
+    tenant = request.user.tenant
+    plan = get_object_or_404(MembershipPlan.base_objects, pk=pk, tenant=tenant)
+
+    if request.method == "POST":
+        form = MembershipPlanForm(request.POST, instance=plan, tenant=tenant)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Plan "{plan.name}" updated successfully.')
+            return redirect("plan_list")
+    else:
+        form = MembershipPlanForm(instance=plan, tenant=tenant)
+
+    return render(request, "memberships/plan_form.html", {"form": form, "plan": plan, "action": "Edit"})
+
+
+@login_required
+def plan_toggle_active(request, pk):
+    tenant = request.user.tenant
+    plan = get_object_or_404(MembershipPlan.base_objects, pk=pk, tenant=tenant)
+
+    if request.method == "POST":
+        plan.is_active = not plan.is_active
+        # bypass full_clean to avoid re-validating unchanged data
+        MembershipPlan.base_objects.filter(pk=plan.pk).update(is_active=plan.is_active)
+        state = "activated" if plan.is_active else "deactivated"
+        messages.success(request, f'Plan "{plan.name}" {state}.')
+
+    return redirect("plan_list")

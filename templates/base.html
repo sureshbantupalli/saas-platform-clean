@@ -133,9 +133,19 @@
 
 <div class="sidebar-section">Memberships</div>
 
+<a href="{% url 'plan_list' %}"
+   class="{% if '/memberships/plans' in request.path %}active{% endif %}">
+    Plans
+</a>
+
+<a href="{% url 'plan_create' %}"
+   class="{% if '/memberships/plans/create' in request.path %}active{% endif %}">
+    + New Plan
+</a>
+
 <a href="{% url 'membership_add' %}"
-   class="{% if '/memberships/' in request.path %}active{% endif %}">
-    Add Membership
+   class="{% if request.path == '/memberships/add/' %}active{% endif %}">
+    Assign Membership
 </a>
 
 <!-- =============================== -->

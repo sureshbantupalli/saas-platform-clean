@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-0">Membership Plans</h2>
+        <small class="text-muted">Define reusable plan templates for your branches</small>
+    </div>
+    <a href="{% url 'plan_create' %}" class="btn btn-primary px-4">
+        + New Plan
+    </a>
+</div>
+
+
+<!-- Filters -->
+<div class="card shadow-sm border-0 mb-4 p-3">
+    <form method="get" class="row g-2 align-items-center">
+
+        <div class="col-md-4">
+            <select name="branch" class="form-select">
+                <option value="">All Branches</option>
+                {% for branch in branches %}
+                    <option value="{{ branch.id }}"
+                        {% if branch_filter == branch.id|stringformat:"s" %}selected{% endif %}>
+                        {{ branch.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <select name="active" class="form-select">
+                <option value="">All Status</option>
+                <option value="1" {% if active_filter == "1" %}selected{% endif %}>Active</option>
+                <option value="0" {% if active_filter == "0" %}selected{% endif %}>Inactive</option>
+            </select>
+        </div>
+
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary">Filter</button>
+        </div>
+
+        {% if branch_filter or active_filter %}
+        <div class="col-auto">
+            <a href="{% url 'plan_list' %}" class="btn btn-outline-secondary">Clear</a>
+        </div>
+        {% endif %}
+
+    </form>
+</div>
+
+
+<!-- Plans Table -->
+<div class="card shadow-sm border-0">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+
+            <thead class="table-light">
+                <tr>
+                    <th>Plan Name</th>
+                    <th>Branch</th>
+                    <th>Type</th>
+                    <th>Price</th>
+                    <th>Cycle</th>
+                    <th>Sessions</th>
+                    <th>Status</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+
+            <tbody>
+            {% for plan in plans %}
+                <tr class="{% if not plan.is_active %}text-muted{% endif %}">
+
+                    <td class="fw-semibold">
+                        {{ plan.name }}
+                        {% if not plan.is_active %}
+                            <span class="badge bg-secondary ms-1">Inactive</span>
+                        {% endif %}
+                    </td>
+
+                    <td>{{ plan.branch.name }}</td>
+
+                    <td>
+                        {% if plan.plan_type == "DURATION" %}
+                            <span class="badge bg-primary">Duration</span>
+                        {% elif plan.plan_type == "CLASS_PACK" %}
+                            <span class="badge bg-info text-dark">Class Pack</span>
+                        {% elif plan.plan_type == "UNLIMITED" %}
+                            <span class="badge bg-success">Unlimited</span>
+                        {% endif %}
+                    </td>
+
+                    <td>₹{{ plan.price }}</td>
+
+                    <td>
+                        {{ plan.billing_interval }}
+                        {{ plan.billing_cycle_type|lower|capfirst }}{% if plan.billing_interval > 1 %}s{% endif %}
+                    </td>
+
+                    <td>
+                        {% if plan.plan_type == "CLASS_PACK" %}
+                            {{ plan.class_count }} sessions
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if plan.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+
+                    <td class="text-end">
+                        <a href="{% url 'plan_edit' plan.pk %}"
+                           class="btn btn-sm btn-outline-secondary">
+                            Edit
+                        </a>
+
+                        <form method="post" action="{% url 'plan_toggle_active' plan.pk %}"
+                              class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit"
+                                    class="btn btn-sm {% if plan.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                                {% if plan.is_active %}Deactivate{% else %}Activate{% endif %}
+                            </button>
+                        </form>
+                    </td>
+
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center text-muted py-5">
+                        <div class="mb-2">No plans found.</div>
+                        <a href="{% url 'plan_create' %}" class="btn btn-primary btn-sm">
+                            Create your first plan
+                        </a>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+
+        </table>
+    </div>
+</div>
+
+{% endblock %}

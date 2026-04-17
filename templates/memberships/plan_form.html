@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-0">{{ action }} Plan</h2>
+        <small class="text-muted">
+            {% if action == "Edit" %}
+                Editing: {{ plan.name }}
+            {% else %}
+                Define a reusable plan template for a branch
+            {% endif %}
+        </small>
+    </div>
+    <a href="{% url 'plan_list' %}" class="btn btn-outline-secondary">
+        Back to Plans
+    </a>
+</div>
+
+<div class="row">
+<div class="col-lg-8">
+
+<div class="card shadow-sm border-0 p-4">
+    <form method="post" id="planForm">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+                {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+            </div>
+        {% endif %}
+
+        <!-- Name + Branch -->
+        <div class="row g-3 mb-3">
+            <div class="col-md-7">
+                <label class="form-label fw-semibold">Plan Name <span class="text-danger">*</span></label>
+                {{ form.name }}
+                {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>{% endif %}
+            </div>
+            <div class="col-md-5">
+                <label class="form-label fw-semibold">Branch <span class="text-danger">*</span></label>
+                {{ form.branch }}
+                {% if form.branch.errors %}<div class="text-danger small mt-1">{{ form.branch.errors.0 }}</div>{% endif %}
+            </div>
+        </div>
+
+        <!-- Plan Type -->
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Plan Type <span class="text-danger">*</span></label>
+            <div class="d-flex gap-3 flex-wrap">
+                {% for value, label in form.plan_type.field.choices %}
+                <div class="form-check plan-type-option border rounded p-3 flex-fill"
+                     style="cursor:pointer; min-width:130px;">
+                    <input class="form-check-input" type="radio"
+                           name="plan_type" id="type_{{ value }}"
+                           value="{{ value }}"
+                           {% if form.plan_type.value == value %}checked{% endif %}>
+                    <label class="form-check-label fw-semibold" for="type_{{ value }}">
+                        {{ label }}
+                    </label>
+                    <div class="text-muted small mt-1">
+                        {% if value == "DURATION" %}Fixed date range{% endif %}
+                        {% if value == "CLASS_PACK" %}Session count{% endif %}
+                        {% if value == "UNLIMITED" %}No limits{% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% if form.plan_type.errors %}<div class="text-danger small mt-1">{{ form.plan_type.errors.0 }}</div>{% endif %}
+        </div>
+
+        <!-- Price + Billing Cycle -->
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Price (₹) <span class="text-danger">*</span></label>
+                {{ form.price }}
+                {% if form.price.errors %}<div class="text-danger small mt-1">{{ form.price.errors.0 }}</div>{% endif %}
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Billing Cycle <span class="text-danger">*</span></label>
+                {{ form.billing_cycle_type }}
+                {% if form.billing_cycle_type.errors %}<div class="text-danger small mt-1">{{ form.billing_cycle_type.errors.0 }}</div>{% endif %}
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Interval <span class="text-danger">*</span></label>
+                {{ form.billing_interval }}
+                <small class="text-muted">e.g. 1 Monthly = 1 month</small>
+                {% if form.billing_interval.errors %}<div class="text-danger small mt-1">{{ form.billing_interval.errors.0 }}</div>{% endif %}
+            </div>
+        </div>
+
+        <!-- Class Count (Class Pack only) -->
+        <div class="mb-3" id="classCountRow" style="display:none;">
+            <label class="form-label fw-semibold">Number of Sessions <span class="text-danger">*</span></label>
+            {{ form.class_count }}
+            <small class="text-muted d-block mt-1">{{ form.class_count.help_text }}</small>
+            {% if form.class_count.errors %}<div class="text-danger small mt-1">{{ form.class_count.errors.0 }}</div>{% endif %}
+        </div>
+
+        <!-- Description -->
+        <div class="mb-3">
+            <label class="form-label fw-semibold">Description</label>
+            {{ form.description }}
+        </div>
+
+        <!-- Options -->
+        <div class="mb-4">
+            <label class="form-label fw-semibold">Options</label>
+            <div class="d-flex flex-column gap-2">
+
+                <div class="form-check">
+                    {{ form.allow_custom_dates }}
+                    <label class="form-check-label" for="{{ form.allow_custom_dates.id_for_label }}">
+                        Allow custom dates
+                        <small class="text-muted">(members can set their own start date)</small>
+                    </label>
+                </div>
+
+                <div class="form-check">
+                    {{ form.auto_renew_default }}
+                    <label class="form-check-label" for="{{ form.auto_renew_default.id_for_label }}">
+                        Auto-renew by default
+                    </label>
+                </div>
+
+                <div class="form-check">
+                    {{ form.is_active }}
+                    <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                        Active
+                        <small class="text-muted">(inactive plans won't appear in membership creation)</small>
+                    </label>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="d-flex justify-content-between">
+            <a href="{% url 'plan_list' %}" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary px-5">
+                {{ action }} Plan
+            </button>
+        </div>
+
+    </form>
+</div>
+
+</div>
+
+<!-- Help Card -->
+<div class="col-lg-4">
+    <div class="card border-0 bg-light p-4">
+        <h6 class="fw-semibold mb-3">Plan Types</h6>
+
+        <div class="mb-3">
+            <span class="badge bg-primary mb-1">Duration</span>
+            <p class="small text-muted mb-0">
+                Fixed date range (e.g. 1 month, 3 months). End date is automatically calculated from start date.
+            </p>
+        </div>
+
+        <div class="mb-3">
+            <span class="badge bg-info text-dark mb-1">Class Pack</span>
+            <p class="small text-muted mb-0">
+                A fixed number of sessions (e.g. 10 classes). Remaining sessions decrement on each attendance.
+            </p>
+        </div>
+
+        <div class="mb-3">
+            <span class="badge bg-success mb-1">Unlimited</span>
+            <p class="small text-muted mb-0">
+                Unlimited access within the billing period. No session count tracked.
+            </p>
+        </div>
+
+        <hr>
+
+        <h6 class="fw-semibold mb-2">Billing Interval</h6>
+        <p class="small text-muted">
+            Combine interval + cycle: "2 Monthly" = 2 months, "12 Weekly" = 12 weeks.
+        </p>
+    </div>
+</div>
+
+</div>
+
+
+<script>
+(function () {
+    const classCountRow = document.getElementById("classCountRow");
+    const radios = document.querySelectorAll('input[name="plan_type"]');
+
+    function toggleClassCount() {
+        const selected = document.querySelector('input[name="plan_type"]:checked');
+        const show = selected && selected.value === "CLASS_PACK";
+        classCountRow.style.display = show ? "block" : "none";
+    }
+
+    radios.forEach(r => r.addEventListener("change", toggleClassCount));
+    toggleClassCount();  // run on load
+
+    // Highlight selected type card
+    function updateTypeCards() {
+        document.querySelectorAll(".plan-type-option").forEach(card => {
+            const radio = card.querySelector("input[type=radio]");
+            card.classList.toggle("border-primary", radio.checked);
+            card.classList.toggle("bg-light", radio.checked);
+        });
+    }
+    radios.forEach(r => r.addEventListener("change", updateTypeCards));
+    updateTypeCards();
+})();
+</script>
+
+{% endblock %}
