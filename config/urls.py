@@ -185,4 +185,38 @@ urlpatterns = [
         "attendance/",
         include("apps.attendance.urls")
     ),
+
+    # ==========================
+    # Intake Forms (UI + API)
+    # ==========================
+
+    path(
+        "intake/",
+        include(("apps.intake.urls", "intake"), namespace="intake")
+    ),
+
+    path(
+        "api/intake/",
+        include("apps.intake.api.urls")
+    ),
+
+    # ==========================
+    # Payments (UI + API)
+    # ==========================
+    path(
+        "payments/",
+        include(("apps.payments.urls", "payments"), namespace="payments")
+    ),
+    path(
+        "api/payments/",
+        include("apps.payments.api.urls")
+    ),
+
+    # ==========================
+    # Communications
+    # ==========================
+    path(
+        "communications/",
+        include(("apps.communications.urls", "communications"), namespace="communications")
+    ),
 ]

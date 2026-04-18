@@ -1,303 +1,544 @@
 {% load static %}
-
 <!DOCTYPE html>
-
-<html>
+<html lang="en">
 <head>
-    <title>SaaS Platform</title>
+    <meta charset="UTF-8">
+    <title>{% block title %}SaaS Platform{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0f172a">
 
-<!-- Bootstrap 5 -->
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/design-system.css' %}">
 
-<!-- Design System -->
-<link rel="stylesheet" href="{% static 'css/design-system.css' %}">
+    <style>
+    /* ─── Skip link ─────────────────────────────────────────────── */
+    .skip-link {
+        position: absolute; top: -9999px; left: 12px;
+        background: #2563eb; color: #fff;
+        padding: 8px 16px; border-radius: 0 0 8px 8px;
+        font-size: 14px; font-weight: 600; text-decoration: none;
+        z-index: 10000; white-space: nowrap;
+    }
+    .skip-link:focus { top: 0; }
 
-<style>
-
+    /* ─── Body ──────────────────────────────────────────────────── */
     body {
         overflow-x: hidden;
         font-size: 14px;
+        background-color: #f1f5f9;
+        margin: 0;
     }
 
-    /* ===== Sidebar ===== */
-
+    /* ─── Sidebar ───────────────────────────────────────────────── */
     .sidebar {
-        height: 100vh;
-        background-color: #111827;
-        color: white;
         position: fixed;
-        width: 240px;
+        top: 0; left: 0;
+        width: 256px;
+        height: 100vh;
+        background-color: #0f172a;
+        display: flex;
+        flex-direction: column;
+        z-index: 1040;
+        overflow-x: hidden;
+        overflow-y: hidden;
+        transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    .sidebar-header {
-        padding: 20px;
-        font-weight: 600;
-        font-size: 18px;
-        border-bottom: 1px solid #1f2937;
+    /* ─── Sidebar brand ─────────────────────────────────────────── */
+    .sidebar-brand {
+        flex-shrink: 0;
+        padding: 16px 18px;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
     }
 
-    .sidebar-header a {
-        color: white;
+    .sidebar-brand a {
+        display: flex;
+        align-items: center;
+        gap: 10px;
         text-decoration: none;
+        color: #f1f5f9;
     }
 
-    .sidebar a {
-        color: #cbd5e1;
-        text-decoration: none;
-        display: block;
-        padding: 12px 20px;
-        font-size: 14px;
-        transition: all 0.2s ease-in-out;
+    .brand-mark {
+        width: 30px; height: 30px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #6366f1 0%, #2563eb 100%);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 13px; font-weight: 800; color: #fff;
+        flex-shrink: 0;
+        box-shadow: 0 2px 8px rgba(99,102,241,0.45);
     }
 
-    .sidebar a:hover {
-        background-color: #1f2937;
-        color: white;
+    .brand-name {
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: #f1f5f9;
     }
 
-    .sidebar .active {
-        background-color: #2563eb;
-        color: white;
-        font-weight: 500;
+    /* ─── Sidebar nav ───────────────────────────────────────────── */
+    .sidebar-nav {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 6px 0 24px;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,0.1) transparent;
     }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; }
+    .sidebar-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
 
-    .sidebar-section {
-        margin-top: 10px;
-        font-size: 12px;
+    /* ─── Nav section labels ─────────────────────────────────────── */
+    .nav-section {
+        margin-top: 18px;
+        padding: 0 18px 5px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
         text-transform: uppercase;
-        color: #9ca3af;
-        padding: 10px 20px;
+        color: #475569;
+    }
+    .nav-section:first-child { margin-top: 8px; }
+
+    /* ─── Sidebar links — use .sidebar-link NOT Bootstrap .nav-link ─ */
+    .sidebar-link {
+        /* Explicit display so Bootstrap can never touch it */
+        display: flex !important;
+        align-items: center !important;
+        flex-direction: row !important;
+        gap: 10px;
+        padding: 9px 14px;
+        margin: 1px 8px;
+        border-radius: 8px;
+        color: #94a3b8;
+        text-decoration: none;
+        font-size: 13.5px;
+        font-weight: 450;
+        min-height: 40px;
+        position: relative;
+        transition: background-color 0.15s, color 0.15s;
+        white-space: nowrap;
     }
 
-    /* ===== Topbar ===== */
+    .sidebar-link i {
+        font-size: 15px;
+        width: 18px;
+        text-align: center;
+        flex-shrink: 0;
+        opacity: 0.75;
+        transition: opacity 0.15s;
+    }
 
+    .sidebar-link:hover {
+        background-color: rgba(255,255,255,0.07);
+        color: #fff;
+    }
+
+    .sidebar-link:hover i { opacity: 1; }
+
+    .sidebar-link.active {
+        background-color: #1e3a8a;
+        color: #fff;
+        font-weight: 600;
+    }
+
+    .sidebar-link.active i { opacity: 1; }
+
+    .sidebar-link.active::before {
+        content: '';
+        position: absolute;
+        left: -8px; top: 50%;
+        transform: translateY(-50%);
+        width: 3px; height: 20px;
+        border-radius: 0 3px 3px 0;
+        background: #60a5fa;
+    }
+
+    /* ─── Sidebar overlay ───────────────────────────────────────── */
+    .sidebar-overlay {
+        display: none;
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 1039;
+    }
+
+    /* ─── Topbar ─────────────────────────────────────────────────── */
     .topbar {
-        background-color: white;
-        padding: 15px 25px;
-        border-bottom: 1px solid #e5e7eb;
-        margin-left: 240px;
+        position: sticky;
+        top: 0;
+        z-index: 1030;
+        height: 58px;
+        background-color: #ffffff;
+        border-bottom: 1px solid #e2e8f0;
+        margin-left: 256px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 24px;
+        transition: box-shadow 0.2s;
     }
 
-    /* ===== Main Content ===== */
+    .topbar.scrolled {
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
 
+    .user-avatar {
+        width: 30px; height: 30px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #6366f1, #2563eb);
+        color: #fff;
+        font-size: 11px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; user-select: none;
+    }
+
+    .user-email {
+        font-size: 13px; font-weight: 500;
+        color: #64748b;
+        max-width: 200px;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    .btn-topbar-logout {
+        display: inline-flex; align-items: center; gap: 5px;
+        background: none; border: 1px solid #e2e8f0;
+        color: #64748b; font-size: 13px; font-weight: 500;
+        padding: 5px 11px; border-radius: 7px;
+        text-decoration: none; cursor: pointer;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
+        white-space: nowrap;
+    }
+    .btn-topbar-logout:hover {
+        background: #f1f5f9; color: #0f172a; border-color: #cbd5e1;
+    }
+
+    .hamburger-btn {
+        display: none;
+        background: none;
+        border: 1px solid #e2e8f0;
+        border-radius: 7px;
+        padding: 5px 8px;
+        cursor: pointer;
+        color: #64748b;
+        transition: background 0.15s;
+    }
+    .hamburger-btn:hover { background: #f1f5f9; }
+
+    /* ─── Main content ───────────────────────────────────────────── */
     .main-content {
-        margin-left: 240px;
-        padding: 30px;
-        background-color: #f3f4f6;
-        min-height: 100vh;
+        margin-left: 256px;
+        padding: 28px 28px 48px;
+        min-height: calc(100vh - 58px);
+        outline: none;
     }
 
-    .username {
-        font-weight: 500;
-        color: #374151;
+    /* ─── Tablet 768–991px ───────────────────────────────────────── */
+    @media (min-width: 768px) and (max-width: 991.98px) {
+        .sidebar   { width: 220px; }
+        .topbar    { margin-left: 220px; padding: 0 18px; }
+        .main-content { margin-left: 220px; padding: 20px 18px 40px; }
     }
 
-</style>
+    /* ─── Mobile <768px ──────────────────────────────────────────── */
+    @media (max-width: 767.98px) {
+        .sidebar           { transform: translateX(-100%); }
+        .sidebar.open      { transform: translateX(0); box-shadow: 8px 0 32px rgba(0,0,0,0.35); }
+        .sidebar-overlay.open { display: block; }
+        .topbar            { margin-left: 0; padding: 0 14px; }
+        .main-content      { margin-left: 0; padding: 16px 14px 40px; }
+        .hamburger-btn     { display: flex !important; align-items: center; }
+        .user-email        { display: none !important; }
+    }
 
+    /* Show hamburger only on mobile */
+    @media (min-width: 768px) {
+        .hamburger-btn { display: none; }
+    }
+    </style>
 </head>
 
 <body>
 
-<!-- =============================== -->
-<!-- Sidebar -->
-<!-- =============================== -->
+<a href="#main-content" class="skip-link">Skip to main content</a>
 
-<div class="sidebar">
+<div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
 
-<div class="sidebar-header">
-    <a href="{% url 'crm:dashboard' %}">
-        SaaS Platform
-    </a>
-</div>
+<!-- ══════════════════════════ SIDEBAR ══════════════════════════ -->
+<aside class="sidebar" id="sidebar" role="navigation" aria-label="Main navigation">
 
-<!-- =============================== -->
-<!-- Members -->
-<!-- =============================== -->
+    <div class="sidebar-brand">
+        <a href="{% url 'crm:dashboard' %}" aria-label="SaaS Platform — go to dashboard">
+            <div class="brand-mark" aria-hidden="true">S</div>
+            <span class="brand-name">SaaS Platform</span>
+        </a>
+    </div>
 
-<div class="sidebar-section">Members</div>
+    <div class="sidebar-nav" role="list">
 
-<a href="{% url 'members:member_list' %}"
-   class="{% if request.path == '/members/' or request.path|slice:':9' == '/members/' and '/members/add' not in request.path %}active{% endif %}">
-    All Members
-</a>
+        <div class="nav-section" aria-hidden="true">Members</div>
 
-<a href="{% url 'members:member_create' %}"
-   class="{% if '/members/create' in request.path %}active{% endif %}">
-    + Add Member
-</a>
-
-<!-- =============================== -->
-<!-- Memberships -->
-<!-- =============================== -->
-
-<div class="sidebar-section">Memberships</div>
-
-<a href="{% url 'plan_list' %}"
-   class="{% if '/memberships/plans' in request.path %}active{% endif %}">
-    Plans
-</a>
-
-<a href="{% url 'plan_create' %}"
-   class="{% if '/memberships/plans/create' in request.path %}active{% endif %}">
-    + New Plan
-</a>
-
-<a href="{% url 'membership_add' %}"
-   class="{% if request.path == '/memberships/add/' %}active{% endif %}">
-    Assign Membership
-</a>
-
-<!-- =============================== -->
-<!-- Sessions -->
-<!-- =============================== -->
-
-<div class="sidebar-section">Sessions</div>
-
-<a href="{% url 'sessions:session_calendar' %}"
-   class="{% if '/sessions/calendar' in request.path %}active{% endif %}">
-    Calendar
-</a>
-
-<a href="{% url 'sessions:session_templates_list' %}"
-   class="{% if '/sessions/templates' in request.path %}active{% endif %}">
-    Templates
-</a>
-
-<a href="{% url 'sessions:session_schedules_list' %}"
-   class="{% if '/sessions/schedules' in request.path %}active{% endif %}">
-    Schedules
-</a>
-
-<!-- =============================== -->
-<!-- Bookings -->
-<!-- =============================== -->
-
-<div class="sidebar-section">Bookings</div>
-
-<a href="{% url 'bookings:booking_list' %}"
-   class="{% if '/bookings/' in request.path %}active{% endif %}">
-    Bookings
-</a>
-
-<!-- =============================== -->
-<!-- Attendance -->
-<!-- =============================== -->
-
-<div class="sidebar-section">Attendance</div>
-
-<a href="{% url 'attendance_ui' %}"
-   class="{% if '/attendance/ui' in request.path %}active{% endif %}">
-    Mark Attendance
-</a>
-
-<!-- =============================== -->
-<!-- CRM -->
-<!-- =============================== -->
-
-<div class="sidebar-section">CRM</div>
-
-<a href="{% url 'crm:dashboard' %}"
-   class="{% if '/crm/dashboard' in request.path %}active{% endif %}">
-    Dashboard
-</a>
-
-<a href="{% url 'crm:enquiry_list' %}"
-   class="{% if '/crm/enquiries' in request.path %}active{% endif %}">
-    Enquiries
-</a>
-
-<a href="{% url 'crm:enquiry_kanban' %}"
-   class="{% if '/crm/kanban' in request.path %}active{% endif %}">
-    Pipeline
-</a>
-
-<!-- =============================== -->
-<!-- Platform Admin Only -->
-<!-- =============================== -->
-
-{% if request.user.is_platform_admin %}
-
-<div class="sidebar-section">Platform</div>
-
-<a href="{% url 'monitoring:lifecycle_dashboard' %}"
-   class="{% if '/monitoring/' in request.path %}active{% endif %}">
-    Lifecycle Monitor
-</a>
-
-<a href="/platform/dashboard/"
-   class="{% if '/platform/dashboard' in request.path %}active{% endif %}">
-    Platform Dashboard
-</a>
-
-<a href="/platform/tenants/"
-   class="{% if '/platform/tenants' in request.path %}active{% endif %}">
-    Tenants
-</a>
-
-{% endif %}
-
-</div>
-
-<!-- =============================== -->
-<!-- Topbar -->
-<!-- =============================== -->
-
-<div class="topbar d-flex justify-content-between align-items-center">
-
-<div>
-    <strong>Internal Admin Panel</strong>
-</div>
-
-<div class="d-flex align-items-center gap-3">
-
-    {% if request.user.is_authenticated %}
-
-        <span class="username">
-            {{ request.user.email }}
-        </span>
-
-        <a href="{% url 'logout' %}" class="btn btn-sm btn-outline-secondary">
-            Logout
+        <a href="{% url 'members:member_list' %}" role="listitem"
+           class="sidebar-link{% if request.path == '/members/' or request.path|slice:':9' == '/members/' and '/members/add' not in request.path %} active{% endif %}"
+           {% if request.path == '/members/' or request.path|slice:':9' == '/members/' and '/members/add' not in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-people-fill" aria-hidden="true"></i>
+            <span>All Members</span>
         </a>
 
-    {% else %}
+        <a href="{% url 'members:member_create' %}" role="listitem"
+           class="sidebar-link{% if '/members/create' in request.path %} active{% endif %}"
+           {% if '/members/create' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-person-plus" aria-hidden="true"></i>
+            <span>Add Member</span>
+        </a>
 
-        <span class="username">Guest</span>
+        <div class="nav-section" aria-hidden="true">Memberships</div>
 
-    {% endif %}
+        <a href="{% url 'plan_list' %}" role="listitem"
+           class="sidebar-link{% if '/memberships/plans' in request.path and 'create' not in request.path and 'edit' not in request.path %} active{% endif %}"
+           {% if '/memberships/plans' in request.path and 'create' not in request.path and 'edit' not in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-card-checklist" aria-hidden="true"></i>
+            <span>Plans</span>
+        </a>
 
-</div>
+        <a href="{% url 'plan_create' %}" role="listitem"
+           class="sidebar-link{% if '/memberships/plans/create' in request.path %} active{% endif %}"
+           {% if '/memberships/plans/create' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-plus-circle" aria-hidden="true"></i>
+            <span>New Plan</span>
+        </a>
 
-</div>
+        <a href="{% url 'membership_add' %}" role="listitem"
+           class="sidebar-link{% if request.path == '/memberships/add/' %} active{% endif %}"
+           {% if request.path == '/memberships/add/' %}aria-current="page"{% endif %}>
+            <i class="bi bi-person-badge" aria-hidden="true"></i>
+            <span>Assign Membership</span>
+        </a>
 
-<!-- =============================== -->
-<!-- Main Content -->
-<!-- =============================== -->
+        <div class="nav-section" aria-hidden="true">Sessions</div>
 
-<div class="main-content">
+        <a href="{% url 'sessions:session_calendar' %}" role="listitem"
+           class="sidebar-link{% if '/sessions/calendar' in request.path %} active{% endif %}"
+           {% if '/sessions/calendar' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-calendar-week" aria-hidden="true"></i>
+            <span>Calendar</span>
+        </a>
 
-<!-- Django Messages -->
+        <a href="{% url 'sessions:session_templates_list' %}" role="listitem"
+           class="sidebar-link{% if '/sessions/templates' in request.path %} active{% endif %}"
+           {% if '/sessions/templates' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-layout-text-window" aria-hidden="true"></i>
+            <span>Templates</span>
+        </a>
 
-{% if messages %}
-    <div class="mb-3">
-        {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <a href="{% url 'sessions:session_schedules_list' %}" role="listitem"
+           class="sidebar-link{% if '/sessions/schedules' in request.path %} active{% endif %}"
+           {% if '/sessions/schedules' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-calendar2-check" aria-hidden="true"></i>
+            <span>Schedules</span>
+        </a>
+
+        <div class="nav-section" aria-hidden="true">Bookings</div>
+
+        <a href="{% url 'bookings:booking_list' %}" role="listitem"
+           class="sidebar-link{% if '/bookings/' in request.path %} active{% endif %}"
+           {% if '/bookings/' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-bookmark-check" aria-hidden="true"></i>
+            <span>Bookings</span>
+        </a>
+
+        <div class="nav-section" aria-hidden="true">Attendance</div>
+
+        <a href="{% url 'attendance_ui' %}" role="listitem"
+           class="sidebar-link{% if '/attendance/ui' in request.path %} active{% endif %}"
+           {% if '/attendance/ui' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-clipboard2-check" aria-hidden="true"></i>
+            <span>Mark Attendance</span>
+        </a>
+
+        <div class="nav-section" aria-hidden="true">CRM</div>
+
+        <a href="{% url 'crm:dashboard' %}" role="listitem"
+           class="sidebar-link{% if '/crm/dashboard' in request.path %} active{% endif %}"
+           {% if '/crm/dashboard' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-speedometer2" aria-hidden="true"></i>
+            <span>Dashboard</span>
+        </a>
+
+        <a href="{% url 'crm:enquiry_list' %}" role="listitem"
+           class="sidebar-link{% if '/crm/enquiries' in request.path %} active{% endif %}"
+           {% if '/crm/enquiries' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-chat-square-dots" aria-hidden="true"></i>
+            <span>Enquiries</span>
+        </a>
+
+        <a href="{% url 'crm:enquiry_kanban' %}" role="listitem"
+           class="sidebar-link{% if '/crm/kanban' in request.path %} active{% endif %}"
+           {% if '/crm/kanban' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-kanban" aria-hidden="true"></i>
+            <span>Pipeline</span>
+        </a>
+
+        <a href="{% url 'crm:followup_queue' %}" role="listitem"
+           class="sidebar-link{% if '/crm/followups' in request.path %} active{% endif %}"
+           {% if '/crm/followups' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-telephone-outbound" aria-hidden="true"></i>
+            <span>Follow-up Queue</span>
+        </a>
+
+        <div class="nav-section" aria-hidden="true">Finance</div>
+
+        <a href="{% url 'payments:payment_list' %}" role="listitem"
+           class="sidebar-link{% if '/payments/' in request.path %} active{% endif %}"
+           {% if '/payments/' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-credit-card" aria-hidden="true"></i>
+            <span>Payments</span>
+        </a>
+
+        <div class="nav-section" aria-hidden="true">Communications</div>
+
+        <a href="{% url 'communications:template_list' %}" role="listitem"
+           class="sidebar-link{% if '/communications/' in request.path %} active{% endif %}"
+           {% if '/communications/' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-chat-dots" aria-hidden="true"></i>
+            <span>Messaging</span>
+        </a>
+
+        <div class="nav-section" aria-hidden="true">Forms</div>
+
+        <a href="{% url 'intake:form_builder_list' %}" role="listitem"
+           class="sidebar-link{% if '/intake/' in request.path %} active{% endif %}"
+           {% if '/intake/' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-ui-checks-grid" aria-hidden="true"></i>
+            <span>Intake Forms</span>
+        </a>
+
+        {% if request.user.is_platform_admin %}
+        <div class="nav-section" aria-hidden="true">Platform</div>
+
+        <a href="{% url 'monitoring:lifecycle_dashboard' %}" role="listitem"
+           class="sidebar-link{% if '/monitoring/' in request.path %} active{% endif %}"
+           {% if '/monitoring/' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-activity" aria-hidden="true"></i>
+            <span>Lifecycle Monitor</span>
+        </a>
+
+        <a href="/platform/dashboard/" role="listitem"
+           class="sidebar-link{% if '/platform/dashboard' in request.path %} active{% endif %}"
+           {% if '/platform/dashboard' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>
+            <span>Platform Dashboard</span>
+        </a>
+
+        <a href="/platform/tenants/" role="listitem"
+           class="sidebar-link{% if '/platform/tenants' in request.path %} active{% endif %}"
+           {% if '/platform/tenants' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-building" aria-hidden="true"></i>
+            <span>Tenants</span>
+        </a>
+        {% endif %}
+
+    </div>
+</aside>
+
+<!-- ══════════════════════════ TOPBAR ══════════════════════════ -->
+<header class="topbar" id="topbar" role="banner">
+
+    <div class="d-flex align-items-center gap-2">
+        <button class="hamburger-btn"
+                id="sidebarToggle"
+                type="button"
+                aria-label="Open navigation menu"
+                aria-expanded="false"
+                aria-controls="sidebar">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+                <rect y="2"  width="18" height="2" rx="1"/>
+                <rect y="8"  width="18" height="2" rx="1"/>
+                <rect y="14" width="18" height="2" rx="1"/>
+            </svg>
+        </button>
+        <span class="fw-semibold" style="font-size:15px; color:#0f172a;">Internal Admin Panel</span>
+    </div>
+
+    <div class="d-flex align-items-center gap-2">
+        {% if request.user.is_authenticated %}
+            <div class="user-avatar" aria-hidden="true" title="{{ request.user.email }}">
+                {{ request.user.email|slice:":1"|upper }}
             </div>
+            <span class="user-email">{{ request.user.email }}</span>
+            <a href="{% url 'logout' %}" class="btn-topbar-logout" aria-label="Log out of your account">
+                <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                <span>Logout</span>
+            </a>
+        {% else %}
+            <span class="user-email">Guest</span>
+        {% endif %}
+    </div>
+
+</header>
+
+<!-- ══════════════════════════ MAIN ══════════════════════════ -->
+<main class="main-content" id="main-content" tabindex="-1">
+
+    {% if messages %}
+    <div role="alert" aria-live="polite" aria-atomic="false" class="mb-3">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="status">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close notification"></button>
+        </div>
         {% endfor %}
     </div>
-{% endif %}
+    {% endif %}
 
-{% block content %}
-{% endblock %}
+    {% block content %}{% endblock %}
 
-</div>
+</main>
 
-<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
+<script>
+(function () {
+    'use strict';
+    var sidebar = document.getElementById('sidebar');
+    var overlay = document.getElementById('sidebarOverlay');
+    var toggle  = document.getElementById('sidebarToggle');
+    var topbar  = document.getElementById('topbar');
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    function open() {
+        sidebar.classList.add('open');
+        overlay.classList.add('open');
+        overlay.removeAttribute('aria-hidden');
+        toggle && (toggle.setAttribute('aria-expanded', 'true'),
+                   toggle.setAttribute('aria-label', 'Close navigation menu'));
+    }
+    function close() {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('open');
+        overlay.setAttribute('aria-hidden', 'true');
+        toggle && (toggle.setAttribute('aria-expanded', 'false'),
+                   toggle.setAttribute('aria-label', 'Open navigation menu'));
+    }
+
+    toggle  && toggle.addEventListener('click', function () {
+        sidebar.classList.contains('open') ? close() : open();
+    });
+    overlay && overlay.addEventListener('click', close);
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && sidebar.classList.contains('open')) close();
+    });
+
+    sidebar.querySelectorAll('a').forEach(function (a) {
+        a.addEventListener('click', function () { if (window.innerWidth < 768) close(); });
+    });
+
+    window.addEventListener('scroll', function () {
+        if (topbar) topbar.classList.toggle('scrolled', window.scrollY > 4);
+    }, { passive: true });
+}());
+</script>
 
 </body>
 </html>

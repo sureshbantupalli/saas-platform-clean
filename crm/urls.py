@@ -137,4 +137,25 @@ urlpatterns = [
         name="quick_schedule_followup",
     ),
 
+    # ======================================
+    # FOLLOW-UP QUEUE
+    # ======================================
+    path(
+        "followups/",
+        views.follow_up_queue,
+        name="followup_queue",
+    ),
+
+    path(
+        "followups/<int:pk>/done/",
+        views.mark_followup_done,
+        name="mark_followup_done",
+    ),
+
+    path(
+        "followups/<int:pk>/log-call/",
+        views.log_call_from_followup,
+        name="log_call_from_followup",
+    ),
+
 ]

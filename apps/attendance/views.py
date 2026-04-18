@@ -16,6 +16,26 @@ from apps.memberships.models import Membership
 from .models import Attendance
 from .serializers import BulkAttendanceSerializer
 
+import logging
+_logger = logging.getLogger(__name__)
+
+
+def _emit_attendance_marked(tenant, member, attendance):
+    try:
+        from apps.communications.services.communication_service import handle_event
+        handle_event("attendance_marked", {
+            "member_name":    f"{member.first_name} {member.last_name}",
+            "phone":          member.phone or "",
+            "email":          member.email or "",
+            "session_date":   str(attendance.session_date),
+            "attendance_type": attendance.attendance_type,
+            "attendance_id":  str(attendance.id),
+            "reference_type": "attendance",
+            "reference_id":   str(attendance.id),
+        }, tenant)
+    except Exception:
+        _logger.exception("Failed to emit attendance_marked event")
+
 
 # =====================================================
 # ✅ UI PAGE
@@ -86,15 +106,31 @@ def mark_attendance_ui(request):
 
         member = Member.objects.get(id=member_id, tenant=tenant)
 
+        # Walk-in attendance requires a currently active membership
+        today = timezone.now().date()
+        has_active_membership = Membership.objects.filter(
+            member=member,
+            status="active",
+            start_date__lte=today,
+            end_date__gte=today,
+        ).exists()
+        if not has_active_membership:
+            return JsonResponse(
+                {"error": "Member does not have an active membership."},
+                status=400,
+            )
+
         attendance = Attendance.objects.create(
             tenant=tenant,
             member=member,
             attendance_type=attendance_type,
-            session_date=timezone.now().date(),
+            session_date=today,
             check_in_time=timezone.now(),
             marked_by=request.user,
             status="present"
         )
+
+        _emit_attendance_marked(tenant, member, attendance)
 
         return JsonResponse({
             "message": "Attendance marked successfully",

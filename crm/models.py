@@ -380,6 +380,21 @@ class Enquiry(models.Model):
                 performed_by=self.created_by
             )
 
+            # Auto-schedule an initial call follow-up for the next day
+            try:
+                FollowUp.objects.create(
+                    tenant=self.tenant,
+                    enquiry=self,
+                    followup_type=FollowUp.TYPE_CALL,
+                    due_date=timezone.now().date() + timedelta(days=1),
+                    status=FollowUp.STATUS_PENDING,
+                    notes="Initial follow-up call",
+                    reference_type="lead_created",
+                    created_by=self.created_by,
+                )
+            except Exception:
+                pass  # non-critical — enquiry is saved regardless
+
         elif old_stage != self.current_stage:
 
             acting_user = getattr(self, "_acting_user", None)
@@ -400,13 +415,17 @@ class Enquiry(models.Model):
 class EnquiryActivity(models.Model):
 
     ACTION_CHOICES = [
-        ("CREATED", "Created"),
-        ("STAGE_CHANGED", "Stage Changed"),
-        ("ASSIGNED", "Assigned"),
-        ("NOTE_ADDED", "Note Added"),
-        ("CALL_LOGGED", "Call Logged"),
-        ("CONVERTED", "Converted"),
-        ("LOST", "Lost"),
+        ("CREATED",             "Created"),
+        ("STAGE_CHANGED",       "Stage Changed"),
+        ("ASSIGNED",            "Assigned"),
+        ("NOTE_ADDED",          "Note Added"),
+        ("CALL_LOGGED",         "Call Logged"),
+        ("CONVERTED",           "Converted"),
+        ("LOST",                "Lost"),
+        ("FOLLOWUP_SCHEDULED",  "Follow-up Scheduled"),
+        ("FOLLOWUP_DONE",       "Follow-up Completed"),
+        ("FOLLOWUP_MISSED",     "Follow-up Missed"),
+        ("MARKED_LOST",         "Marked as Lost"),
     ]
 
     tenant = models.ForeignKey(
@@ -442,3 +461,103 @@ class EnquiryActivity(models.Model):
 
     def __str__(self):
         return f"{self.action_type} - {self.enquiry.full_name}"
+
+
+# ============================================================
+# FOLLOW-UP MODEL
+# ============================================================
+
+class FollowUp(models.Model):
+    """
+    Tracks individual follow-up tasks for enquiries and/or members.
+
+    Enquiry follow-ups are created automatically on lead creation and
+    by staff when scheduling calls. Member follow-ups are created when
+    events like session_missed or payment_failed occur post-conversion.
+    """
+
+    TYPE_CALL    = "call"
+    TYPE_MESSAGE = "message"
+    TYPE_VISIT   = "visit"
+
+    STATUS_PENDING = "pending"
+    STATUS_DONE    = "done"
+    STATUS_MISSED  = "missed"
+
+    TYPE_CHOICES = [
+        (TYPE_CALL,    "Call"),
+        (TYPE_MESSAGE, "Message"),
+        (TYPE_VISIT,   "Visit"),
+    ]
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_DONE,    "Done"),
+        (STATUS_MISSED,  "Missed"),
+    ]
+
+    tenant = models.ForeignKey(
+        "core.Tenant",
+        on_delete=models.CASCADE,
+        related_name="followups",
+    )
+
+    # At least one of enquiry / member must be set
+    enquiry = models.ForeignKey(
+        Enquiry,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="followups",
+    )
+    member = models.ForeignKey(
+        "members.Member",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="followups",
+    )
+
+    followup_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default=TYPE_CALL)
+    due_date      = models.DateField()
+    status        = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    notes         = models.TextField(blank=True)
+
+    # Source event context
+    reference_type = models.CharField(max_length=100, blank=True)
+    reference_id   = models.CharField(max_length=100, blank=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "crm_followups"
+        ordering = ["due_date", "status"]
+
+    @property
+    def is_overdue(self):
+        return self.status == self.STATUS_PENDING and self.due_date < timezone.now().date()
+
+    @property
+    def display_name(self):
+        if self.enquiry:
+            return self.enquiry.full_name
+        if self.member:
+            return f"{self.member.first_name} {self.member.last_name}"
+        return "Unknown"
+
+    @property
+    def phone(self):
+        if self.enquiry:
+            return self.enquiry.phone
+        if self.member:
+            return self.member.phone
+        return ""
+
+    def __str__(self):
+        return f"{self.get_followup_type_display()} — {self.display_name} [{self.due_date}]"

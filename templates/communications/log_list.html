@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Communication Logs{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold mb-0">Communication Logs</h2>
+    <a href="{% url 'communications:template_list' %}" class="btn btn-outline-secondary btn-sm">Templates</a>
+</div>
+
+<form method="get" class="row g-2 mb-4">
+    <div class="col-auto">
+        <select name="channel" class="form-select form-select-sm">
+            <option value="">All Channels</option>
+            {% for val, label in channel_choices %}
+            <option value="{{ val }}" {% if channel_filter == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <select name="status" class="form-select form-select-sm">
+            <option value="">All Statuses</option>
+            {% for val, label in status_choices %}
+            <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-outline-primary">Filter</button>
+        <a href="{% url 'communications:log_list' %}" class="btn btn-sm btn-outline-secondary ms-1">Clear</a>
+    </div>
+</form>
+
+{% if logs %}
+<div class="card shadow-sm border-0">
+    <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>When</th>
+                    <th>Channel</th>
+                    <th>Recipient</th>
+                    <th>Message</th>
+                    <th>Status</th>
+                    <th>Ref</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for log in logs %}
+            <tr>
+                <td class="text-muted small text-nowrap">{{ log.created_at|date:"d M H:i" }}</td>
+                <td>
+                    {% if log.channel == "SMS" %}<span class="badge bg-primary">SMS</span>
+                    {% elif log.channel == "WHATSAPP" %}<span class="badge bg-success">WA</span>
+                    {% else %}<span class="badge bg-secondary">Email</span>{% endif %}
+                </td>
+                <td class="small font-monospace">{{ log.recipient }}</td>
+                <td class="small text-truncate" style="max-width:240px" title="{{ log.message }}">
+                    {% if log.subject %}<em class="text-muted">{{ log.subject }}</em><br>{% endif %}
+                    {{ log.message|truncatechars:80 }}
+                </td>
+                <td>
+                    {% if log.status == "SENT" %}
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">Sent</span>
+                    {% elif log.status == "FAILED" %}
+                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle"
+                          title="{{ log.error_message }}">Failed</span>
+                    {% else %}
+                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Pending</span>
+                    {% endif %}
+                </td>
+                <td class="small text-muted">
+                    {% if log.reference_type %}{{ log.reference_type }}{% else %}&mdash;{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<p class="text-muted small mt-2">Showing last 200 records.</p>
+{% else %}
+<div class="text-center py-5 text-muted">
+    <i class="bi bi-journal-x fs-1 d-block mb-2"></i>
+    No communication logs found.
+</div>
+{% endif %}
+{% endblock %}

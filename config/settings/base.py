@@ -50,11 +50,13 @@ INSTALLED_APPS = [
     'apps.payments',
     'apps.attendance',
     'apps.sessions',
+    'apps.communications.apps.CommunicationsConfig',
 
     'members',
-    'crm',
+    'crm.apps.CrmConfig',
 
     'platform_core',
+    'apps.intake.apps.IntakeConfig',
 ]
 
 
@@ -201,3 +203,24 @@ SECURE_REFERRER_POLICY = "same-origin"
 
 # Optional safety
 CSRF_TRUSTED_ORIGINS = ["http://127.0.0.1:8000"]
+
+# ==============================
+# RAZORPAY (global dev fallback — override per-tenant via TenantPaymentConfig)
+# ==============================
+
+import os
+
+RAZORPAY_KEY_ID         = os.environ.get("RAZORPAY_KEY_ID",         "rzp_test_placeholder")
+RAZORPAY_KEY_SECRET     = os.environ.get("RAZORPAY_KEY_SECRET",     "placeholder_secret")
+RAZORPAY_WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "webhook_placeholder")
+
+# ==============================
+# PAYMENT FIELD ENCRYPTION
+# ==============================
+# Fernet key — generate with:
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# MUST be overridden in production via env var.
+PAYMENTS_ENCRYPTION_KEY = os.environ.get(
+    "PAYMENTS_ENCRYPTION_KEY",
+    "BywK4uUFhAvnBYlTJi85zxFGzl74PSoGcVcbKPs_9bY=",  # dev default — change in production
+)

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Message Templates{% endblock %}
+
+{% block content %}
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show" role="alert">
+    {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Dismiss"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold mb-0">Message Templates</h2>
+    <a href="{% url 'communications:template_create' %}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle me-1"></i>New Template
+    </a>
+</div>
+
+{% if templates %}
+<div class="card shadow-sm border-0">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>Channel</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for tpl in templates %}
+            <tr>
+                <td class="fw-semibold">{{ tpl.name }}</td>
+                <td>
+                    {% if tpl.channel == "SMS" %}<span class="badge bg-primary">SMS</span>
+                    {% elif tpl.channel == "WHATSAPP" %}<span class="badge bg-success">WhatsApp</span>
+                    {% else %}<span class="badge bg-secondary">Email</span>{% endif %}
+                </td>
+                <td>
+                    {% if tpl.is_active %}
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">Active</span>
+                    {% else %}
+                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Inactive</span>
+                    {% endif %}
+                </td>
+                <td class="text-muted small">{{ tpl.created_at|date:"d M Y" }}</td>
+                <td class="text-end">
+                    <a href="{% url 'communications:template_edit' tpl.pk %}" class="btn btn-sm btn-outline-secondary me-1">Edit</a>
+                    <form method="post" action="{% url 'communications:template_toggle' tpl.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm {% if tpl.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                            {% if tpl.is_active %}Deactivate{% else %}Activate{% endif %}
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+    <i class="bi bi-chat-square-text fs-1 d-block mb-2"></i>
+    No message templates yet.
+    <a href="{% url 'communications:template_create' %}">Create the first one.</a>
+</div>
+{% endif %}
+{% endblock %}

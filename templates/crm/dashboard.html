@@ -66,6 +66,44 @@
 
 </div>
 
+<!-- ===================== -->
+<!-- FOLLOW-UP WIDGETS -->
+<!-- ===================== -->
+
+<div class="row g-3 mb-4">
+
+<div class="col-md-3">
+<div class="card shadow-sm border-warning border-2">
+<div class="card-body d-flex align-items-center gap-3">
+<div class="rounded-circle bg-warning bg-opacity-25 p-2">
+    <i class="bi bi-clock-fill text-warning fs-5"></i>
+</div>
+<div>
+<h6 class="text-muted mb-0">Today's Follow-ups</h6>
+<h3 class="mb-0">{{ today_followups|length }}</h3>
+</div>
+<a href="{% url 'crm:followup_queue' %}" class="stretched-link"></a>
+</div>
+</div>
+</div>
+
+<div class="col-md-3">
+<div class="card shadow-sm border-danger border-2">
+<div class="card-body d-flex align-items-center gap-3">
+<div class="rounded-circle bg-danger bg-opacity-25 p-2">
+    <i class="bi bi-exclamation-circle-fill text-danger fs-5"></i>
+</div>
+<div>
+<h6 class="text-muted mb-0">Missed Follow-ups</h6>
+<h3 class="mb-0">{{ missed_followup_count|default:"0" }}</h3>
+</div>
+<a href="{% url 'crm:followup_queue' %}" class="stretched-link"></a>
+</div>
+</div>
+</div>
+
+</div>
+
 <div class="dashboard-section-title">
 Followups
 </div>

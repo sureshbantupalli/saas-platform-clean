@@ -1,11 +1,13 @@
 from django.db import IntegrityError
-from django.shortcuts import redirect, get_object_or_404
+from django.shortcuts import redirect, get_object_or_404, render
 from django.views.generic import UpdateView
 from django.urls import reverse_lazy
 from django.urls import reverse
 from django.db.models import Count, Q
 from django.views.generic import TemplateView, ListView, DetailView
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
 from django.contrib.auth import get_user_model
 from django.views import View
 from .forms import EnquiryForm
@@ -152,6 +154,14 @@ class CRMdashboardView(LoginRequiredMixin, TemplateView):
                 "conversion_rate": conversion_percent,
             })
 
+        from crm.models import FollowUp
+        tenant = user.tenant if hasattr(user, "tenant") and not user.is_superuser else None
+        missed_followup_count = 0
+        if tenant:
+            missed_followup_count = FollowUp.objects.filter(
+                tenant=tenant, status=FollowUp.STATUS_MISSED
+            ).count()
+
         context.update({
             "total_enquiries": total_enquiries,
             "new_count": new_count,
@@ -164,7 +174,8 @@ class CRMdashboardView(LoginRequiredMixin, TemplateView):
             "today_followups": today_followups,
             "upcoming_followups": upcoming_followups,
             "no_followups": no_followups,
-            "needs_attention": needs_attention,  # NEW
+            "needs_attention": needs_attention,
+            "missed_followup_count": missed_followup_count,
         })
 
         return context
@@ -569,7 +580,23 @@ class CRMConvertEnquiryView(LoginRequiredMixin, View):
         try:
             member = enquiry.convert_to_member(request.user)
             messages.success(request, "Enquiry successfully converted.")
-            return redirect(reverse("members:member_detail", args=[member.pk]))
+
+            # If there is an active intake form for members, redirect through it
+            from apps.intake.services.form_service import FormService
+            from django.urls import reverse as _reverse
+            intake_form = FormService.get_active_form_for_entity(
+                request.user.tenant, "member"
+            )
+            if intake_form:
+                # After intake, go to membership assignment
+                next_url = f"{_reverse('membership_add')}?member={member.pk}"
+                intake_url = _reverse("intake:form_render", args=[intake_form.pk])
+                return redirect(
+                    f"{intake_url}?entity_type=member&entity_id={member.pk}&next={next_url}"
+                )
+
+            # No active intake form — go straight to membership assignment
+            return redirect(f"{reverse('membership_add')}?member={member.pk}")
 
         except ValidationError as e:
             messages.error(request, "; ".join(e.messages))
@@ -771,3 +798,70 @@ def quick_schedule_followup(request, enquiry_id):
     )
 
     return JsonResponse({"status": "success"})
+
+
+# ============================================================
+# FOLLOW-UP QUEUE
+# ============================================================
+
+@login_required
+def follow_up_queue(request):
+    from crm.services.followup_service import FollowUpService
+    from crm.models import FollowUp
+
+    tenant = request.user.tenant
+
+    # Auto-mark overdue as missed on each queue view
+    FollowUpService.mark_overdue_as_missed(tenant=tenant)
+
+    overdue, today_fus, upcoming = FollowUpService.get_queue_sections(tenant)
+
+    missed_count = FollowUp.objects.filter(
+        tenant=tenant, status=FollowUp.STATUS_MISSED
+    ).count()
+
+    return render(request, "crm/followup_queue.html", {
+        "overdue":      overdue,
+        "today_fus":    today_fus,
+        "upcoming":     upcoming,
+        "missed_count": missed_count,
+        "today":        timezone.localdate(),
+    })
+
+
+# ============================================================
+# MARK FOLLOW-UP DONE
+# ============================================================
+
+@login_required
+@require_POST
+def mark_followup_done(request, pk):
+    from crm.models import FollowUp
+    from crm.services.followup_service import FollowUpService
+
+    fu = get_object_or_404(FollowUp, pk=pk, tenant=request.user.tenant)
+    FollowUpService.mark_done(fu, user=request.user)
+    messages.success(request, "Follow-up marked as done.")
+    return redirect(request.POST.get("next", "crm:followup_queue"))
+
+
+# ============================================================
+# LOG CALL FROM FOLLOW-UP QUEUE
+# ============================================================
+
+@login_required
+@require_POST
+def log_call_from_followup(request, pk):
+    from crm.models import FollowUp
+    from crm.services.followup_service import FollowUpService
+
+    fu = get_object_or_404(FollowUp, pk=pk, tenant=request.user.tenant)
+    note = request.POST.get("notes", "Call logged from follow-up queue.")
+
+    if fu.enquiry:
+        EnquiryLifecycleService.log_call(fu.enquiry, user=request.user, notes=note)
+    else:
+        FollowUpService.mark_done(fu, user=request.user)
+
+    messages.success(request, "Call logged.")
+    return redirect(request.POST.get("next", "crm:followup_queue"))

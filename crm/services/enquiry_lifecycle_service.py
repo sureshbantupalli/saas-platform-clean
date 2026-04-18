@@ -1,6 +1,7 @@
 from django.utils import timezone
+from datetime import timedelta
 
-from crm.models import Enquiry, EnquiryActivity, LeadStage
+from crm.models import Enquiry, EnquiryActivity, FollowUp, LeadStage
 
 
 class EnquiryLifecycleService:
@@ -71,9 +72,9 @@ class EnquiryLifecycleService:
     @staticmethod
     def log_call(enquiry, user, notes="Phone call made"):
         """
-        Log a phone call activity and optionally move stage forward.
+        Log a phone call activity, mark any pending follow-up done,
+        and schedule the next follow-up for tomorrow.
         """
-
         EnquiryActivity.objects.create(
             tenant=enquiry.tenant,
             enquiry=enquiry,
@@ -82,18 +83,43 @@ class EnquiryLifecycleService:
             notes=notes,
         )
 
-       
+        # Mark the earliest pending follow-up as done
+        pending = (
+            FollowUp.objects.filter(enquiry=enquiry, status=FollowUp.STATUS_PENDING)
+            .order_by("due_date")
+            .first()
+        )
+        if pending:
+            from crm.services.followup_service import FollowUpService
+            FollowUpService.mark_done(pending, user=user)
+
+        # Auto-schedule next follow-up in 2 days (staff can adjust)
+        FollowUp.objects.create(
+            tenant        = enquiry.tenant,
+            enquiry       = enquiry,
+            followup_type = FollowUp.TYPE_CALL,
+            due_date      = timezone.now().date() + timedelta(days=2),
+            status        = FollowUp.STATUS_PENDING,
+            notes         = "Follow-up after call",
+            created_by    = user,
+        )
+        # Sync denormalized date
+        enquiry.next_followup_date = timezone.now().date() + timedelta(days=2)
+        enquiry._acting_user = user
+        enquiry.save(update_fields=["next_followup_date"])
+
 
     # ==========================================================
     # FOLLOWUP SCHEDULING
     # ==========================================================
 
     @staticmethod
-    def schedule_followup(enquiry, followup_date, user, notes="Follow-up scheduled"):
+    def schedule_followup(enquiry, followup_date, user, notes="Follow-up scheduled",
+                          followup_type=None):
         """
-        Schedule next follow-up.
+        Schedule next follow-up — updates Enquiry.next_followup_date AND
+        creates a FollowUp record for status tracking.
         """
-
         old_date = enquiry.next_followup_date
 
         enquiry.next_followup_date = followup_date
@@ -108,6 +134,17 @@ class EnquiryLifecycleService:
             old_value=str(old_date) if old_date else None,
             new_value=str(followup_date),
             notes=notes,
+        )
+
+        # Create a FollowUp record for queue tracking
+        FollowUp.objects.create(
+            tenant        = enquiry.tenant,
+            enquiry       = enquiry,
+            followup_type = followup_type or FollowUp.TYPE_CALL,
+            due_date      = followup_date,
+            status        = FollowUp.STATUS_PENDING,
+            notes         = notes,
+            created_by    = user,
         )
 
 

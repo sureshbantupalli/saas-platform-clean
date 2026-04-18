@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+
+{% block title %}Follow-up Queue{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">Follow-up Queue</h2>
+    <a href="{% url 'crm:dashboard' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-speedometer2 me-1"></i>CRM Dashboard
+    </a>
+</div>
+
+{% if missed_count %}
+<div class="alert alert-warning d-flex align-items-center gap-2">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    <span>{{ missed_count }} follow-up{{ missed_count|pluralize }} marked as missed (overdue from prior days).</span>
+</div>
+{% endif %}
+
+{% include "partials/_messages.html" ignore missing %}
+
+{% macro followup_card fu section_class %}{% endmacro %}
+
+<!-- ============================================================ -->
+<!-- OVERDUE -->
+<!-- ============================================================ -->
+
+<div class="mb-4">
+    <h5 class="text-danger mb-3">
+        <i class="bi bi-exclamation-circle-fill me-1"></i>
+        Overdue
+        {% if overdue %}<span class="badge bg-danger ms-1">{{ overdue|length }}</span>{% endif %}
+    </h5>
+
+    {% if overdue %}
+    <div class="row g-3">
+        {% for fu in overdue %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card border-danger shadow-sm h-100">
+                <div class="card-body">
+
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <strong>
+                                {% if fu.enquiry %}
+                                <a href="{% url 'crm:enquiry_detail' fu.enquiry.pk %}">{{ fu.enquiry.full_name }}</a>
+                                {% elif fu.member %}
+                                <a href="{% url 'members:member_detail' fu.member.pk %}">{{ fu.member.full_name }}</a>
+                                {% else %}
+                                Unknown
+                                {% endif %}
+                            </strong>
+                        </div>
+                        <span class="badge bg-danger">{{ fu.get_followup_type_display }}</span>
+                    </div>
+
+                    <div class="text-muted small mb-2">
+                        <i class="bi bi-calendar-x me-1"></i>Due: <strong class="text-danger">{{ fu.due_date }}</strong>
+                    </div>
+
+                    {% if fu.notes %}
+                    <p class="small text-muted mb-2">{{ fu.notes }}</p>
+                    {% endif %}
+
+                    {% if fu.phone %}
+                    <div class="mb-2 small">
+                        <i class="bi bi-telephone me-1"></i>
+                        <a href="tel:{{ fu.phone }}" class="text-decoration-none">{{ fu.phone }}</a>
+                        <a href="https://wa.me/{{ fu.phone }}" target="_blank" class="ms-2 text-success">
+                            <i class="bi bi-whatsapp"></i>
+                        </a>
+                    </div>
+                    {% endif %}
+
+                </div>
+                <div class="card-footer bg-transparent d-flex gap-2">
+                    <form method="post" action="{% url 'crm:log_call_from_followup' fu.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{% url 'crm:followup_queue' %}">
+                        <button type="submit" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-telephone me-1"></i>Log Call
+                        </button>
+                    </form>
+                    <form method="post" action="{% url 'crm:mark_followup_done' fu.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{% url 'crm:followup_queue' %}">
+                        <button type="submit" class="btn btn-sm btn-outline-success">
+                            <i class="bi bi-check-lg me-1"></i>Done
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted">No overdue follow-ups.</p>
+    {% endif %}
+</div>
+
+<!-- ============================================================ -->
+<!-- DUE TODAY -->
+<!-- ============================================================ -->
+
+<div class="mb-4">
+    <h5 class="text-warning mb-3">
+        <i class="bi bi-clock-fill me-1"></i>
+        Due Today
+        {% if today_fus %}<span class="badge bg-warning text-dark ms-1">{{ today_fus|length }}</span>{% endif %}
+    </h5>
+
+    {% if today_fus %}
+    <div class="row g-3">
+        {% for fu in today_fus %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card border-warning shadow-sm h-100">
+                <div class="card-body">
+
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <strong>
+                                {% if fu.enquiry %}
+                                <a href="{% url 'crm:enquiry_detail' fu.enquiry.pk %}">{{ fu.enquiry.full_name }}</a>
+                                {% elif fu.member %}
+                                <a href="{% url 'members:member_detail' fu.member.pk %}">{{ fu.member.full_name }}</a>
+                                {% else %}
+                                Unknown
+                                {% endif %}
+                            </strong>
+                        </div>
+                        <span class="badge bg-warning text-dark">{{ fu.get_followup_type_display }}</span>
+                    </div>
+
+                    {% if fu.notes %}
+                    <p class="small text-muted mb-2">{{ fu.notes }}</p>
+                    {% endif %}
+
+                    {% if fu.phone %}
+                    <div class="mb-2 small">
+                        <i class="bi bi-telephone me-1"></i>
+                        <a href="tel:{{ fu.phone }}" class="text-decoration-none">{{ fu.phone }}</a>
+                        <a href="https://wa.me/{{ fu.phone }}" target="_blank" class="ms-2 text-success">
+                            <i class="bi bi-whatsapp"></i>
+                        </a>
+                    </div>
+                    {% endif %}
+
+                </div>
+                <div class="card-footer bg-transparent d-flex gap-2">
+                    <form method="post" action="{% url 'crm:log_call_from_followup' fu.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{% url 'crm:followup_queue' %}">
+                        <button type="submit" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-telephone me-1"></i>Log Call
+                        </button>
+                    </form>
+                    <form method="post" action="{% url 'crm:mark_followup_done' fu.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{% url 'crm:followup_queue' %}">
+                        <button type="submit" class="btn btn-sm btn-outline-success">
+                            <i class="bi bi-check-lg me-1"></i>Done
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted">No follow-ups due today.</p>
+    {% endif %}
+</div>
+
+<!-- ============================================================ -->
+<!-- UPCOMING -->
+<!-- ============================================================ -->
+
+<div class="mb-4">
+    <h5 class="text-success mb-3">
+        <i class="bi bi-calendar-check me-1"></i>
+        Upcoming
+        {% if upcoming %}<span class="badge bg-success ms-1">{{ upcoming|length }}</span>{% endif %}
+    </h5>
+
+    {% if upcoming %}
+    <div class="row g-3">
+        {% for fu in upcoming %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <strong>
+                                {% if fu.enquiry %}
+                                <a href="{% url 'crm:enquiry_detail' fu.enquiry.pk %}">{{ fu.enquiry.full_name }}</a>
+                                {% elif fu.member %}
+                                <a href="{% url 'members:member_detail' fu.member.pk %}">{{ fu.member.full_name }}</a>
+                                {% else %}
+                                Unknown
+                                {% endif %}
+                            </strong>
+                        </div>
+                        <span class="badge bg-secondary">{{ fu.get_followup_type_display }}</span>
+                    </div>
+
+                    <div class="text-muted small mb-2">
+                        <i class="bi bi-calendar me-1"></i>Due: {{ fu.due_date }}
+                    </div>
+
+                    {% if fu.notes %}
+                    <p class="small text-muted mb-2">{{ fu.notes }}</p>
+                    {% endif %}
+
+                    {% if fu.phone %}
+                    <div class="mb-2 small">
+                        <i class="bi bi-telephone me-1"></i>
+                        <a href="tel:{{ fu.phone }}" class="text-decoration-none">{{ fu.phone }}</a>
+                        <a href="https://wa.me/{{ fu.phone }}" target="_blank" class="ms-2 text-success">
+                            <i class="bi bi-whatsapp"></i>
+                        </a>
+                    </div>
+                    {% endif %}
+
+                </div>
+                <div class="card-footer bg-transparent d-flex gap-2">
+                    <form method="post" action="{% url 'crm:mark_followup_done' fu.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{% url 'crm:followup_queue' %}">
+                        <button type="submit" class="btn btn-sm btn-outline-success">
+                            <i class="bi bi-check-lg me-1"></i>Done
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted">No upcoming follow-ups.</p>
+    {% endif %}
+</div>
+
+{% endblock %}

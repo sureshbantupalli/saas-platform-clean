@@ -1,7 +1,7 @@
 import time
 import os
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
@@ -9,6 +9,8 @@ from django.conf import settings
 
 from apps.memberships.models import Membership
 from apps.lifecycles.models import LifecycleRun
+
+EXPIRY_WARNING_DAYS = 7  # emit membership_expiring this many days before expiry
 
 
 class Command(BaseCommand):
@@ -35,9 +37,12 @@ class Command(BaseCommand):
                     f"\n--- Lifecycle Run: {datetime.now()} ---\n"
                 )
 
-                memberships = Membership._base_manager.select_related("tenant")
+                memberships = Membership._base_manager.select_related(
+                    "tenant", "member", "plan"
+                )
 
                 total_checked = memberships.count()
+                today = timezone.now().date()
 
                 for membership in memberships:
                     previous_status = membership.status
@@ -53,6 +58,9 @@ class Command(BaseCommand):
                                 f"Updated {membership.id}: "
                                 f"{previous_status} → {membership.status}\n"
                             )
+
+                        # Emit membership_expiring for active memberships near end date
+                        _maybe_emit_expiry_warning(membership, today)
 
                     except Exception:
                         total_errors += 1
@@ -103,3 +111,35 @@ class Command(BaseCommand):
             lifecycle_run.total_errors = total_errors
 
             lifecycle_run.save()
+
+
+def _maybe_emit_expiry_warning(membership, today):
+    """
+    Emit a membership_expiring event when an active membership is within
+    EXPIRY_WARNING_DAYS of its final end date.  Called once per lifecycle run.
+    """
+    if membership.status != "active":
+        return
+    expiry = membership.final_end_date
+    if not expiry:
+        return
+    days_remaining = (expiry - today).days
+    if not (0 < days_remaining <= EXPIRY_WARNING_DAYS):
+        return
+
+    try:
+        from apps.communications.services.communication_service import handle_event
+        member = membership.member
+        handle_event("membership_expiring", {
+            "member_name":    f"{member.first_name} {member.last_name}",
+            "phone":          member.phone or "",
+            "email":          member.email or "",
+            "expiry_date":    str(expiry),
+            "days_remaining": str(days_remaining),
+            "plan_name":      membership.plan.name if membership.plan else "",
+            "membership_id":  str(membership.id),
+            "reference_type": "membership",
+            "reference_id":   str(membership.id),
+        }, membership.tenant)
+    except Exception:
+        pass  # non-critical — log file already captures membership errors

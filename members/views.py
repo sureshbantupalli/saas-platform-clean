@@ -82,10 +82,27 @@ def member_detail(request, pk):
     if not member:
         raise Http404("Member not found")
 
+    tenant = request.user.tenant
+
+    from apps.payments.models import Payment
+    member_payments = Payment.base_objects.filter(
+        tenant=tenant,
+        reference_type="membership",
+        reference_id__in=member.memberships.values_list("id", flat=True),
+        is_deleted=False,
+    ).order_by("-created_at")
+
+    from members.services.timeline_service import get_member_timeline
+    timeline = get_member_timeline(member, tenant)
+
     return render(
         request,
         "members/member_detail.html",
-        {"member": member}
+        {
+            "member":         member,
+            "member_payments": member_payments,
+            "timeline":       timeline,
+        }
     )
 
 
