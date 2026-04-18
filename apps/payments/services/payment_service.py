@@ -187,17 +187,7 @@ class PaymentService:
         # Logging here records only what the caller sent; no financial action.
         # ══════════════════════════════════════════════════════════════════════
 
-        # ── Step 1: order_id required for gateway webhooks ────────────────────
-        # An empty order_id would match offline payments whose gateway_order_id
-        # is "" — must be rejected before any DB access.
-        if not order_id:
-            _logger.warning(
-                "Razorpay webhook rejected: missing order_id",
-                extra={"reason": "missing_order_id", "gateway": "razorpay", "event": event},
-            )
-            raise PaymentError("Webhook rejected: missing order_id.")
-
-        # ── Step 2: gateway_payment_id (entity.id) required ──────────────────
+        # ── Step 1: gateway_payment_id (entity.id) required ──────────────────
         # Without it we cannot store the result or detect conflicts later.
         if not payment_id:
             _logger.warning(
@@ -210,18 +200,29 @@ class PaymentService:
         # READ-ONLY DB LOOKUPS — still no writes
         # ══════════════════════════════════════════════════════════════════════
 
-        # ── Step 3: locate payment by gateway_order_id ────────────────────────
+        # ── Step 2: locate payment by gateway_order_id ────────────────────────
         payment = Payment.base_objects.filter(
             gateway_order_id=order_id, is_deleted=False
         ).first()
         if not payment:
             _logger.warning(
-                "Razorpay webhook rejected: unknown order_id",
-                extra={"reason": "unknown_order_id", "gateway": "razorpay", "order_id": order_id},
+                "Razorpay webhook rejected: payment not found",
+                extra={"reason": "payment_not_found", "gateway": "razorpay", "order_id": order_id},
             )
             raise PaymentError(f"No payment found for order_id={order_id}")
 
-        # ── Step 4: load tenant webhook secret (READ only) ────────────────────
+        # ── Step 3: order_id required for Razorpay gateway payments ──────────
+        # Offline payments legitimately have an empty gateway_order_id; Razorpay
+        # payments must always carry one. Validated post-lookup so we can inspect
+        # the payment's gateway field rather than rejecting blindly.
+        if payment.gateway == PaymentGateway.RAZORPAY and not order_id:
+            _logger.warning(
+                "Razorpay webhook rejected: missing order_id for razorpay payment",
+                extra={"reason": "missing_order_id", "gateway": "razorpay", "payment_id": str(payment.id)},
+            )
+            raise PaymentError("Webhook rejected: razorpay payment requires order_id.")
+
+        # ── Step 4: load tenant webhook secret (READ only) ───────────────────
         from apps.payments.services.config_service import get_active_payment_config, PaymentConfigError
         try:
             config         = get_active_payment_config(payment.tenant, "razorpay")

@@ -722,7 +722,7 @@ class WebhookProductionHardeningTests(TestCase):
         self.assertEqual(record.order_id, "order_PROD001")
 
     def test_missing_order_id_is_logged_with_structured_data(self):
-        """Missing order_id must be logged with reason and gateway (no DB write occurs)."""
+        """Empty order_id → payment not found → logged with reason=payment_not_found."""
         body = {
             "event": "payment.captured",
             "payload": {"payment": {"entity": {"id": "pay_X", "amount": 250000}}},
@@ -731,7 +731,7 @@ class WebhookProductionHardeningTests(TestCase):
             _post_webhook(self.client, body)
         record = next(
             r for r in cm.records
-            if getattr(r, "reason", None) == "missing_order_id"
+            if getattr(r, "reason", None) == "payment_not_found"
         )
         self.assertEqual(record.gateway, "razorpay")
 
