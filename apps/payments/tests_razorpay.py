@@ -618,3 +618,183 @@ class RazorpayEndToEndTests(TestCase):
         self.membership.refresh_from_db()
         self.assertEqual(self.membership.status, "active")
         self.assertEqual(self.membership.payment_status, "paid")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 5. Production Hardening Tests
+# ══════════════════════════════════════════════════════════════════════════════
+
+@override_settings(**RZP_SETTINGS)
+class WebhookProductionHardeningTests(TestCase):
+    """
+    Covers the three final production-readiness improvements:
+    1. order_id scoped to gateway payments only
+    2. Structured audit logging for all failure paths
+    3. gateway_payment_id validation and conflict detection
+    """
+
+    def setUp(self):
+        self.tenant, self.branch, self.user, self.member, self.plan, self.membership = \
+            make_rzp_world(gym_name="ProdGym", email="prod@test.com")
+        self.payment = PaymentService.create_payment(
+            tenant=self.tenant, amount=Decimal("2500"), purpose="membership",
+            reference_type="membership", reference_id=self.membership.pk,
+            gateway=PaymentGateway.RAZORPAY, created_by=self.user,
+        )
+        PaymentService.mark_pending(self.payment, gateway_order_id="order_PROD001")
+
+    # ─── 1. order_id scoping ─────────────────────────────────────────────────
+
+    def test_offline_payment_succeeds_without_gateway_order_id(self):
+        """Offline (cash) payments have no gateway_order_id and must work correctly."""
+        p = PaymentService.create_payment(
+            tenant=self.tenant, amount=Decimal("2500"), purpose="membership",
+            reference_type="membership", reference_id=self.membership.pk,
+            gateway=PaymentGateway.OFFLINE, payment_method="cash", created_by=self.user,
+        )
+        # Offline payments are marked success directly — no webhook involved
+        self.assertEqual(p.gateway_order_id, "")
+        with self.captureOnCommitCallbacks(execute=True):
+            PaymentService.mark_payment_success(p, payment_method="cash")
+        p.refresh_from_db()
+        self.assertEqual(p.status, PaymentStatus.SUCCESS)
+        self.assertEqual(p.gateway_order_id, "")  # never set for offline
+
+    def test_gateway_payment_missing_order_id_rejected(self):
+        """A Razorpay webhook with no order_id is rejected before any DB access."""
+        body = {
+            "event": "payment.captured",
+            "payload": {"payment": {"entity": {
+                "id": "pay_X", "amount": 250000, "currency": "INR"
+                # order_id deliberately absent
+            }}},
+        }
+        resp = _post_webhook(self.client, body)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("order_id", resp.json()["detail"].lower())
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.status, PaymentStatus.PENDING)
+
+    def test_gateway_payment_missing_payment_id_rejected(self):
+        """A Razorpay webhook with no entity.id is rejected before any DB write."""
+        body = {
+            "event": "payment.captured",
+            "payload": {"payment": {"entity": {
+                "order_id": "order_PROD001", "amount": 250000, "currency": "INR"
+                # entity.id (payment_id) deliberately absent
+            }}},
+        }
+        resp = _post_webhook(self.client, body)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("payment_id", resp.json()["detail"].lower())
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.status, PaymentStatus.PENDING)
+
+    # ─── 2. Structured audit logging ─────────────────────────────────────────
+
+    def test_invalid_signature_is_logged_with_structured_data(self):
+        """An invalid signature must be logged with reason, gateway, and order_id."""
+        body = _webhook_body("payment.captured", "order_PROD001", "pay_X", 250000)
+        with self.assertLogs("apps.payments", level="WARNING") as cm:
+            resp = _post_webhook(self.client, body, secret="wrong_secret")
+        self.assertEqual(resp.status_code, 400)
+        record = next(
+            r for r in cm.records
+            if getattr(r, "reason", None) == "invalid_signature"
+        )
+        self.assertEqual(record.gateway, "razorpay")
+        self.assertEqual(record.order_id, "order_PROD001")
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.status, PaymentStatus.PENDING)
+
+    def test_amount_mismatch_logs_structured_data(self):
+        """Amount mismatch log must contain reason, expected, received, gateway, order_id."""
+        body = _webhook_body("payment.captured", "order_PROD001", "pay_X", 100)
+        with self.assertLogs("apps.payments", level="WARNING") as cm:
+            _post_webhook(self.client, body)
+        record = next(
+            r for r in cm.records
+            if getattr(r, "reason", None) == "amount_mismatch"
+        )
+        self.assertEqual(record.expected, 250000)   # ₹2500 × 100 paise
+        self.assertEqual(record.received, 100)
+        self.assertEqual(record.gateway,  "razorpay")
+        self.assertEqual(record.order_id, "order_PROD001")
+
+    def test_missing_order_id_is_logged_with_structured_data(self):
+        """Missing order_id must be logged with reason and gateway (no DB write occurs)."""
+        body = {
+            "event": "payment.captured",
+            "payload": {"payment": {"entity": {"id": "pay_X", "amount": 250000}}},
+        }
+        with self.assertLogs("apps.payments", level="WARNING") as cm:
+            _post_webhook(self.client, body)
+        record = next(
+            r for r in cm.records
+            if getattr(r, "reason", None) == "missing_order_id"
+        )
+        self.assertEqual(record.gateway, "razorpay")
+
+    # ─── 3. gateway_payment_id validation ────────────────────────────────────
+
+    def test_duplicate_gateway_payment_id_is_idempotent(self):
+        """Same webhook (same payment_id) replayed after SUCCESS → DUPLICATE_SKIP, no change."""
+        body = _webhook_body("payment.captured", "order_PROD001", "pay_SAME", 250000)
+        with self.captureOnCommitCallbacks(execute=True):
+            resp1 = _post_webhook(self.client, body)
+        self.assertEqual(resp1.status_code, 200)
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.status, PaymentStatus.SUCCESS)
+        self.assertEqual(self.payment.gateway_payment_id, "pay_SAME")
+
+        with self.captureOnCommitCallbacks(execute=True):
+            resp2 = _post_webhook(self.client, body)
+        self.assertEqual(resp2.status_code, 200)
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.status, PaymentStatus.SUCCESS)
+        self.assertEqual(self.payment.gateway_payment_id, "pay_SAME")
+        self.assertEqual(
+            PaymentEvent.objects.filter(payment=self.payment, event_type="DUPLICATE_SKIP").count(),
+            1,
+        )
+
+    def test_conflicting_gateway_payment_id_on_pending_rejected(self):
+        """A PENDING payment with gateway_payment_id already set rejects a different payment_id."""
+        # Simulate a previous partial write that set gateway_payment_id on PENDING
+        Payment.base_objects.filter(pk=self.payment.pk).update(gateway_payment_id="pay_FIRST")
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.status, PaymentStatus.PENDING)
+
+        body = _webhook_body("payment.captured", "order_PROD001", "pay_CONFLICT", 250000)
+        resp = _post_webhook(self.client, body)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("conflict", resp.json()["detail"].lower())
+        self.payment.refresh_from_db()
+        self.assertNotEqual(self.payment.status, PaymentStatus.SUCCESS)
+        self.assertTrue(
+            PaymentEvent.objects.filter(payment=self.payment, event_type="PAYMENT_ID_CONFLICT").exists()
+        )
+
+    def test_conflicting_gateway_payment_id_on_success_logs_error(self):
+        """A webhook for a SUCCESS payment with a different payment_id logs a conflict
+        but returns 200 (DUPLICATE_SKIP) to prevent Razorpay from retrying."""
+        body = _webhook_body("payment.captured", "order_PROD001", "pay_LEGIT", 250000)
+        with self.captureOnCommitCallbacks(execute=True):
+            _post_webhook(self.client, body)
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.gateway_payment_id, "pay_LEGIT")
+
+        # Replay with a different payment_id (potential replay attack)
+        body2 = _webhook_body("payment.captured", "order_PROD001", "pay_EVIL", 250000)
+        with self.assertLogs("apps.payments", level="ERROR") as cm:
+            resp = _post_webhook(self.client, body2)
+        self.assertEqual(resp.status_code, 200)  # acknowledged to stop retries
+        record = next(
+            r for r in cm.records
+            if getattr(r, "reason", None) == "duplicate_or_conflict"
+        )
+        self.assertEqual(record.expected, "pay_LEGIT")
+        self.assertEqual(record.received, "pay_EVIL")
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.status, PaymentStatus.SUCCESS)
+        self.assertEqual(self.payment.gateway_payment_id, "pay_LEGIT")

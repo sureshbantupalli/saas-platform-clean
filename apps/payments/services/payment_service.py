@@ -178,35 +178,124 @@ class PaymentService:
         event             = payload.get("event", "")
         entity            = payload.get("payload", {}).get("payment", {}).get("entity", {})
         order_id          = entity.get("order_id", "")
-        payment_id        = entity.get("id", "")
-        amount_paise      = entity.get("amount")   # None if key absent — intentional, not 0
+        payment_id        = entity.get("id", "")   # Razorpay gateway payment id (pay_Xxx)
+        amount_paise      = entity.get("amount")   # None if key absent — NOT defaulted to 0
         currency_received = entity.get("currency", "")
 
-        # ── Step 1: order_id must be present ─────────────────────────────────
-        # An empty order_id could match offline payments that never received a
-        # gateway order (gateway_order_id=""). Reject before any DB read.
+        # ══════════════════════════════════════════════════════════════════════
+        # PRE-LOOKUP GUARDS — no DB reads or writes.
+        # Logging here records only what the caller sent; no financial action.
+        # ══════════════════════════════════════════════════════════════════════
+
+        # ── Step 1: order_id required for gateway webhooks ────────────────────
+        # An empty order_id would match offline payments whose gateway_order_id
+        # is "" — must be rejected before any DB access.
         if not order_id:
+            _logger.warning(
+                "Razorpay webhook rejected: missing order_id",
+                extra={"reason": "missing_order_id", "gateway": "razorpay", "event": event},
+            )
             raise PaymentError("Webhook rejected: missing order_id.")
 
-        # ── Step 2: locate payment by gateway_order_id (READ only) ───────────
+        # ── Step 2: gateway_payment_id (entity.id) required ──────────────────
+        # Without it we cannot store the result or detect conflicts later.
+        if not payment_id:
+            _logger.warning(
+                "Razorpay webhook rejected: missing payment_id",
+                extra={"reason": "missing_payment_id", "gateway": "razorpay", "order_id": order_id},
+            )
+            raise PaymentError("Webhook rejected: missing payment_id.")
+
+        # ══════════════════════════════════════════════════════════════════════
+        # READ-ONLY DB LOOKUPS — still no writes
+        # ══════════════════════════════════════════════════════════════════════
+
+        # ── Step 3: locate payment by gateway_order_id ────────────────────────
         payment = Payment.base_objects.filter(
             gateway_order_id=order_id, is_deleted=False
         ).first()
         if not payment:
+            _logger.warning(
+                "Razorpay webhook rejected: unknown order_id",
+                extra={"reason": "unknown_order_id", "gateway": "razorpay", "order_id": order_id},
+            )
             raise PaymentError(f"No payment found for order_id={order_id}")
 
-        # ── Step 3: defense-in-depth — stored order_id must match exactly ─────
-        # The filter above guarantees this; the explicit check is a contract
-        # assertion that prevents any future loosening of the filter from silently
-        # processing the wrong payment.
-        if payment.gateway_order_id != order_id:
+        # ── Step 4: load tenant webhook secret (READ only) ────────────────────
+        from apps.payments.services.config_service import get_active_payment_config, PaymentConfigError
+        try:
+            config         = get_active_payment_config(payment.tenant, "razorpay")
+            webhook_secret = config.webhook_secret
+        except PaymentConfigError as exc:
+            raise PaymentError(str(exc))
+
+        # ══════════════════════════════════════════════════════════════════════
+        # SIGNATURE GATE — the sole entry point to DB writes.
+        # Every path above raises without touching the DB.
+        # ══════════════════════════════════════════════════════════════════════
+
+        # ── Step 5: verify HMAC-SHA256 signature ─────────────────────────────
+        expected_sig = hmac.HMAC(
+            webhook_secret.encode(), raw_body, hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(expected_sig, signature):
+            _logger.warning(
+                "Razorpay webhook rejected: invalid signature",
+                extra={
+                    "reason":     "invalid_signature",
+                    "payment_id": str(payment.id),
+                    "gateway":    "razorpay",
+                    "order_id":   order_id,
+                },
+            )
+            raise PaymentError("Invalid Razorpay webhook signature.")
+
+        # ══════════════════════════════════════════════════════════════════════
+        # DB WRITES BELOW — signature verified; payment identity confirmed
+        # ══════════════════════════════════════════════════════════════════════
+
+        # ── Step 6: idempotency — short-circuit for already-SUCCESS payments ──
+        # Must happen AFTER signature verification so an unauthenticated caller
+        # cannot probe payment status via forged webhooks.
+        if payment.status == PaymentStatus.SUCCESS:
+            # Detect conflicting gateway_payment_id on a completed payment
+            # (same order_id, different Razorpay pay_Xxx → possible replay
+            # with a fraudulent transaction). Log but still return 200 so
+            # Razorpay stops retrying.
+            if payment.gateway_payment_id and payment.gateway_payment_id != payment_id:
+                _logger.error(
+                    "Razorpay webhook: gateway_payment_id conflict on already-SUCCESS payment",
+                    extra={
+                        "reason":     "duplicate_or_conflict",
+                        "payment_id": str(payment.id),
+                        "expected":   payment.gateway_payment_id,
+                        "received":   payment_id,
+                        "gateway":    "razorpay",
+                        "order_id":   order_id,
+                    },
+                )
+            PaymentEvent.objects.create(
+                payment=payment,
+                event_type="DUPLICATE_SKIP",
+                payload={"reason": "already SUCCESS", "event": event},
+            )
+            return payment
+
+        # ── Step 7: defense-in-depth order_id validation (gateway payments only)
+        # Scoped to gateway payments — offline payments legitimately have an
+        # empty gateway_order_id and should never reach this handler. The
+        # filter in Step 3 already guarantees equality; this explicit check
+        # is a contract assertion that survives future query refactors.
+        if payment.gateway == PaymentGateway.RAZORPAY and payment.gateway_order_id != order_id:
             _logger.error(
                 "Razorpay webhook rejected: order_id mismatch",
                 extra={
-                    "reason":   "order_mismatch",
-                    "expected": payment.gateway_order_id,
-                    "received": order_id,
-                    "payment":  str(payment.id),
+                    "reason":     "order_mismatch",
+                    "payment_id": str(payment.id),
+                    "expected":   payment.gateway_order_id,
+                    "received":   order_id,
+                    "gateway":    "razorpay",
+                    "order_id":   order_id,
                 },
             )
             PaymentEvent.objects.create(
@@ -223,36 +312,7 @@ class PaymentService:
                 f"Order ID mismatch: expected {payment.gateway_order_id!r}, received {order_id!r}."
             )
 
-        # ── Step 4: load tenant-specific webhook secret (READ only) ──────────
-        from apps.payments.services.config_service import get_active_payment_config, PaymentConfigError
-        try:
-            config         = get_active_payment_config(payment.tenant, "razorpay")
-            webhook_secret = config.webhook_secret
-        except PaymentConfigError as exc:
-            raise PaymentError(str(exc))
-
-        # ── Step 5: verify HMAC-SHA256 signature ─────────────────────────────
-        # This is the FIRST DB write gate. Nothing is written to the DB before
-        # this point, so an invalid signature has zero side effects.
-        expected_sig = hmac.HMAC(
-            webhook_secret.encode(), raw_body, hashlib.sha256
-        ).hexdigest()
-        if not hmac.compare_digest(expected_sig, signature):
-            raise PaymentError("Invalid Razorpay webhook signature.")
-
-        # ── Step 6: idempotency — already SUCCESS → acknowledge, no side effects
-        # Short-circuit here (after signature verification, before re-running
-        # amount/currency checks) so a duplicate confirmed webhook does not
-        # re-trigger membership activation or produce a second WEBHOOK event.
-        if payment.status == PaymentStatus.SUCCESS:
-            PaymentEvent.objects.create(
-                payment=payment,
-                event_type="DUPLICATE_SKIP",
-                payload={"reason": "already SUCCESS", "event": event},
-            )
-            return payment
-
-        # ── Step 7: log the verified, non-duplicate incoming webhook ──────────
+        # ── Step 8: log the verified, non-duplicate incoming webhook ──────────
         PaymentEvent.objects.create(
             payment=payment,
             event_type="WEBHOOK",
@@ -262,18 +322,49 @@ class PaymentService:
         if event == "payment.captured":
             expected_paise = int(payment.amount * 100)
 
+            # ── gateway_payment_id conflict (PENDING payment) ─────────────────
+            # For PENDING payments gateway_payment_id is normally "".
+            # If already set to a different value, a previous partial processing
+            # wrote it — this is a conflict that must be rejected.
+            if payment.gateway_payment_id and payment.gateway_payment_id != payment_id:
+                _logger.error(
+                    "Razorpay webhook rejected: gateway_payment_id conflict on PENDING payment",
+                    extra={
+                        "reason":     "duplicate_or_conflict",
+                        "payment_id": str(payment.id),
+                        "expected":   payment.gateway_payment_id,
+                        "received":   payment_id,
+                        "gateway":    "razorpay",
+                        "order_id":   order_id,
+                    },
+                )
+                PaymentEvent.objects.create(
+                    payment=payment,
+                    event_type="PAYMENT_ID_CONFLICT",
+                    payload={
+                        "reason":   "duplicate_or_conflict",
+                        "stored":   payment.gateway_payment_id,
+                        "received": payment_id,
+                        "order_id": order_id,
+                    },
+                )
+                raise PaymentError(
+                    f"Payment ID conflict: stored {payment.gateway_payment_id!r}, "
+                    f"received {payment_id!r}."
+                )
+
             # ── Amount guard ──────────────────────────────────────────────────
-            # Strict equality — a None or 0 paise value must NOT bypass this
-            # check. The previous falsy-check bug (`if amount_paise and ...`)
-            # allowed amount=0 to skip validation and mark payment SUCCESS.
+            # Strict equality: None or 0 must not bypass this check.
             if amount_paise is None or amount_paise != expected_paise:
                 _logger.warning(
                     "Razorpay webhook rejected: amount mismatch",
                     extra={
-                        "reason":   "amount_mismatch",
-                        "expected": expected_paise,
-                        "received": amount_paise,
-                        "order_id": order_id,
+                        "reason":     "amount_mismatch",
+                        "payment_id": str(payment.id),
+                        "expected":   expected_paise,
+                        "received":   amount_paise,
+                        "gateway":    "razorpay",
+                        "order_id":   order_id,
                     },
                 )
                 PaymentEvent.objects.create(
@@ -299,10 +390,12 @@ class PaymentService:
                 _logger.warning(
                     "Razorpay webhook rejected: currency mismatch",
                     extra={
-                        "reason":   "currency_mismatch",
-                        "expected": payment.currency,
-                        "received": currency_received,
-                        "order_id": order_id,
+                        "reason":     "currency_mismatch",
+                        "payment_id": str(payment.id),
+                        "expected":   payment.currency,
+                        "received":   currency_received,
+                        "gateway":    "razorpay",
+                        "order_id":   order_id,
                     },
                 )
                 PaymentEvent.objects.create(
