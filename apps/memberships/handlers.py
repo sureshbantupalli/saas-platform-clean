@@ -10,6 +10,8 @@ from django.db.models import Sum
 from django.dispatch import receiver
 from django.utils import timezone
 
+from django.db import transaction
+
 from apps.payments.signals import payment_success, payment_failed
 from apps.payments.models import Payment, PaymentStatus
 
@@ -66,6 +68,14 @@ def on_payment_success(sender, payment, **kwargs):
         status=new_status,
         updated_at=timezone.now(),
     )
+
+    if new_status == "active":
+        # Refresh to get the updated instance for the signal
+        fresh = Membership.base_objects.get(pk=membership.pk)
+        from apps.memberships.signals import membership_activated
+        transaction.on_commit(
+            lambda: membership_activated.send(sender=Membership, membership=fresh)
+        )
 
 
 @receiver(payment_failed, sender=Payment)

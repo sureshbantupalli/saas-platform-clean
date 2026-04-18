@@ -52,6 +52,7 @@ def send_message(
     tenant,
     reference_type: str = "",
     reference_id: str = "",
+    event_type: str = "",
 ) -> CommunicationLog:
     """
     Render the template with context, pick the right adapter, send, and log.
@@ -65,6 +66,7 @@ def send_message(
     log = CommunicationLog(
         tenant         = tenant,
         channel        = channel,
+        event_type     = event_type,
         recipient      = recipient or "unknown",
         subject        = subject,
         message        = message,
@@ -130,6 +132,7 @@ def handle_event(event_name: str, payload: dict, tenant) -> None:
                 tenant         = tenant,
                 reference_type = payload.get("reference_type", ""),
                 reference_id   = payload.get("reference_id", ""),
+                event_type     = event_name,
             )
         except Exception as exc:
             logger.exception(

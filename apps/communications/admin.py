@@ -18,6 +18,7 @@ class TriggerRuleAdmin(admin.ModelAdmin):
 
 @admin.register(CommunicationLog)
 class CommunicationLogAdmin(admin.ModelAdmin):
-    list_display   = ["channel", "recipient", "status", "tenant", "created_at"]
-    list_filter    = ["channel", "status"]
+    list_display    = ["channel", "event_type", "recipient", "status", "tenant", "created_at"]
+    list_filter     = ["channel", "status", "event_type"]
+    search_fields   = ["recipient", "event_type", "message"]
     readonly_fields = ["created_at", "updated_at"]

@@ -507,3 +507,232 @@ class LogListViewTests(TestCase):
         )
         resp = self.client.get(reverse("communications:log_list"))
         self.assertEqual(len(list(resp.context["logs"])), 0)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 7. event_type stored in CommunicationLog
+# ══════════════════════════════════════════════════════════════════════════════
+
+class EventTypeInLogTests(TestCase):
+
+    def setUp(self):
+        self.tenant   = make_tenant("EventGym")
+        self.template = make_template(self.tenant, channel=Channel.SMS)
+        make_rule(self.tenant, self.template, "payment_success")
+
+    def test_event_type_written_to_log(self):
+        ctx = {"member_name": "Raj", "amount": "500", "phone": "9876543210"}
+        with patch("apps.communications.adapters.sms.SMSAdapter.send"):
+            handle_event("payment_success", ctx, self.tenant)
+        log = CommunicationLog.base_objects.get(tenant=self.tenant)
+        self.assertEqual(log.event_type, "payment_success")
+
+    def test_event_type_empty_on_direct_send(self):
+        ctx = {"member_name": "Raj", "amount": "500", "phone": "9876543210"}
+        with patch("apps.communications.adapters.sms.SMSAdapter.send"):
+            log = send_message(self.template, ctx, self.tenant)
+        self.assertEqual(log.event_type, "")
+
+    def test_event_type_passed_to_send_message(self):
+        ctx = {"member_name": "Raj", "amount": "500", "phone": "9876543210"}
+        with patch("apps.communications.adapters.sms.SMSAdapter.send"):
+            log = send_message(self.template, ctx, self.tenant, event_type="custom_event")
+        self.assertEqual(log.event_type, "custom_event")
+
+    def test_different_events_have_correct_event_type(self):
+        make_rule(self.tenant, self.template, "payment_failed")
+        ctx = {"member_name": "Raj", "amount": "500", "phone": "9876543210"}
+        with patch("apps.communications.adapters.sms.SMSAdapter.send"):
+            handle_event("payment_failed", ctx, self.tenant)
+        log = CommunicationLog.base_objects.filter(tenant=self.tenant, event_type="payment_failed").first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.event_type, "payment_failed")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 8. membership_activated signal + communications handler
+# ══════════════════════════════════════════════════════════════════════════════
+
+class MembershipActivatedHandlerTests(TestCase):
+
+    def setUp(self):
+        self.tenant = make_tenant("MemberGym")
+        wa_tpl = make_template(
+            self.tenant, name="Activated WA", channel=Channel.WHATSAPP,
+            content="Hi {{member_name}}, your {{plan_name}} is active.",
+        )
+        make_rule(self.tenant, wa_tpl, "membership_activated")
+
+    def test_membership_activated_signal_is_connected(self):
+        """Verify the signal receiver is registered after app ready()."""
+        from apps.memberships.signals import membership_activated
+        from apps.communications.handlers import on_membership_activated
+
+        # Django stores (key, receiver_or_weakref) tuples.
+        # With weak=False the function is stored directly.
+        stored = [r[1] for r in membership_activated.receivers]
+        self.assertIn(on_membership_activated, stored)
+
+    def test_on_membership_activated_calls_handle_event(self):
+        """Direct unit test of the handler function — no signal dispatch needed."""
+        from apps.communications.handlers import on_membership_activated, _membership_payload
+        from apps.memberships.models import Membership
+
+        fake_payload = {
+            "member_name": "Priya",
+            "plan_name":   "Gold",
+            "phone":       "9999999999",
+        }
+        with patch("apps.communications.handlers.handle_event") as mock_handle, \
+             patch("apps.memberships.models.Membership.base_objects") as mock_mgr:
+            # Make the DB refetch return a mock membership
+            mock_membership = type("M", (), {
+                "pk": uuid.uuid4(), "tenant": self.tenant,
+                "member": None, "plan": None,
+                "start_date": None, "end_date": None,
+                "remaining_sessions": None,
+            })()
+            mock_mgr.select_related.return_value.get.return_value = mock_membership
+
+            class FakeMembership:
+                pk = mock_membership.pk
+            on_membership_activated(sender=Membership, membership=FakeMembership())
+
+        mock_handle.assert_called_once()
+        self.assertEqual(mock_handle.call_args[0][0], "membership_activated")
+        self.assertEqual(mock_handle.call_args[0][2], self.tenant)
+
+    def test_membership_activated_missing_from_db_skipped(self):
+        """Handler must silently skip if membership no longer exists."""
+        from apps.communications.handlers import on_membership_activated
+        from apps.memberships.models import Membership
+
+        with patch("apps.communications.handlers.handle_event") as mock_handle, \
+             patch("apps.memberships.models.Membership.base_objects") as mock_mgr:
+            mock_mgr.select_related.return_value.get.side_effect = Membership.DoesNotExist
+
+            class FakeMembership:
+                pk = uuid.uuid4()
+            on_membership_activated(sender=Membership, membership=FakeMembership())
+
+        mock_handle.assert_not_called()
+
+    def test_membership_activated_end_to_end_sends_whatsapp(self):
+        """Signal → handler → WhatsApp send → CommunicationLog created."""
+        from apps.memberships.signals import membership_activated
+        from apps.memberships.models import Membership
+
+        fake_payload = {"member_name": "Priya", "plan_name": "Gold", "phone": "9999999999"}
+        with patch("apps.communications.adapters.whatsapp.WhatsAppAdapter.send") as mock_send, \
+             patch("apps.communications.handlers._membership_payload", return_value=fake_payload), \
+             patch("apps.memberships.models.Membership.base_objects") as mock_mgr:
+
+            class FakeMembership:
+                pk     = uuid.uuid4()
+                tenant = self.tenant
+            mock_mgr.select_related.return_value.get.return_value = FakeMembership()
+
+            membership_activated.send(sender=Membership, membership=FakeMembership())
+
+        mock_send.assert_called_once()
+        log = CommunicationLog.base_objects.filter(
+            tenant=self.tenant, event_type="membership_activated"
+        ).first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.status, MessageStatus.SENT)
+        self.assertIn("Priya", log.message)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 9. emit_followup_due management command
+# ══════════════════════════════════════════════════════════════════════════════
+
+class EmitFollowupDueCommandTests(TestCase):
+
+    def setUp(self):
+        from django.utils import timezone
+        self.tenant   = make_tenant("FollowGym")
+        self.today    = timezone.now().date()
+        wa_tpl = make_template(
+            self.tenant, name="Followup WA", channel=Channel.WHATSAPP,
+            content="Hi {{name}}, we want to connect with you today!",
+        )
+        make_rule(self.tenant, wa_tpl, "followup_due")
+
+    def _make_followup(self, due_date, status="pending"):
+        from crm.models import FollowUp, Enquiry, EnquirySource
+        from apps.core.models import Branch
+        branch, _ = Branch.objects.get_or_create(
+            tenant=self.tenant, name="Main", defaults={"is_active": True}
+        )
+        source, _ = EnquirySource.objects.get_or_create(
+            tenant=self.tenant, name="Walk-in", defaults={"is_active": True}
+        )
+        enquiry = Enquiry.objects.create(
+            tenant=self.tenant,
+            branch=branch,
+            full_name="Test Lead",
+            phone="9876543210",
+            source=source,
+        )
+        return FollowUp.objects.create(
+            tenant=self.tenant,
+            enquiry=enquiry,
+            due_date=due_date,
+            status=status,
+        )
+
+    def test_dry_run_emits_nothing(self):
+        self.tenant  # noqa — ensure setUp ran
+        self._make_followup(self.today)
+        with patch("apps.communications.management.commands.emit_followup_due.handle_event") as mock_handle:
+            from django.core.management import call_command
+            call_command("emit_followup_due", dry_run=True)
+        mock_handle.assert_not_called()
+
+    def test_due_today_emits_event(self):
+        self._make_followup(self.today)
+        with patch("apps.communications.adapters.whatsapp.WhatsAppAdapter.send"):
+            from django.core.management import call_command
+            call_command("emit_followup_due")
+        log = CommunicationLog.base_objects.filter(
+            tenant=self.tenant, event_type="followup_due"
+        ).first()
+        self.assertIsNotNone(log)
+
+    def test_overdue_followup_emits_event(self):
+        from datetime import timedelta
+        past = self.today - timedelta(days=3)
+        self._make_followup(past)
+        with patch("apps.communications.adapters.whatsapp.WhatsAppAdapter.send"):
+            from django.core.management import call_command
+            call_command("emit_followup_due")
+        self.assertEqual(
+            CommunicationLog.base_objects.filter(tenant=self.tenant, event_type="followup_due").count(),
+            1,
+        )
+
+    def test_done_followup_not_emitted(self):
+        self._make_followup(self.today, status="done")
+        with patch("apps.communications.management.commands.emit_followup_due.handle_event") as mock_handle:
+            from django.core.management import call_command
+            call_command("emit_followup_due")
+        mock_handle.assert_not_called()
+
+    def test_future_followup_not_emitted(self):
+        from datetime import timedelta
+        future = self.today + timedelta(days=5)
+        self._make_followup(future)
+        with patch("apps.communications.management.commands.emit_followup_due.handle_event") as mock_handle:
+            from django.core.management import call_command
+            call_command("emit_followup_due")
+        mock_handle.assert_not_called()
+
+    def test_payload_contains_name_and_phone(self):
+        from apps.communications.management.commands.emit_followup_due import _build_payload
+        fu = self._make_followup(self.today)
+        payload = _build_payload(fu)
+        self.assertEqual(payload["name"], "Test Lead")
+        self.assertEqual(payload["phone"], "9876543210")
+        self.assertEqual(payload["reference_type"], "followup")
+        self.assertIn("due_date", payload)

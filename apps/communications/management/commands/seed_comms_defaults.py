@@ -90,6 +90,26 @@ DEFAULTS = [
         ),
         "conditions": {},
     },
+    {
+        "event_name": "membership_activated",
+        "channel":    Channel.WHATSAPP,
+        "name":       "Membership Activated — WhatsApp",
+        "content":    (
+            "Hi {{member_name}}, your {{plan_name}} membership is now active. Welcome! "
+            "We look forward to seeing you 🙏"
+        ),
+        "conditions": {},
+    },
+    {
+        "event_name": "followup_due",
+        "channel":    Channel.WHATSAPP,
+        "name":       "Follow-up Due — WhatsApp",
+        "content":    (
+            "Hi {{name}}, this is a reminder from our team. "
+            "We'd love to connect with you today. Please give us a call or reply here!"
+        ),
+        "conditions": {},
+    },
 ]
 
 

@@ -60,11 +60,12 @@ class TriggerRule(TenantAwareModel):
 
 
 class CommunicationLog(TenantAwareModel):
-    channel       = models.CharField(max_length=20, choices=Channel.choices)
-    recipient     = models.CharField(max_length=500)
-    subject       = models.CharField(max_length=500, blank=True)
-    message       = models.TextField()
-    status        = models.CharField(max_length=20, choices=MessageStatus.choices, default=MessageStatus.PENDING)
+    channel        = models.CharField(max_length=20, choices=Channel.choices)
+    event_type     = models.CharField(max_length=100, blank=True, help_text="System event that triggered this message.")
+    recipient      = models.CharField(max_length=500)
+    subject        = models.CharField(max_length=500, blank=True)
+    message        = models.TextField()
+    status         = models.CharField(max_length=20, choices=MessageStatus.choices, default=MessageStatus.PENDING)
     reference_type = models.CharField(max_length=100, blank=True)
     reference_id   = models.CharField(max_length=100, blank=True)
     error_message  = models.TextField(blank=True)

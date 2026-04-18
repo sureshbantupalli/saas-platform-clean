@@ -400,10 +400,24 @@
         <div class="nav-section" aria-hidden="true">Communications</div>
 
         <a href="{% url 'communications:template_list' %}" role="listitem"
-           class="sidebar-link{% if '/communications/' in request.path %} active{% endif %}"
-           {% if '/communications/' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-chat-dots" aria-hidden="true"></i>
-            <span>Messaging</span>
+           class="sidebar-link{% if '/communications/templates' in request.path %} active{% endif %}"
+           {% if '/communications/templates' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-chat-square-text" aria-hidden="true"></i>
+            <span>Templates</span>
+        </a>
+
+        <a href="{% url 'communications:trigger_list' %}" role="listitem"
+           class="sidebar-link{% if '/communications/triggers' in request.path %} active{% endif %}"
+           {% if '/communications/triggers' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-lightning-charge" aria-hidden="true"></i>
+            <span>Triggers</span>
+        </a>
+
+        <a href="{% url 'communications:log_list' %}" role="listitem"
+           class="sidebar-link{% if '/communications/logs' in request.path %} active{% endif %}"
+           {% if '/communications/logs' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-journal-check" aria-hidden="true"></i>
+            <span>Message Logs</span>
         </a>
 
         <div class="nav-section" aria-hidden="true">Forms</div>

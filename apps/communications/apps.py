@@ -8,4 +8,6 @@ class CommunicationsConfig(AppConfig):
     verbose_name = "Communications"
 
     def ready(self):
-        import apps.communications.handlers  # noqa: F401 — registers signal receivers
+        import apps.communications.handlers  # noqa: F401 — registers payment signal receivers
+        from apps.communications.handlers import _register_membership_receiver
+        _register_membership_receiver()

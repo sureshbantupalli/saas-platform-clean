@@ -4,7 +4,10 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="fw-bold mb-0">Communication Logs</h2>
-    <a href="{% url 'communications:template_list' %}" class="btn btn-outline-secondary btn-sm">Templates</a>
+    <div class="d-flex gap-2">
+        <a href="{% url 'communications:trigger_list' %}" class="btn btn-outline-secondary btn-sm">Triggers</a>
+        <a href="{% url 'communications:template_list' %}" class="btn btn-outline-secondary btn-sm">Templates</a>
+    </div>
 </div>
 
 <form method="get" class="row g-2 mb-4">
@@ -38,10 +41,10 @@
                 <tr>
                     <th>When</th>
                     <th>Channel</th>
+                    <th>Event</th>
                     <th>Recipient</th>
                     <th>Message</th>
                     <th>Status</th>
-                    <th>Ref</th>
                 </tr>
             </thead>
             <tbody>
@@ -53,8 +56,11 @@
                     {% elif log.channel == "WHATSAPP" %}<span class="badge bg-success">WA</span>
                     {% else %}<span class="badge bg-secondary">Email</span>{% endif %}
                 </td>
+                <td class="small text-nowrap">
+                    {% if log.event_type %}<code class="text-secondary">{{ log.event_type }}</code>{% else %}&mdash;{% endif %}
+                </td>
                 <td class="small font-monospace">{{ log.recipient }}</td>
-                <td class="small text-truncate" style="max-width:240px" title="{{ log.message }}">
+                <td class="small text-truncate" style="max-width:200px" title="{{ log.message }}">
                     {% if log.subject %}<em class="text-muted">{{ log.subject }}</em><br>{% endif %}
                     {{ log.message|truncatechars:80 }}
                 </td>
@@ -67,9 +73,6 @@
                     {% else %}
                     <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Pending</span>
                     {% endif %}
-                </td>
-                <td class="small text-muted">
-                    {% if log.reference_type %}{{ log.reference_type }}{% else %}&mdash;{% endif %}
                 </td>
             </tr>
             {% endfor %}
