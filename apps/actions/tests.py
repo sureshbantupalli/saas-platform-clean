@@ -558,7 +558,7 @@ class CTAMappingTests(TestCase):
                      next_followup_date=date.today() - timedelta(days=3))
         a = self._get_action("hot_leads_not_contacted")
         self.assertIsNotNone(a)
-        self.assertEqual(a["cta_url"], "/crm/")
+        self.assertEqual(a["cta_url"], "/crm/dashboard/")
 
     def test_expiring_memberships_cta(self):
         member = make_member(self.tenant, self.branch, self.user)

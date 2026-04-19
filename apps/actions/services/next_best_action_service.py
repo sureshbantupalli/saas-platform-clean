@@ -116,7 +116,7 @@ def _hot_leads_not_contacted(tenant, today: date) -> dict:
         "priority":      PRIORITY_HIGH,
         "title":         "Contact hot leads immediately",
         "count":         count,
-        "cta_url":       "/crm/",
+        "cta_url":       "/crm/dashboard/",
         "cta_label":     "View Leads",
         "urgency":       "Not contacted in 2+ days",
         "quick_actions": _QUICK_ACTIONS["hot_leads_not_contacted"],
