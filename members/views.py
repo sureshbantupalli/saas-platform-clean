@@ -1,7 +1,9 @@
+from datetime import date, timedelta
+
 from django.shortcuts import render, redirect
 from django.http import HttpResponseForbidden, Http404
 from django.core.paginator import Paginator
-from django.views.decorators.csrf import ensure_csrf_cookie  # ✅ NEW
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.middleware.csrf import get_token
 
 from .forms import MemberForm
@@ -25,42 +27,52 @@ def member_create_ui(request):
 @require_permission("members", "view")
 def member_list(request):
 
-    search_query = request.GET.get("q", "").strip()
-    status_filter = request.GET.get("status", "").strip()
+    search_query   = request.GET.get("q", "").strip()
+    status_filter  = request.GET.get("status", "").strip()
     expiring_param = request.GET.get("expiring")
+    filter_param   = request.GET.get("filter", "").strip()
 
-    # 🔥 Detect Expiring Drilldown Mode
     expiring_filter = expiring_param == "1"
 
     members_queryset = MemberService.get_queryset(
         request.user,
         search_query=search_query,
         status_filter=status_filter,
-        expiring_filter=expiring_filter
+        expiring_filter=expiring_filter,
     )
 
-    # 🔢 Pagination
+    # At-risk drilldown: active members with no attendance in the last 7 days
+    at_risk_filter = filter_param == "at_risk"
+    if at_risk_filter:
+        from apps.attendance.models import Attendance
+        seven_days_ago = date.today() - timedelta(days=7)
+        recent_ids = set(
+            Attendance.base_objects.filter(
+                tenant=request.user.tenant,
+                status="present",
+                session_date__gte=seven_days_ago,
+                is_deleted=False,
+            ).values_list("member_id", flat=True).distinct()
+        )
+        members_queryset = [m for m in members_queryset if m.id not in recent_ids]
+
+    # Pagination
     paginator = Paginator(members_queryset, 10)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
-    # 📊 KPI Summary
     kpis = MemberService.get_kpis(members_queryset)
-
-    # 🔥 Expiring Soon KPI Count
-    expiring_soon = MemberService.get_expiring_soon_count(
-        members_queryset,
-        days=7
-    )
+    expiring_soon = MemberService.get_expiring_soon_count(members_queryset, days=7)
 
     context = {
-        "members": page_obj,
-        "page_obj": page_obj,
-        "search_query": search_query,
-        "status_filter": status_filter,
-        "kpis": kpis,
-        "expiring_soon": expiring_soon,
+        "members":        page_obj,
+        "page_obj":       page_obj,
+        "search_query":   search_query,
+        "status_filter":  status_filter,
+        "kpis":           kpis,
+        "expiring_soon":  expiring_soon,
         "expiring_filter": expiring_filter,
+        "at_risk_filter": at_risk_filter,
     }
 
     return render(

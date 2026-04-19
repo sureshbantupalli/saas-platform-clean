@@ -484,13 +484,11 @@ class PriorityOrderingTests(TestCase):
                       due_date=date.today() - timedelta(days=1))
         actions = get_next_actions(self.tenant)
         self.assertTrue(len(actions) > 0)
+        required = {"type", "priority", "title", "count",
+                    "cta_url", "cta_label", "urgency", "quick_actions", "description"}
         for action in actions:
-            self.assertIn("type",        action)
-            self.assertIn("priority",    action)
-            self.assertIn("title",       action)
-            self.assertIn("count",       action)
-            self.assertIn("cta",         action)
-            self.assertIn("description", action)
+            for field in required:
+                self.assertIn(field, action, f"Missing field '{field}' in action {action['type']}")
 
 
 class TenantIsolationTests(TestCase):
@@ -530,3 +528,177 @@ class TenantIsolationTests(TestCase):
         actions = get_next_actions(self.t1)
         action = next((a for a in actions if a["type"] == "at_risk_members"), None)
         self.assertIsNone(action)
+
+
+class CTAMappingTests(TestCase):
+
+    def setUp(self):
+        self.tenant, self.branch, self.user = make_world("CTAGym")
+        self.plan = make_plan(self.tenant, self.branch)
+
+    def _get_action(self, action_type):
+        return next((a for a in get_next_actions(self.tenant) if a["type"] == action_type), None)
+
+    def test_followup_overdue_cta(self):
+        make_followup(self.tenant, self.branch, self.user,
+                      due_date=date.today() - timedelta(days=1))
+        a = self._get_action("followup_overdue")
+        self.assertIsNotNone(a)
+        self.assertEqual(a["cta_url"], "/crm/followups/")
+        self.assertIsInstance(a["cta_label"], str)
+
+    def test_followup_due_today_cta(self):
+        make_followup(self.tenant, self.branch, self.user, due_date=date.today())
+        a = self._get_action("followup_due_today")
+        self.assertIsNotNone(a)
+        self.assertEqual(a["cta_url"], "/crm/followups/")
+
+    def test_hot_leads_cta(self):
+        make_enquiry(self.tenant, self.branch, self.user,
+                     next_followup_date=date.today() - timedelta(days=3))
+        a = self._get_action("hot_leads_not_contacted")
+        self.assertIsNotNone(a)
+        self.assertEqual(a["cta_url"], "/crm/")
+
+    def test_expiring_memberships_cta(self):
+        member = make_member(self.tenant, self.branch, self.user)
+        make_membership(self.tenant, member, self.plan, self.branch,
+                        end_date=date.today() + timedelta(days=5))
+        a = self._get_action("expiring_memberships")
+        self.assertIsNotNone(a)
+        self.assertIn("/members/", a["cta_url"])
+
+    def test_at_risk_members_cta(self):
+        member = make_member(self.tenant, self.branch, self.user)
+        make_membership(self.tenant, member, self.plan, self.branch)
+        a = self._get_action("at_risk_members")
+        self.assertIsNotNone(a)
+        self.assertIn("/members/", a["cta_url"])
+
+    def test_payment_pending_cta(self):
+        member = make_member(self.tenant, self.branch, self.user)
+        make_membership(self.tenant, member, self.plan, self.branch,
+                        payment_status="unpaid")
+        a = self._get_action("payment_pending")
+        self.assertIsNotNone(a)
+        self.assertIn("/payments/", a["cta_url"])
+
+    def test_low_utilization_cta(self):
+        make_session_instance(self.tenant, self.branch,
+                              session_date=date.today() + timedelta(days=1))
+        a = self._get_action("low_utilization_slots")
+        self.assertIsNotNone(a)
+        self.assertIn("/sessions/", a["cta_url"])
+
+
+class UrgencyTests(TestCase):
+
+    def setUp(self):
+        self.tenant, self.branch, self.user = make_world("UrgencyGym")
+        self.plan = make_plan(self.tenant, self.branch)
+
+    def test_overdue_urgency_mentions_days(self):
+        make_followup(self.tenant, self.branch, self.user,
+                      due_date=date.today() - timedelta(days=3))
+        a = next(a for a in get_next_actions(self.tenant) if a["type"] == "followup_overdue")
+        self.assertIn("3", a["urgency"])
+
+    def test_expiring_urgency_mentions_days(self):
+        member = make_member(self.tenant, self.branch, self.user)
+        make_membership(self.tenant, member, self.plan, self.branch,
+                        end_date=date.today() + timedelta(days=2))
+        a = next(a for a in get_next_actions(self.tenant) if a["type"] == "expiring_memberships")
+        self.assertIn("2", a["urgency"])
+
+    def test_due_today_urgency(self):
+        make_followup(self.tenant, self.branch, self.user, due_date=date.today())
+        a = next(a for a in get_next_actions(self.tenant) if a["type"] == "followup_due_today")
+        self.assertIn("today", a["urgency"].lower())
+
+    def test_hot_leads_urgency(self):
+        make_enquiry(self.tenant, self.branch, self.user,
+                     next_followup_date=date.today() - timedelta(days=3))
+        a = next(a for a in get_next_actions(self.tenant) if a["type"] == "hot_leads_not_contacted")
+        self.assertIn("2", a["urgency"])
+
+    def test_at_risk_urgency(self):
+        member = make_member(self.tenant, self.branch, self.user)
+        make_membership(self.tenant, member, self.plan, self.branch)
+        a = next(a for a in get_next_actions(self.tenant) if a["type"] == "at_risk_members")
+        self.assertIn("7", a["urgency"])
+
+    def test_payment_pending_urgency(self):
+        member = make_member(self.tenant, self.branch, self.user)
+        make_membership(self.tenant, member, self.plan, self.branch,
+                        payment_status="unpaid")
+        a = next(a for a in get_next_actions(self.tenant) if a["type"] == "payment_pending")
+        self.assertIsInstance(a["urgency"], str)
+        self.assertGreater(len(a["urgency"]), 0)
+
+
+class AtRiskImprovedLogicTests(TestCase):
+
+    def setUp(self):
+        self.tenant, self.branch, self.user = make_world("AtRiskImproved")
+        self.plan = make_plan(self.tenant, self.branch)
+
+    def test_no_attendance_is_at_risk(self):
+        member = make_member(self.tenant, self.branch, self.user)
+        make_membership(self.tenant, member, self.plan, self.branch)
+        actions = get_next_actions(self.tenant)
+        a = next((a for a in actions if a["type"] == "at_risk_members"), None)
+        self.assertIsNotNone(a)
+        self.assertEqual(a["count"], 1)
+
+    def test_attendance_drop_50pct_is_at_risk(self):
+        member = make_member(self.tenant, self.branch, self.user)
+        make_membership(self.tenant, member, self.plan, self.branch)
+        today = date.today()
+        # Previous period: 4 sessions (days 8-14 ago)
+        for i in range(8, 12):
+            make_attendance(self.tenant, member, self.branch,
+                            session_date=today - timedelta(days=i))
+        # Recent period: 1 session (last 7 days) — 75% drop
+        make_attendance(self.tenant, member, self.branch,
+                        session_date=today - timedelta(days=2))
+        actions = get_next_actions(self.tenant)
+        a = next((a for a in actions if a["type"] == "at_risk_members"), None)
+        self.assertIsNotNone(a)
+        self.assertEqual(a["count"], 1)
+
+    def test_no_drop_not_at_risk(self):
+        member = make_member(self.tenant, self.branch, self.user)
+        make_membership(self.tenant, member, self.plan, self.branch)
+        today = date.today()
+        # Equal attendance in both periods
+        for i in range(8, 11):
+            make_attendance(self.tenant, member, self.branch,
+                            session_date=today - timedelta(days=i))
+        for i in range(1, 4):
+            make_attendance(self.tenant, member, self.branch,
+                            session_date=today - timedelta(days=i))
+        actions = get_next_actions(self.tenant)
+        a = next((a for a in actions if a["type"] == "at_risk_members"), None)
+        self.assertIsNone(a)
+
+    def test_first_time_attendee_not_at_risk(self):
+        member = make_member(self.tenant, self.branch, self.user)
+        make_membership(self.tenant, member, self.plan, self.branch)
+        today = date.today()
+        # Attended recently but never in prev period (new member)
+        make_attendance(self.tenant, member, self.branch,
+                        session_date=today - timedelta(days=1))
+        actions = get_next_actions(self.tenant)
+        a = next((a for a in actions if a["type"] == "at_risk_members"), None)
+        self.assertIsNone(a)
+
+    def test_quick_actions_structure(self):
+        member = make_member(self.tenant, self.branch, self.user)
+        make_membership(self.tenant, member, self.plan, self.branch)
+        actions = get_next_actions(self.tenant)
+        a = next((a for a in actions if a["type"] == "at_risk_members"), None)
+        self.assertIsNotNone(a)
+        self.assertIsInstance(a["quick_actions"], list)
+        for qa in a["quick_actions"]:
+            self.assertIn("type",  qa)
+            self.assertIn("label", qa)

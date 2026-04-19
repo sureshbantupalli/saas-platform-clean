@@ -14,38 +14,46 @@
   </div>
 
   {# ── Next Best Actions ───────────────────────────────────────────────── #}
-  {% if next_actions %}
+  {% if next_action_groups %}
   <div class="mb-4">
-    <h6 class="text-uppercase text-muted fw-semibold small mb-3 ls-1">
-      Next Actions
-    </h6>
-    <div class="row g-2">
-      {% for action in next_actions %}
+    <h6 class="text-uppercase text-muted fw-semibold small mb-3 ls-1">Next Actions</h6>
+
+    {% for group in next_action_groups %}
+    <p class="text-{{ group.cls }} fw-semibold small mb-2" style="font-size:0.72rem;letter-spacing:.06em;">
+      {{ group.label }}
+    </p>
+    <div class="row g-2 mb-3">
+      {% for action in group.actions %}
       <div class="col-12 col-md-6 col-xl-4">
-        <div class="card border-0 shadow-sm h-100
-          {% if action.priority == 'HIGH' %}border-start border-danger border-3
-          {% elif action.priority == 'MEDIUM' %}border-start border-warning border-3
-          {% else %}border-start border-info border-3{% endif %}">
-          <div class="card-body py-2 px-3 d-flex align-items-center justify-content-between gap-2">
-            <div class="d-flex align-items-center gap-2 flex-grow-1">
-              {% if action.priority == "HIGH" %}
-                <span class="badge bg-danger">HIGH</span>
-              {% elif action.priority == "MEDIUM" %}
-                <span class="badge bg-warning text-dark">MED</span>
-              {% else %}
-                <span class="badge bg-info text-dark">LOW</span>
-              {% endif %}
-              <div>
-                <p class="mb-0 fw-semibold small">{{ action.title }}</p>
-                <p class="mb-0 text-muted" style="font-size:0.75rem;">{{ action.count }} item{{ action.count|pluralize }}</p>
-              </div>
+        <div class="card border-0 shadow-sm h-100 border-start border-{{ group.cls }} border-3">
+          <div class="card-body py-2 px-3">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <span class="badge bg-{{ group.cls }}{% if group.priority == 'MEDIUM' or group.priority == 'LOW' %} text-dark{% endif %}"
+                    style="font-size:0.65rem;">{{ group.priority }}</span>
+              <span class="fw-semibold small">{{ action.title }}</span>
             </div>
-            <a href="{{ action.cta }}" class="btn btn-sm btn-outline-secondary flex-shrink-0">View</a>
+            <p class="mb-2 text-muted" style="font-size:0.75rem;">
+              <strong>{{ action.count }}</strong> item{{ action.count|pluralize }}
+              &nbsp;·&nbsp;{{ action.urgency }}
+            </p>
+            <div class="d-flex gap-1 flex-wrap">
+              <a href="{{ action.cta_url }}"
+                 class="btn btn-sm btn-outline-{{ group.cls }} py-0 px-2"
+                 style="font-size:0.75rem;">{{ action.cta_label }}</a>
+              {% for qa in action.quick_actions %}
+              <button class="btn btn-sm btn-outline-secondary py-0 px-2"
+                      style="font-size:0.75rem;"
+                      data-action-type="{{ qa.type }}"
+                      disabled title="Coming soon">{{ qa.label }}</button>
+              {% endfor %}
+            </div>
           </div>
         </div>
       </div>
       {% endfor %}
     </div>
+    {% endfor %}
+
   </div>
   {% endif %}
 
