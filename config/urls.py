@@ -86,7 +86,7 @@ urlpatterns = [
     # CRM Module
     path(
         "crm/",
-        include("crm.urls")
+        include(("crm.urls", "crm"), namespace="crm")
     ),
 
     # Platform Control Layer
