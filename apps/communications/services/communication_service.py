@@ -2,23 +2,36 @@
 Communication service — core entry points.
 
 handle_event(event_name, payload, tenant)
-    Main entry point. Finds active TriggerRules, evaluates conditions,
-    renders templates, sends messages, and logs results.
+    Main entry point called by all signal receivers.
+    Normalizes payload, validates fields, checks rate limit,
+    resolves matching TriggerRules, and delegates to send_message().
 
 send_message(template, context, tenant, ...)
-    Resolves recipient, picks adapter, sends, and writes CommunicationLog.
+    Resolves recipient, applies rate limit, picks adapter, sends, logs.
+    Always returns a CommunicationLog — never raises.
+
+Payload normalization (backward compatible):
+    Standard format: {"event": ..., "data": {"member_name": ...}}
+        → template context = payload["data"]
+    Legacy flat format: {"member_name": ..., "phone": ...}
+        → template context = payload  (unchanged)
 """
 import logging
+
+from django.utils import timezone
 
 from apps.communications.models import (
     Channel, CommunicationLog, MessageStatus, MessageTemplate, TriggerRule,
 )
+from apps.communications.services.event_schema import (
+    extract_context, validate_event_payload,
+)
 from apps.communications.utils.conditions import evaluate_conditions
-from apps.communications.utils.renderer import render_template
+from apps.communications.utils.renderer import render_template, extract_placeholders
 
 logger = logging.getLogger("apps.communications")
 
-# Field names to try when resolving recipient per channel
+# Ordered preference when resolving recipient address per channel
 _RECIPIENT_FIELDS = {
     Channel.SMS:      ["phone", "mobile", "phone_number"],
     Channel.WHATSAPP: ["whatsapp", "phone", "mobile", "phone_number"],
@@ -38,9 +51,9 @@ def _get_adapter(channel: str):
     }.get(channel)
 
 
-def _resolve_recipient(channel: str, payload: dict) -> str:
+def _resolve_recipient(channel: str, context: dict) -> str:
     for field in _RECIPIENT_FIELDS.get(channel, []):
-        value = payload.get(field, "")
+        value = context.get(field, "")
         if value:
             return str(value)
     return ""
@@ -55,49 +68,102 @@ def send_message(
     event_type: str = "",
 ) -> CommunicationLog:
     """
-    Render the template with context, pick the right adapter, send, and log.
-    Always returns a CommunicationLog — never raises.
+    Render the template with context, apply rate limit, pick the right adapter,
+    send, and write a CommunicationLog. Always returns a log — never raises.
     """
     channel   = template.channel
     recipient = _resolve_recipient(channel, context)
     message   = render_template(template.content, context)
     subject   = render_template(template.subject, context) if template.subject else ""
 
+    # Warn on missing template placeholders so operators can fix templates
+    missing = extract_placeholders(template.content) - set(context.keys())
+    if missing:
+        logger.warning(
+            "[Communications] Template has unresolved placeholders",
+            extra={
+                "reason":      "missing_template_vars",
+                "template":    template.name,
+                "event":       event_type,
+                "tenant_id":   str(tenant.pk) if tenant else "",
+                "missing":     sorted(missing),
+            },
+        )
+
     log = CommunicationLog(
-        tenant         = tenant,
-        channel        = channel,
-        event_type     = event_type,
-        recipient      = recipient or "unknown",
-        subject        = subject,
-        message        = message,
-        status         = MessageStatus.PENDING,
-        reference_type = reference_type,
-        reference_id   = str(reference_id) if reference_id else "",
+        tenant          = tenant,
+        channel         = channel,
+        event_type      = event_type,
+        recipient       = recipient or "unknown",
+        subject         = subject,
+        message         = message,
+        status          = MessageStatus.PENDING,
+        reference_type  = reference_type,
+        reference_id    = str(reference_id) if reference_id else "",
+        last_attempt_at = timezone.now(),
     )
 
+    # ── No recipient ───────────────────────────────────────────────────────────
     if not recipient:
         log.status        = MessageStatus.FAILED
         log.error_message = "No recipient found in payload."
         log.save()
         logger.warning(
-            "[Communications] No recipient for channel=%s template=%s", channel, template.name
+            "[Communications] No recipient — message not sent",
+            extra={
+                "reason":    "no_recipient",
+                "channel":   channel,
+                "template":  template.name,
+                "event":     event_type,
+                "tenant_id": str(tenant.pk) if tenant else "",
+            },
         )
         return log
 
+    # ── Rate limit ─────────────────────────────────────────────────────────────
+    from apps.communications.services.rate_limiter import is_rate_limited, record_rate_limited
+    if is_rate_limited(tenant):
+        record_rate_limited(tenant, channel, event_type, recipient)
+        log.status        = MessageStatus.FAILED
+        log.error_message = "rate_limited: per-minute quota exceeded"
+        # rate_limiter already wrote its own log; don't double-write
+        return log
+
+    # ── No adapter ─────────────────────────────────────────────────────────────
     adapter = _get_adapter(channel)
     if adapter is None:
         log.status        = MessageStatus.FAILED
         log.error_message = f"No adapter registered for channel: {channel}"
         log.save()
+        logger.error(
+            "[Communications] No adapter for channel",
+            extra={
+                "reason":    "no_adapter",
+                "channel":   channel,
+                "event":     event_type,
+                "tenant_id": str(tenant.pk) if tenant else "",
+            },
+        )
         return log
 
+    # ── Send ───────────────────────────────────────────────────────────────────
     try:
         adapter.send(to=recipient, message=message, subject=subject)
         log.status = MessageStatus.SENT
     except Exception as exc:
         log.status        = MessageStatus.FAILED
         log.error_message = str(exc)
-        logger.exception("[Communications] Send failed for channel=%s: %s", channel, exc)
+        logger.warning(
+            "[Communications] Adapter send failed",
+            extra={
+                "reason":    "send_failed",
+                "channel":   channel,
+                "event":     event_type,
+                "tenant_id": str(tenant.pk) if tenant else "",
+                "recipient": recipient,
+                "error":     str(exc),
+            },
+        )
 
     log.save()
     return log
@@ -107,11 +173,29 @@ def handle_event(event_name: str, payload: dict, tenant) -> None:
     """
     Entry point for all system events.
 
-    Looks up active TriggerRules for this tenant + event, evaluates optional
-    conditions against the payload, then sends a message for each matching rule.
+    1. Normalizes payload (standard or legacy flat format).
+    2. Validates required fields against EventRegistry (warns, does not block).
+    3. Finds active TriggerRules for this tenant + event.
+    4. Evaluates optional conditions.
+    5. Sends a message for each matching rule via send_message().
 
-    New events can be wired in without any code change — just add a TriggerRule.
+    New events are wired in without any code change — just add a TriggerRule.
     """
+    context = extract_context(payload)
+
+    # Validate expected fields — log missing ones, never raise
+    missing_fields = validate_event_payload(event_name, context)
+    if missing_fields:
+        logger.warning(
+            "[Communications] Event payload missing expected fields",
+            extra={
+                "reason":         "missing_event_fields",
+                "event":          event_name,
+                "tenant_id":      str(tenant.pk) if tenant else "",
+                "missing_fields": missing_fields,
+            },
+        )
+
     rules = (
         TriggerRule.base_objects
         .filter(tenant=tenant, event_name=event_name, is_active=True, template__is_active=True)
@@ -120,7 +204,7 @@ def handle_event(event_name: str, payload: dict, tenant) -> None:
 
     for rule in rules:
         try:
-            if not evaluate_conditions(rule.conditions, payload):
+            if not evaluate_conditions(rule.conditions, context):
                 logger.debug(
                     "[Communications] Conditions not met for rule=%s event=%s", rule.pk, event_name
                 )
@@ -128,10 +212,10 @@ def handle_event(event_name: str, payload: dict, tenant) -> None:
 
             send_message(
                 template       = rule.template,
-                context        = payload,
+                context        = context,
                 tenant         = tenant,
-                reference_type = payload.get("reference_type", ""),
-                reference_id   = payload.get("reference_id", ""),
+                reference_type = context.get("reference_type", payload.get("reference_type", "")),
+                reference_id   = context.get("reference_id", payload.get("reference_id", "")),
                 event_type     = event_name,
             )
         except Exception as exc:

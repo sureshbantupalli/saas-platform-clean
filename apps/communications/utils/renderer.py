@@ -18,3 +18,8 @@ def render_template(content: str, context: dict) -> str:
         return str(value) if value is not None else ""
 
     return _PLACEHOLDER.sub(_sub, content)
+
+
+def extract_placeholders(content: str) -> set:
+    """Return the set of placeholder names declared in a template string."""
+    return {m.group(1).strip() for m in _PLACEHOLDER.finditer(content)}

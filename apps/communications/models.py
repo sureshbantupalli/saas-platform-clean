@@ -60,15 +60,17 @@ class TriggerRule(TenantAwareModel):
 
 
 class CommunicationLog(TenantAwareModel):
-    channel        = models.CharField(max_length=20, choices=Channel.choices)
-    event_type     = models.CharField(max_length=100, blank=True, help_text="System event that triggered this message.")
-    recipient      = models.CharField(max_length=500)
-    subject        = models.CharField(max_length=500, blank=True)
-    message        = models.TextField()
-    status         = models.CharField(max_length=20, choices=MessageStatus.choices, default=MessageStatus.PENDING)
-    reference_type = models.CharField(max_length=100, blank=True)
-    reference_id   = models.CharField(max_length=100, blank=True)
-    error_message  = models.TextField(blank=True)
+    channel         = models.CharField(max_length=20, choices=Channel.choices)
+    event_type      = models.CharField(max_length=100, blank=True, help_text="System event that triggered this message.")
+    recipient       = models.CharField(max_length=500)
+    subject         = models.CharField(max_length=500, blank=True)
+    message         = models.TextField()
+    status          = models.CharField(max_length=20, choices=MessageStatus.choices, default=MessageStatus.PENDING)
+    reference_type  = models.CharField(max_length=100, blank=True)
+    reference_id    = models.CharField(max_length=100, blank=True)
+    error_message   = models.TextField(blank=True)
+    retry_count     = models.PositiveSmallIntegerField(default=0)
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "communication_logs"
@@ -76,3 +78,8 @@ class CommunicationLog(TenantAwareModel):
 
     def __str__(self):
         return f"{self.channel} → {self.recipient} [{self.status}]"
+
+    @property
+    def can_retry(self) -> bool:
+        from apps.communications.services.retry_service import MAX_RETRIES
+        return self.status == MessageStatus.FAILED and self.retry_count < MAX_RETRIES

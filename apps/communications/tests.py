@@ -333,7 +333,9 @@ class PaymentSignalIntegrationTests(TestCase):
         call_args = mock_handle.call_args
         self.assertEqual(call_args[0][0], "payment_success")
         self.assertEqual(call_args[0][2], self.tenant)
-        self.assertEqual(call_args[0][1]["amount"], str(payment.amount))
+        # Standard payload: amount lives in payload["data"]
+        payload = call_args[0][1]
+        self.assertEqual(payload["data"]["amount"], str(payment.amount))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -585,9 +587,10 @@ class MembershipActivatedHandlerTests(TestCase):
         }
         with patch("apps.communications.handlers.handle_event") as mock_handle, \
              patch("apps.memberships.models.Membership.base_objects") as mock_mgr:
-            # Make the DB refetch return a mock membership
+            mock_pk = uuid.uuid4()
             mock_membership = type("M", (), {
-                "pk": uuid.uuid4(), "tenant": self.tenant,
+                "pk": mock_pk, "tenant": self.tenant,
+                "tenant_id": self.tenant.pk,
                 "member": None, "plan": None,
                 "start_date": None, "end_date": None,
                 "remaining_sessions": None,
@@ -595,7 +598,7 @@ class MembershipActivatedHandlerTests(TestCase):
             mock_mgr.select_related.return_value.get.return_value = mock_membership
 
             class FakeMembership:
-                pk = mock_membership.pk
+                pk = mock_pk
             on_membership_activated(sender=Membership, membership=FakeMembership())
 
         mock_handle.assert_called_once()
@@ -627,11 +630,14 @@ class MembershipActivatedHandlerTests(TestCase):
              patch("apps.communications.handlers._membership_payload", return_value=fake_payload), \
              patch("apps.memberships.models.Membership.base_objects") as mock_mgr:
 
-            class FakeMembership:
-                pk     = uuid.uuid4()
-                tenant = self.tenant
-            mock_mgr.select_related.return_value.get.return_value = FakeMembership()
+            _fake_pk = uuid.uuid4()
+            mock_fresh = type("M", (), {
+                "pk": _fake_pk, "tenant": self.tenant, "tenant_id": self.tenant.pk,
+            })()
+            mock_mgr.select_related.return_value.get.return_value = mock_fresh
 
+            class FakeMembership:
+                pk = _fake_pk
             membership_activated.send(sender=Membership, membership=FakeMembership())
 
         mock_send.assert_called_once()
@@ -736,3 +742,375 @@ class EmitFollowupDueCommandTests(TestCase):
         self.assertEqual(payload["phone"], "9876543210")
         self.assertEqual(payload["reference_type"], "followup")
         self.assertIn("due_date", payload)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 10. Standard Event Payload (CommunicationEvent + extract_context)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class CommunicationEventSchemaTests(TestCase):
+
+    def test_to_payload_round_trip(self):
+        from apps.communications.services.event_schema import CommunicationEvent
+        ev = CommunicationEvent(
+            event="payment_success", tenant_id="t1",
+            entity_type="member", entity_id="m1",
+            data={"member_name": "Raj", "phone": "999"},
+        )
+        p = ev.to_payload()
+        self.assertEqual(p["event"], "payment_success")
+        self.assertEqual(p["data"]["member_name"], "Raj")
+        self.assertEqual(p["entity_type"], "member")
+
+    def test_from_payload(self):
+        from apps.communications.services.event_schema import CommunicationEvent
+        raw = {"event": "foo", "tenant_id": "t", "entity_type": "x", "entity_id": "y",
+               "data": {"a": 1}}
+        ev = CommunicationEvent.from_payload(raw)
+        self.assertEqual(ev.event, "foo")
+        self.assertEqual(ev.data, {"a": 1})
+
+    def test_extract_context_standard_format(self):
+        from apps.communications.services.event_schema import extract_context
+        payload = {"event": "e", "data": {"member_name": "Raj"}}
+        self.assertEqual(extract_context(payload), {"member_name": "Raj"})
+
+    def test_extract_context_legacy_flat_format(self):
+        from apps.communications.services.event_schema import extract_context
+        flat = {"member_name": "Raj", "phone": "999"}
+        self.assertEqual(extract_context(flat), flat)
+
+    def test_handle_event_uses_data_for_template_context(self):
+        """Standard payload: template variables resolved from data dict."""
+        tenant = make_tenant("SchemaGym")
+        tpl = make_template(tenant, channel=Channel.SMS,
+                            content="Hi {{member_name}}, amount ₹{{amount}}.")
+        make_rule(tenant, tpl, "payment_success")
+        payload = {
+            "event": "payment_success", "tenant_id": str(tenant.pk),
+            "entity_type": "member", "entity_id": "x",
+            "data": {"member_name": "Priya", "amount": "3000", "phone": "9999999999"},
+        }
+        with patch("apps.communications.adapters.sms.SMSAdapter.send"):
+            handle_event("payment_success", payload, tenant)
+        log = CommunicationLog.base_objects.filter(tenant=tenant).first()
+        self.assertIsNotNone(log)
+        self.assertIn("Priya", log.message)
+        self.assertIn("3000", log.message)
+
+    def test_handle_event_flat_payload_still_works(self):
+        """Legacy flat payload stays backward compatible."""
+        tenant = make_tenant("FlatGym")
+        tpl = make_template(tenant, channel=Channel.SMS,
+                            content="Hi {{member_name}}.")
+        make_rule(tenant, tpl, "payment_success")
+        with patch("apps.communications.adapters.sms.SMSAdapter.send"):
+            handle_event("payment_success",
+                         {"member_name": "Raj", "phone": "9876543210"}, tenant)
+        log = CommunicationLog.base_objects.filter(tenant=tenant).first()
+        self.assertIn("Raj", log.message)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 11. Template Variable Safety
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TemplateVariableSafetyTests(TestCase):
+
+    def test_extract_placeholders(self):
+        from apps.communications.utils.renderer import extract_placeholders
+        result = extract_placeholders("Hi {{name}}, your {{plan}} is active.")
+        self.assertEqual(result, {"name", "plan"})
+
+    def test_extract_placeholders_empty(self):
+        from apps.communications.utils.renderer import extract_placeholders
+        self.assertEqual(extract_placeholders("No placeholders here."), set())
+
+    def test_extract_placeholders_with_whitespace(self):
+        from apps.communications.utils.renderer import extract_placeholders
+        result = extract_placeholders("{{ name }} and {{  amount  }}")
+        self.assertEqual(result, {"name", "amount"})
+
+    def test_missing_vars_render_as_empty(self):
+        from apps.communications.utils.renderer import render_template
+        result = render_template("Hi {{name}}, amount ₹{{amount}}.", {"name": "Raj"})
+        self.assertEqual(result, "Hi Raj, amount ₹.")
+
+    def test_missing_vars_logged_as_warning(self):
+        """send_message must log a warning when template placeholders are absent."""
+        tenant = make_tenant("VarGym")
+        tpl = make_template(tenant, channel=Channel.SMS,
+                            content="Hi {{member_name}}, your {{plan_name}} is ready.")
+        # Provide member_name but NOT plan_name
+        ctx = {"member_name": "Raj", "phone": "9876543210"}
+        with patch("apps.communications.adapters.sms.SMSAdapter.send"):
+            with self.assertLogs("apps.communications", level="WARNING") as cm:
+                log = send_message(tpl, ctx, tenant, event_type="membership_activated")
+        # Message still rendered and sent (empty string for missing var)
+        self.assertEqual(log.status, MessageStatus.SENT)
+        self.assertIn("Raj", log.message)
+        record = next(
+            r for r in cm.records
+            if getattr(r, "reason", None) == "missing_template_vars"
+        )
+        self.assertIn("plan_name", record.missing)
+
+    def test_validate_event_payload_reports_missing_fields(self):
+        from apps.communications.services.event_schema import validate_event_payload
+        missing = validate_event_payload("payment_success", {"amount": "500"})
+        self.assertIn("member_name", missing)
+        self.assertIn("phone", missing)
+        self.assertNotIn("amount", missing)
+
+    def test_validate_event_payload_unknown_event_returns_empty(self):
+        from apps.communications.services.event_schema import validate_event_payload
+        self.assertEqual(validate_event_payload("unknown_event", {}), [])
+
+    def test_validate_event_payload_all_present(self):
+        from apps.communications.services.event_schema import validate_event_payload
+        ctx = {"member_name": "Raj", "phone": "999", "amount": "500"}
+        self.assertEqual(validate_event_payload("payment_success", ctx), [])
+
+    def test_missing_event_fields_logged_in_handle_event(self):
+        """handle_event warns when known-event fields are missing from payload."""
+        tenant = make_tenant("ValidGym")
+        tpl = make_template(tenant, channel=Channel.SMS, content="Hi {{member_name}}.")
+        make_rule(tenant, tpl, "payment_success")
+        # Deliberately omit member_name and phone
+        ctx = {"amount": "500", "email": "x@y.com"}
+        with self.assertLogs("apps.communications", level="WARNING") as cm:
+            handle_event("payment_success", ctx, tenant)
+        record = next(
+            r for r in cm.records
+            if getattr(r, "reason", None) == "missing_event_fields"
+        )
+        self.assertIn("phone", record.missing_fields)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 12. Retry Mechanism
+# ══════════════════════════════════════════════════════════════════════════════
+
+class RetryMechanismTests(TestCase):
+
+    def setUp(self):
+        self.tenant = make_tenant("RetryGym")
+
+    def _failed_log(self, retry_count=0, channel=Channel.SMS):
+        return CommunicationLog.base_objects.create(
+            tenant=self.tenant, channel=channel,
+            recipient="9876543210", message="Test message",
+            status=MessageStatus.FAILED, retry_count=retry_count,
+        )
+
+    def test_retry_count_default_zero(self):
+        log = self._failed_log()
+        self.assertEqual(log.retry_count, 0)
+
+    def test_can_retry_true_when_below_max(self):
+        log = self._failed_log(retry_count=1)
+        self.assertTrue(log.can_retry)
+
+    def test_can_retry_false_at_max(self):
+        from apps.communications.services.retry_service import MAX_RETRIES
+        log = self._failed_log(retry_count=MAX_RETRIES)
+        self.assertFalse(log.can_retry)
+
+    def test_can_retry_false_when_sent(self):
+        log = CommunicationLog.base_objects.create(
+            tenant=self.tenant, channel=Channel.SMS, recipient="999",
+            message="ok", status=MessageStatus.SENT,
+        )
+        self.assertFalse(log.can_retry)
+
+    def test_retry_succeeds_and_marks_sent(self):
+        log = self._failed_log()
+        with patch("apps.communications.adapters.sms.SMSAdapter.send"):
+            from apps.communications.services.retry_service import retry_failed_messages
+            count = retry_failed_messages(tenant=self.tenant)
+        log.refresh_from_db()
+        self.assertEqual(count, 1)
+        self.assertEqual(log.status, MessageStatus.SENT)
+        self.assertEqual(log.retry_count, 1)
+        self.assertIsNotNone(log.last_attempt_at)
+
+    def test_retry_failure_increments_count(self):
+        log = self._failed_log()
+        with patch("apps.communications.adapters.sms.SMSAdapter.send",
+                   side_effect=Exception("network down")):
+            from apps.communications.services.retry_service import retry_failed_messages
+            count = retry_failed_messages(tenant=self.tenant)
+        log.refresh_from_db()
+        self.assertEqual(count, 0)
+        self.assertEqual(log.retry_count, 1)
+        self.assertEqual(log.status, MessageStatus.FAILED)
+        self.assertIn("network down", log.error_message)
+
+    def test_retry_stops_at_max_retries(self):
+        from apps.communications.services.retry_service import MAX_RETRIES, retry_failed_messages
+        log = self._failed_log(retry_count=MAX_RETRIES)
+        with patch("apps.communications.adapters.sms.SMSAdapter.send") as mock_send:
+            retry_failed_messages(tenant=self.tenant)
+        mock_send.assert_not_called()
+        log.refresh_from_db()
+        self.assertEqual(log.retry_count, MAX_RETRIES)  # unchanged
+
+    def test_retry_only_affects_own_tenant(self):
+        other = make_tenant("Other")
+        other_log = CommunicationLog.base_objects.create(
+            tenant=other, channel=Channel.SMS, recipient="000",
+            message="other", status=MessageStatus.FAILED,
+        )
+        own_log = self._failed_log()
+        with patch("apps.communications.adapters.sms.SMSAdapter.send"):
+            from apps.communications.services.retry_service import retry_failed_messages
+            retry_failed_messages(tenant=self.tenant)
+        own_log.refresh_from_db()
+        other_log.refresh_from_db()
+        self.assertEqual(own_log.status, MessageStatus.SENT)
+        self.assertEqual(other_log.status, MessageStatus.FAILED)
+
+    def test_retry_management_command(self):
+        self._failed_log()
+        with patch("apps.communications.adapters.sms.SMSAdapter.send"):
+            from django.core.management import call_command
+            call_command("retry_failed_messages")
+        log = CommunicationLog.base_objects.filter(tenant=self.tenant).first()
+        self.assertEqual(log.status, MessageStatus.SENT)
+
+    def test_last_attempt_at_set_on_initial_send(self):
+        """first send_message call sets last_attempt_at on the log."""
+        tenant = make_tenant("AttemptGym")
+        tpl = make_template(tenant)
+        ctx = {"member_name": "X", "amount": "0", "phone": "111"}
+        with patch("apps.communications.adapters.sms.SMSAdapter.send"):
+            log = send_message(tpl, ctx, tenant)
+        self.assertIsNotNone(log.last_attempt_at)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 13. Rate Limiting
+# ══════════════════════════════════════════════════════════════════════════════
+
+class RateLimitingTests(TestCase):
+
+    def setUp(self):
+        self.tenant = make_tenant("RateGym")
+
+    def _fill_window(self, count: int):
+        """Create `count` SENT logs within the last minute to fill the rate window."""
+        from django.utils import timezone
+        for _ in range(count):
+            CommunicationLog.base_objects.create(
+                tenant=self.tenant, channel=Channel.SMS,
+                recipient="111", message="x", status=MessageStatus.SENT,
+                # created_at is auto_now_add — will be set to now() which is within window
+            )
+
+    def test_below_limit_not_rate_limited(self):
+        from apps.communications.services.rate_limiter import is_rate_limited
+        with self.settings(COMMS_RATE_LIMIT_PER_MINUTE=10):
+            self._fill_window(5)
+            self.assertFalse(is_rate_limited(self.tenant))
+
+    def test_at_limit_is_rate_limited(self):
+        from apps.communications.services.rate_limiter import is_rate_limited
+        with self.settings(COMMS_RATE_LIMIT_PER_MINUTE=5):
+            self._fill_window(5)
+            self.assertTrue(is_rate_limited(self.tenant))
+
+    def test_zero_limit_means_unlimited(self):
+        from apps.communications.services.rate_limiter import is_rate_limited
+        with self.settings(COMMS_RATE_LIMIT_PER_MINUTE=0):
+            self._fill_window(1000)
+            self.assertFalse(is_rate_limited(self.tenant))
+
+    def test_failed_logs_dont_count_toward_limit(self):
+        from apps.communications.services.rate_limiter import is_rate_limited
+        with self.settings(COMMS_RATE_LIMIT_PER_MINUTE=3):
+            for _ in range(10):
+                CommunicationLog.base_objects.create(
+                    tenant=self.tenant, channel=Channel.SMS,
+                    recipient="111", message="x", status=MessageStatus.FAILED,
+                )
+            self.assertFalse(is_rate_limited(self.tenant))
+
+    def test_rate_limited_send_logs_failed(self):
+        """When rate-limited, send_message records a FAILED rate_limited log."""
+        tpl = make_template(self.tenant, channel=Channel.SMS)
+        ctx = {"member_name": "X", "amount": "0", "phone": "9876543210"}
+        with self.settings(COMMS_RATE_LIMIT_PER_MINUTE=0):  # 0 = disabled → no rate limit
+            pass  # sanity check that disabling works
+
+        with self.settings(COMMS_RATE_LIMIT_PER_MINUTE=1):
+            # Exhaust the quota
+            self._fill_window(1)
+            with patch("apps.communications.adapters.sms.SMSAdapter.send") as mock_send:
+                log = send_message(tpl, ctx, self.tenant)
+        # Adapter must NOT have been called
+        mock_send.assert_not_called()
+        self.assertEqual(log.status, MessageStatus.FAILED)
+        self.assertIn("rate_limited", log.error_message)
+
+    def test_rate_limit_logged_as_warning(self):
+        tpl = make_template(self.tenant, channel=Channel.SMS)
+        ctx = {"member_name": "X", "amount": "0", "phone": "9876543210"}
+        with self.settings(COMMS_RATE_LIMIT_PER_MINUTE=1):
+            self._fill_window(1)
+            with self.assertLogs("apps.communications", level="WARNING") as cm:
+                send_message(tpl, ctx, self.tenant)
+        record = next(
+            r for r in cm.records
+            if getattr(r, "reason", None) == "rate_limited"
+        )
+        self.assertEqual(record.tenant_id, str(self.tenant.pk))
+
+    def test_different_tenants_have_independent_limits(self):
+        from apps.communications.services.rate_limiter import is_rate_limited
+        other = make_tenant("OtherRate")
+        with self.settings(COMMS_RATE_LIMIT_PER_MINUTE=2):
+            self._fill_window(5)  # exhaust self.tenant
+            self.assertTrue(is_rate_limited(self.tenant))
+            self.assertFalse(is_rate_limited(other))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 14. Event Registry
+# ══════════════════════════════════════════════════════════════════════════════
+
+class EventRegistryTests(TestCase):
+
+    def test_known_events_registered(self):
+        from apps.communications.services.event_schema import EVENT_REGISTRY
+        for name in ("payment_success", "payment_failed", "membership_activated",
+                     "followup_due", "booking_confirmed"):
+            self.assertIn(name, EVENT_REGISTRY, f"{name} not in registry")
+
+    def test_event_definition_has_required_attrs(self):
+        from apps.communications.services.event_schema import EVENT_REGISTRY
+        for name, defn in EVENT_REGISTRY.items():
+            self.assertIsInstance(defn.description, str, name)
+            self.assertIsInstance(defn.expected_fields, list, name)
+            self.assertTrue(len(defn.expected_fields) > 0, name)
+
+    def test_get_event_definition_known(self):
+        from apps.communications.services.event_schema import get_event_definition
+        defn = get_event_definition("payment_success")
+        self.assertIsNotNone(defn)
+        self.assertIn("phone", defn.expected_fields)
+
+    def test_get_event_definition_unknown(self):
+        from apps.communications.services.event_schema import get_event_definition
+        self.assertIsNone(get_event_definition("completely_unknown_event"))
+
+    def test_validate_returns_missing_fields(self):
+        from apps.communications.services.event_schema import validate_event_payload
+        missing = validate_event_payload("followup_due", {"name": "Raj"})
+        self.assertIn("phone", missing)
+        self.assertIn("due_date", missing)
+        self.assertNotIn("name", missing)
+
+    def test_validate_all_present_returns_empty(self):
+        from apps.communications.services.event_schema import validate_event_payload
+        ctx = {"member_name": "R", "phone": "9", "plan_name": "Gold"}
+        self.assertEqual(validate_event_payload("membership_activated", ctx), [])

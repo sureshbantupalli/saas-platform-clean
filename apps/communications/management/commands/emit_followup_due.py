@@ -15,6 +15,7 @@ from datetime import date
 from django.core.management.base import BaseCommand
 
 from apps.communications.services.communication_service import handle_event
+from apps.communications.services.event_schema import CommunicationEvent
 
 logger = logging.getLogger("apps.communications")
 
@@ -56,7 +57,14 @@ class Command(BaseCommand):
                 )
             else:
                 try:
-                    handle_event("followup_due", payload, followup.tenant)
+                    event = CommunicationEvent(
+                        event       = "followup_due",
+                        tenant_id   = str(followup.tenant_id),
+                        entity_type = "contact",
+                        entity_id   = str(followup.pk),
+                        data        = payload,
+                    )
+                    handle_event(event.event, event.to_payload(), followup.tenant)
                     emitted += 1
                 except Exception as exc:
                     logger.exception("emit_followup_due: error for followup=%s: %s", followup.pk, exc)
