@@ -14,17 +14,12 @@
             <strong>{{ member.first_name }} {{ member.last_name }}</strong>?
         </p>
 
-        <form method="post" class="mt-3">
+        <form method="post">
             {% csrf_token %}
-
-            <button type="submit" class="btn btn-danger">
-                Yes, Delete
-            </button>
-
-            <a href="{% url 'member_detail' member.id %}"
-               class="btn btn-outline-secondary">
-                Cancel
-            </a>
+            <div class="d-flex flex-row flex-nowrap align-items-center gap-3 pt-3 mt-2" style="border-top:1px solid #e2e8f0;">
+                <button type="submit" class="btn btn-danger">Yes, Delete</button>
+                <a href="{% url 'members:member_detail' member.id %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
         </form>
 
     </div>

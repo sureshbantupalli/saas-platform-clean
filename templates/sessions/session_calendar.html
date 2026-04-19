@@ -1,59 +1,48 @@
-{% extends "platform/base.html" %}
-
-{% block title %}Session Calendar{% endblock %}
+{% extends "base.html" %}
 
 {% block content %}
 
-<h2>Upcoming Sessions</h2>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Upcoming Sessions</h2>
+</div>
 
-<div class="card mt-4">
-  <div class="card-body">
-
-```
-<table class="table table-striped">
-
-  <thead>
-    <tr>
-      <th>Date</th>
-      <th>Session</th>
-      <th>Start Time</th>
-      <th>Capacity</th>
-      <th>Bookings</th>
-      <th>Status</th>
-    </tr>
-  </thead>
-
-  <tbody>
-
-    {% for instance in instances %}
-
-    <tr>
-      <td>{{ instance.session_date }}</td>
-      <td>
-          <a href="/sessions/instance/{{ instance.id }}/">
-          {{ instance.schedule.template.name }}
-          </a>
-      </td>
-      <td>{{ instance.start_time }}</td>
-      <td>{{ instance.capacity }}</td>
-      <td>{{ instance.bookings.count }}</td>
-      <td>{{ instance.status }}</td>
-    </tr>
-
-    {% empty %}
-
-    <tr>
-      <td colspan="6">No upcoming sessions.</td>
-    </tr>
-
-    {% endfor %}
-
-  </tbody>
-
-</table>
-```
-
-  </div>
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Session</th>
+                        <th>Start Time</th>
+                        <th>Capacity</th>
+                        <th>Bookings</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for instance in instances %}
+                    <tr>
+                        <td>{{ instance.session_date }}</td>
+                        <td>
+                            <a href="/sessions/instance/{{ instance.id }}/">
+                                {{ instance.schedule.template.name }}
+                            </a>
+                        </td>
+                        <td>{{ instance.start_time }}</td>
+                        <td>{{ instance.capacity }}</td>
+                        <td>{{ instance.bookings.count }}</td>
+                        <td>{{ instance.status }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">No upcoming sessions.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
 {% endblock %}

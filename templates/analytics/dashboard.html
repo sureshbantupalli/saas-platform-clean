@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Analytics Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+      <h4 class="mb-0 fw-bold">Analytics Dashboard</h4>
+      <p class="text-muted small mb-0">What needs your attention today</p>
+    </div>
+  </div>
+
+  {# ── Next Best Actions ───────────────────────────────────────────────── #}
+  {% if next_actions %}
+  <div class="mb-4">
+    <h6 class="text-uppercase text-muted fw-semibold small mb-3 ls-1">
+      Next Actions
+    </h6>
+    <div class="row g-2">
+      {% for action in next_actions %}
+      <div class="col-12 col-md-6 col-xl-4">
+        <div class="card border-0 shadow-sm h-100
+          {% if action.priority == 'HIGH' %}border-start border-danger border-3
+          {% elif action.priority == 'MEDIUM' %}border-start border-warning border-3
+          {% else %}border-start border-info border-3{% endif %}">
+          <div class="card-body py-2 px-3 d-flex align-items-center justify-content-between gap-2">
+            <div class="d-flex align-items-center gap-2 flex-grow-1">
+              {% if action.priority == "HIGH" %}
+                <span class="badge bg-danger">HIGH</span>
+              {% elif action.priority == "MEDIUM" %}
+                <span class="badge bg-warning text-dark">MED</span>
+              {% else %}
+                <span class="badge bg-info text-dark">LOW</span>
+              {% endif %}
+              <div>
+                <p class="mb-0 fw-semibold small">{{ action.title }}</p>
+                <p class="mb-0 text-muted" style="font-size:0.75rem;">{{ action.count }} item{{ action.count|pluralize }}</p>
+              </div>
+            </div>
+            <a href="{{ action.cta }}" class="btn btn-sm btn-outline-secondary flex-shrink-0">View</a>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Alerts ─────────────────────────────────────────────────────────── #}
+  {% if data.alerts %}
+  <div class="mb-4">
+    <h6 class="text-uppercase text-muted fw-semibold small mb-3 ls-1">Action Required</h6>
+    <div class="row g-2">
+      {% for alert in data.alerts %}
+      <div class="col-12 col-md-6 col-xl-4">
+        <div class="alert alert-{{ alert.level }} d-flex align-items-center mb-0 py-2 px-3" role="alert">
+          {% if alert.level == "danger" %}
+            <i class="bi bi-exclamation-triangle-fill me-2 flex-shrink-0"></i>
+          {% elif alert.level == "warning" %}
+            <i class="bi bi-exclamation-circle-fill me-2 flex-shrink-0"></i>
+          {% else %}
+            <i class="bi bi-info-circle-fill me-2 flex-shrink-0"></i>
+          {% endif %}
+          <span class="small">{{ alert.message }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Summary Cards ──────────────────────────────────────────────────── #}
+  <h6 class="text-uppercase text-muted fw-semibold small mb-3 ls-1">Overview</h6>
+  <div class="row g-3 mb-4">
+
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <p class="text-muted small mb-1">Total Members</p>
+          <h3 class="fw-bold mb-0">{{ data.summary.total_members }}</h3>
+          <p class="text-success small mb-0 mt-1">
+            <i class="bi bi-person-plus"></i> {{ data.summary.new_members_last_30_days }} new (30d)
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <p class="text-muted small mb-1">Active Members</p>
+          <h3 class="fw-bold mb-0">{{ data.summary.active_members }}</h3>
+          <p class="text-muted small mb-0 mt-1">
+            <i class="bi bi-graph-up"></i> {{ data.retention.retention_rate }}% retention
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <p class="text-muted small mb-1">Revenue MTD</p>
+          <h3 class="fw-bold mb-0">₹{{ data.summary.revenue_mtd }}</h3>
+          {% if data.summary.pending_payments_count %}
+          <p class="text-warning small mb-0 mt-1">
+            <i class="bi bi-clock"></i> ₹{{ data.summary.pending_payments_amount }} pending
+          </p>
+          {% else %}
+          <p class="text-success small mb-0 mt-1"><i class="bi bi-check-circle"></i> No pending</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <p class="text-muted small mb-1">Lead Conversion</p>
+          <h3 class="fw-bold mb-0">{{ data.summary.conversion_rate }}%</h3>
+          <p class="text-muted small mb-0 mt-1">
+            <i class="bi bi-funnel"></i> {{ data.summary.converted_leads }}/{{ data.summary.total_leads }} leads
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  {# ── Charts row ─────────────────────────────────────────────────────── #}
+  <div class="row g-3 mb-4">
+
+    <div class="col-12 col-lg-7">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="fw-semibold mb-3">Revenue — Last 30 Days</h6>
+          <canvas id="revenueChart" height="120"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="fw-semibold mb-3">Lead Funnel</h6>
+          <canvas id="funnelChart" height="120"></canvas>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  {# ── Attendance + Retention + At-Risk row ───────────────────────────── #}
+  <div class="row g-3 mb-4">
+
+    <div class="col-12 col-md-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="fw-semibold mb-3">Attendance (30 Days)</h6>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted small">Total check-ins</span>
+            <span class="fw-bold">{{ data.attendance.total_last_30_days }}</span>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted small">Active sessions</span>
+            <span class="fw-bold">{{ data.attendance.total_sessions_last_30_days }}</span>
+          </div>
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="text-muted small">Avg per session</span>
+            <span class="fw-bold">{{ data.attendance.avg_per_session }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-md-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="fw-semibold mb-3">Retention</h6>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted small">Retention rate</span>
+            <span class="fw-bold text-success">{{ data.retention.retention_rate }}%</span>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted small">Churned (30d)</span>
+            <span class="fw-bold {% if data.retention.churned_last_30_days %}text-danger{% endif %}">
+              {{ data.retention.churned_last_30_days }}
+            </span>
+          </div>
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="text-muted small">Avg membership</span>
+            <span class="fw-bold">{{ data.retention.avg_membership_duration_days }}d</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-md-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="fw-semibold mb-3">Engagement</h6>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted small">Engaged (14d)</span>
+            <span class="fw-bold">{{ data.engagement.engaged_last_14_days }}</span>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted small">Engagement rate</span>
+            <span class="fw-bold text-primary">{{ data.engagement.engagement_rate }}%</span>
+          </div>
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="text-muted small">At-risk members</span>
+            <span class="fw-bold {% if data.at_risk_members.count %}text-warning{% endif %}">
+              {{ data.at_risk_members.count }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  {# ── Peak Hours ─────────────────────────────────────────────────────── #}
+  {% if data.peak_hours %}
+  <div class="row g-3 mb-4">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <h6 class="fw-semibold mb-3">Peak Hours (Last 30 Days)</h6>
+          <canvas id="peakChart" height="60"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  const palette = {
+    blue:   'rgba(37,99,235,0.85)',
+    blueLight: 'rgba(37,99,235,0.15)',
+    green:  'rgba(16,185,129,0.85)',
+    greenLight: 'rgba(16,185,129,0.15)',
+    orange: 'rgba(245,158,11,0.85)',
+    red:    'rgba(239,68,68,0.85)',
+    gray:   'rgba(100,116,139,0.85)',
+  };
+
+  // ── Revenue trend ────────────────────────────────────────────────────
+  const revData  = {{ revenue_trend_json|safe }};
+  const revCtx   = document.getElementById('revenueChart');
+  if (revCtx && revData.length) {
+    new Chart(revCtx, {
+      type: 'line',
+      data: {
+        labels:   revData.map(r => r.date),
+        datasets: [{
+          label: 'Revenue (₹)',
+          data:  revData.map(r => parseFloat(r.amount)),
+          borderColor:     palette.blue,
+          backgroundColor: palette.blueLight,
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+        }],
+      },
+      options: {
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { maxTicksLimit: 8, font: { size: 11 } }, grid: { display: false } },
+          y: { ticks: { font: { size: 11 } } },
+        },
+      },
+    });
+  } else if (revCtx) {
+    revCtx.parentElement.innerHTML += '<p class="text-muted small text-center">No revenue data yet</p>';
+  }
+
+  // ── Lead funnel ──────────────────────────────────────────────────────
+  const funnel  = {{ lead_funnel_json|safe }};
+  const fnlCtx  = document.getElementById('funnelChart');
+  if (fnlCtx) {
+    new Chart(fnlCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Converted', 'Lost', 'Active'],
+        datasets: [{
+          data:            [funnel.converted, funnel.lost, funnel.active],
+          backgroundColor: [palette.green, palette.red, palette.blue],
+          borderWidth: 2,
+        }],
+      },
+      options: {
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } },
+        },
+        cutout: '65%',
+      },
+    });
+  }
+
+  // ── Peak hours ───────────────────────────────────────────────────────
+  const peakData = {{ data.peak_hours|safe }};
+  if (Array.isArray(peakData)) {
+    const peakCtx = document.getElementById('peakChart');
+    if (peakCtx && peakData.length) {
+      new Chart(peakCtx, {
+        type: 'bar',
+        data: {
+          labels:   peakData.map(r => r.hour + ':00'),
+          datasets: [{
+            label: 'Check-ins',
+            data:  peakData.map(r => r.count),
+            backgroundColor: palette.blue,
+            borderRadius: 4,
+          }],
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { font: { size: 11 } }, grid: { display: false } },
+            y: { ticks: { font: { size: 11 } }, beginAtZero: true },
+          },
+        },
+      });
+    }
+  }
+}());
+</script>
+{% endblock %}

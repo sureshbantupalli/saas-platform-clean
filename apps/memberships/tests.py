@@ -114,10 +114,12 @@ class MembershipCreateViewTest(TestCase):
             "plan": str(self.plan.pk),
             "branch": str(self.branch.pk),
             "start_date": date.today().isoformat(),
-            "end_date": "",
-            "status": "active",
+            "discount_type": "NONE",
+            "discount_value": "",
         })
         self.assertEqual(response.status_code, 302)
+        # Redirects to payment_create with member_id in query string
+        self.assertIn("payments/create", response["Location"])
         self.assertIn(str(self.member.pk), response["Location"])
         self.assertTrue(Membership.objects.filter(member=self.member).exists())
 
@@ -129,8 +131,8 @@ class MembershipCreateViewTest(TestCase):
             "plan": str(self.plan.pk),
             "branch": str(self.branch.pk),
             "start_date": date.today().isoformat(),
-            "end_date": "",
-            "status": "active",
+            "discount_type": "NONE",
+            "discount_value": "",
         })
         self.assertEqual(response.status_code, 302)
         self.assertTrue(Membership.objects.filter(member=self.member).exists())
@@ -141,8 +143,8 @@ class MembershipCreateViewTest(TestCase):
             "plan": str(self.plan.pk),
             "branch": str(self.branch.pk),
             "start_date": date.today().isoformat(),
-            "end_date": "",
-            "status": "active",
+            "discount_type": "NONE",
+            "discount_value": "",
         })
         membership = Membership.objects.filter(member=self.member).first()
         self.assertIsNotNone(membership)

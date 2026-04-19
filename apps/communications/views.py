@@ -6,15 +6,23 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from .models import Channel, CommunicationLog, MessageTemplate, TriggerRule
+from .models import Channel, CommunicationLog, MessageTemplate, Priority, TriggerRule
 
 
 # ── Forms ─────────────────────────────────────────────────────────────────────
 
 class MessageTemplateForm(forms.ModelForm):
+    priority = forms.TypedChoiceField(
+        choices=Priority.choices,
+        coerce=int,
+        initial=Priority.MEDIUM,
+        required=False,
+        help_text="Message priority — affects retry ordering (High processed first).",
+    )
+
     class Meta:
         model  = MessageTemplate
-        fields = ["name", "channel", "subject", "content", "variables", "is_active"]
+        fields = ["name", "channel", "subject", "content", "variables", "priority", "is_active"]
         widgets = {
             "content":   forms.Textarea(attrs={"rows": 6}),
             "variables": forms.Textarea(attrs={"rows": 3}),
@@ -24,6 +32,12 @@ class MessageTemplateForm(forms.ModelForm):
             "variables": "Optional JSON documenting available variables, e.g. {\"member_name\": \"Member full name\"}.",
             "subject":   "Email only — leave blank for SMS/WhatsApp.",
         }
+
+    def clean_priority(self):
+        value = self.cleaned_data.get("priority")
+        if not value:
+            return Priority.MEDIUM
+        return int(value)
 
     def clean_variables(self):
         raw = self.cleaned_data.get("variables")

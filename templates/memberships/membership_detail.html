@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block title %}Membership — {{ membership.plan_name }}{% endblock %}
+
+{% block content %}
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show" role="alert">
+    {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Dismiss"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+    <div>
+        <a href="{% url 'members:member_detail' membership.member.pk %}"
+           class="text-muted text-decoration-none small">
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Back to Member
+        </a>
+        <h2 class="fw-bold mb-1 mt-1">{{ membership.plan_name }}</h2>
+        <span class="text-muted small">{{ membership.branch.name }}</span>
+    </div>
+
+    {% if membership.balance_amount > 0 %}
+    <a href="{% url 'payments:payment_create' %}?reference_type=membership&reference_id={{ membership.pk }}&amount={{ membership.balance_amount }}&member_id={{ membership.member.pk }}&purpose=membership"
+       class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Record Payment
+    </a>
+    {% endif %}
+</div>
+
+<div class="row g-4">
+
+    <!-- Membership Status Card -->
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <h6 class="fw-semibold mb-3">Status</h6>
+                <dl class="row mb-0">
+                    <dt class="col-6 text-muted small">Membership</dt>
+                    <dd class="col-6 mb-2">
+                        {% if membership.status == "active" %}
+                            <span class="badge bg-success">Active</span>
+                        {% elif membership.status == "pending" %}
+                            <span class="badge bg-warning text-dark">Pending</span>
+                        {% elif membership.status == "paused" %}
+                            <span class="badge bg-secondary">Paused</span>
+                        {% elif membership.status == "expired" %}
+                            <span class="badge bg-danger">Expired</span>
+                        {% elif membership.status == "cancelled" %}
+                            <span class="badge bg-dark">Cancelled</span>
+                        {% endif %}
+                    </dd>
+
+                    <dt class="col-6 text-muted small">Payment</dt>
+                    <dd class="col-6 mb-2">
+                        {% if membership.payment_status == "paid" %}
+                            <span class="badge bg-success">Paid</span>
+                        {% elif membership.payment_status == "partial" %}
+                            <span class="badge bg-warning text-dark">Partial</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Unpaid</span>
+                        {% endif %}
+                    </dd>
+
+                    <dt class="col-6 text-muted small">Start</dt>
+                    <dd class="col-6 mb-2">{{ membership.start_date }}</dd>
+
+                    <dt class="col-6 text-muted small">End</dt>
+                    <dd class="col-6 mb-2">{{ membership.final_end_date }}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <!-- Financial Breakdown Card -->
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <h6 class="fw-semibold mb-3">Financial Breakdown</h6>
+                <dl class="row mb-0">
+                    <dt class="col-7 text-muted small">Plan Amount</dt>
+                    <dd class="col-5 mb-2 text-end">₹{{ membership.base_amount|default:"—" }}</dd>
+
+                    {% if membership.discount_amount > 0 %}
+                    <dt class="col-7 text-muted small">
+                        Discount
+                        {% if membership.discount_type == "PERCENTAGE" %}
+                            ({{ membership.discount_value }}%)
+                        {% endif %}
+                    </dt>
+                    <dd class="col-5 mb-2 text-end text-danger">− ₹{{ membership.discount_amount }}</dd>
+                    {% endif %}
+
+                    <dt class="col-7 fw-semibold small border-top pt-2">Final Amount</dt>
+                    <dd class="col-5 mb-2 fw-bold border-top pt-2 text-end">₹{{ membership.fee_amount }}</dd>
+
+                    <dt class="col-7 text-muted small">Amount Paid</dt>
+                    <dd class="col-5 mb-2 text-end text-success">₹{{ membership.amount_paid }}</dd>
+
+                    <dt class="col-7 fw-semibold small">Balance Due</dt>
+                    <dd class="col-5 mb-0 fw-bold text-end {% if membership.balance_amount > 0 %}text-danger{% else %}text-success{% endif %}">
+                        ₹{{ membership.balance_amount }}
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <!-- Member Card -->
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <h6 class="fw-semibold mb-3">Member</h6>
+                <p class="mb-1 fw-semibold">
+                    <a href="{% url 'members:member_detail' membership.member.pk %}" class="text-decoration-none">
+                        {{ membership.member.first_name }} {{ membership.member.last_name }}
+                    </a>
+                </p>
+                <p class="text-muted small mb-1">{{ membership.member.email }}</p>
+                <p class="text-muted small mb-0">{{ membership.member.phone|default:"—" }}</p>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Payments Table -->
+<div class="card shadow-sm border-0 mt-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="fw-semibold mb-0">
+                <i class="bi bi-credit-card me-1" aria-hidden="true"></i>Payment History
+            </h6>
+            {% if membership.balance_amount > 0 %}
+            <a href="{% url 'payments:payment_create' %}?reference_type=membership&reference_id={{ membership.pk }}&amount={{ membership.balance_amount }}&member_id={{ membership.member.pk }}&purpose=membership"
+               class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Record Payment
+            </a>
+            {% endif %}
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Method</th>
+                        <th>Reference</th>
+                        <th>Date</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for payment in payments %}
+                    <tr>
+                        <td class="fw-semibold">₹{{ payment.amount }}</td>
+                        <td>
+                            {% if payment.status == "SUCCESS" %}
+                                <span class="badge bg-success">Paid</span>
+                            {% elif payment.status == "PENDING" %}
+                                <span class="badge bg-warning text-dark">Pending</span>
+                            {% elif payment.status == "CREATED" %}
+                                <span class="badge bg-secondary">Created</span>
+                            {% elif payment.status == "FAILED" %}
+                                <span class="badge bg-danger">Failed</span>
+                            {% else %}
+                                <span class="badge bg-light text-dark border">{{ payment.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ payment.get_payment_method_display|default:"—" }}</td>
+                        <td class="font-monospace small">{{ payment.payment_reference|default:"—" }}</td>
+                        <td class="small">{{ payment.created_at|date:"d M Y" }}</td>
+                        <td>
+                            <a href="{% url 'payments:payment_detail' payment.pk %}"
+                               class="btn btn-outline-secondary btn-sm">View</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-3">No payments recorded yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

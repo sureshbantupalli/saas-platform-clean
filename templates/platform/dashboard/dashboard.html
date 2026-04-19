@@ -4,35 +4,35 @@
 
 {% block content %}
 
-<h2>Dashboard</h2>
-
-<p>This is the SaaS platform dashboard.</p>
-
-<div class="row mt-4">
-
-```
-<div class="col-md-3">
-    <div class="card p-3">
-        <h5>Total Members</h5>
-        <h3>0</h3>
-    </div>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold mb-0">Platform Dashboard</h2>
 </div>
 
-<div class="col-md-3">
-    <div class="card p-3">
-        <h5>Active Memberships</h5>
-        <h3>0</h3>
+<div class="row g-3">
+    <div class="col-md-3 col-sm-6">
+        <div class="kpi-card">
+            <div class="kpi-title">Total Tenants</div>
+            <div class="kpi-value">{{ total_tenants|default:"0" }}</div>
+        </div>
     </div>
-</div>
-
-<div class="col-md-3">
-    <div class="card p-3">
-        <h5>Today's Sessions</h5>
-        <h3>0</h3>
+    <div class="col-md-3 col-sm-6">
+        <div class="kpi-card">
+            <div class="kpi-title">Active Tenants</div>
+            <div class="kpi-value">{{ active_tenants|default:"0" }}</div>
+        </div>
     </div>
-</div>
-```
-
+    <div class="col-md-3 col-sm-6">
+        <div class="kpi-card">
+            <div class="kpi-title">Total Members</div>
+            <div class="kpi-value">{{ total_members|default:"0" }}</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="kpi-card">
+            <div class="kpi-title">Active Memberships</div>
+            <div class="kpi-value">{{ active_memberships|default:"0" }}</div>
+        </div>
+    </div>
 </div>
 
 {% endblock %}

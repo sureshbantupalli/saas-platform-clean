@@ -2,7 +2,6 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 
 from apps.dashboard.services.widget_service import WidgetService
-from apps.core.models import Tenant
 
 
 class DashboardWidgetsAPIView(APIView):
@@ -12,12 +11,10 @@ class DashboardWidgetsAPIView(APIView):
 
     def get(self, request):
 
-        # Try tenant from request middleware
         tenant = getattr(request, "tenant", None)
 
-        # Development fallback
         if tenant is None:
-            tenant = Tenant.objects.first()
+            return Response({"error": "Tenant not found for this user."}, status=400)
 
         branch = getattr(request, "branch", None)
 

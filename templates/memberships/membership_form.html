@@ -64,43 +64,52 @@
                 </div>
             </div>
 
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Start Date</label>
-                    {{ form.start_date }}
-                    {% if form.start_date.errors %}
-                        <div class="text-danger small mt-1">{{ form.start_date.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">End Date</label>
-                    {{ form.end_date }}
-                    {% if form.end_date.errors %}
-                        <div class="text-danger small mt-1">{{ form.end_date.errors.0 }}</div>
-                    {% endif %}
-                    <small class="text-muted">Auto-calculated from plan. Override only if needed.</small>
-                </div>
-            </div>
-
-            <div class="mb-4">
-                <label class="form-label fw-semibold">Status</label>
-                {{ form.status }}
-            </div>
-
-            <div class="d-flex justify-content-between">
-                {% if member %}
-                    <a href="{% url 'members:member_detail' member.id %}" class="btn btn-outline-secondary">
-                        Cancel
-                    </a>
-                {% else %}
-                    <a href="{% url 'members:member_list' %}" class="btn btn-outline-secondary">
-                        Cancel
-                    </a>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Start Date</label>
+                {{ form.start_date }}
+                {% if form.start_date.errors %}
+                    <div class="text-danger small mt-1">{{ form.start_date.errors.0 }}</div>
                 {% endif %}
+                <div class="text-muted small mt-1">End date is auto-calculated from the plan.</div>
+            </div>
 
-                <button type="submit" class="btn btn-success px-5">
-                    Create Membership
+            <!-- Discount Section -->
+            <div class="card bg-light border-0 p-3 mb-4">
+                <h6 class="fw-semibold mb-3">Discount (Optional)</h6>
+                <div class="row">
+                    <div class="col-md-5 mb-3">
+                        <label class="form-label fw-medium">Discount Type</label>
+                        {{ form.discount_type }}
+                        {% if form.discount_type.errors %}
+                            <div class="text-danger small mt-1">{{ form.discount_type.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-5 mb-3">
+                        <label class="form-label fw-medium">Discount Value</label>
+                        {{ form.discount_value }}
+                        <div class="text-muted small mt-1">
+                            Enter amount (₹) for Fixed, or percentage (%) for Percentage discount.
+                        </div>
+                        {% if form.discount_value.errors %}
+                            <div class="text-danger small mt-1">{{ form.discount_value.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="alert alert-info small mb-0 py-2" role="note">
+                    <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                    Final amount = Plan price − Discount. Membership activates when fully paid.
+                </div>
+            </div>
+
+            <div class="d-flex flex-row flex-nowrap justify-content-between align-items-center gap-3 pt-3 mt-2"
+                 style="border-top:1px solid #e2e8f0;">
+                {% if member %}
+                    <a href="{% url 'members:member_detail' member.id %}" class="btn btn-outline-secondary">Cancel</a>
+                {% else %}
+                    <a href="{% url 'members:member_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                {% endif %}
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-check-circle me-1" aria-hidden="true"></i>Create Membership
                 </button>
             </div>
 

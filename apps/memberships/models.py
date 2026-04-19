@@ -1,5 +1,6 @@
 from datetime import timedelta
 from dateutil.relativedelta import relativedelta
+from decimal import Decimal
 import uuid
 
 from django.db import models
@@ -18,6 +19,7 @@ from apps.core.models import TenantAwareModel, Branch
 class Membership(TenantAwareModel):
 
     STATUS_CHOICES = [
+        ("pending", "Pending"),
         ("active", "Active"),
         ("paused", "Paused"),
         ("expired", "Expired"),
@@ -28,6 +30,12 @@ class Membership(TenantAwareModel):
         ("NONE", "No Discount"),
         ("FIXED", "Fixed Amount"),
         ("PERCENTAGE", "Percentage"),
+    ]
+
+    PAYMENT_STATUS_CHOICES = [
+        ("unpaid", "Unpaid"),
+        ("partial", "Partial"),
+        ("paid", "Paid"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -62,7 +70,7 @@ class Membership(TenantAwareModel):
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default="active"
+        default="pending"
     )
 
     base_amount = models.DecimalField(
@@ -88,6 +96,23 @@ class Membership(TenantAwareModel):
         max_digits=10,
         decimal_places=2,
         default=0
+    )
+
+    # -----------------------------------------
+    # Payment Tracking
+    # -----------------------------------------
+
+    payment_status = models.CharField(
+        max_length=10,
+        choices=PAYMENT_STATUS_CHOICES,
+        default="unpaid",
+        db_index=True,
+    )
+
+    amount_paid = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
     )
 
     auto_renew = models.BooleanField(default=False)
@@ -122,7 +147,7 @@ class Membership(TenantAwareModel):
         constraints = [
             models.UniqueConstraint(
                 fields=["member", "branch"],
-                condition=Q(status="active"),
+                condition=Q(status__in=["pending", "active"]),
                 name="unique_active_membership_per_branch"
             )
         ]
@@ -145,6 +170,19 @@ class Membership(TenantAwareModel):
         # Ensure tenant matches branch
         if self.branch:
             self.tenant = self.branch.tenant
+
+        # Discount must not exceed plan amount
+        if self.base_amount and self.discount_type == "FIXED":
+            if self.discount_value > self.base_amount:
+                raise ValidationError(
+                    {"discount_value": "Discount cannot exceed plan amount."}
+                )
+
+        if self.discount_type == "PERCENTAGE":
+            if self.discount_value < 0 or self.discount_value > 100:
+                raise ValidationError(
+                    {"discount_value": "Percentage discount must be between 0 and 100."}
+                )
 
     # -----------------------------------------------------
     # Save Logic
@@ -234,6 +272,10 @@ class Membership(TenantAwareModel):
             elif cycle == "YEARLY":
                 self.end_date = self.start_date + relativedelta(years=interval)
 
+        # Zero-fee memberships are immediately "paid" — no payment required
+        if self.fee_amount == 0:
+            self.payment_status = "paid"
+
         self.full_clean()
 
         self.sync_status_with_lifecycle()
@@ -301,6 +343,20 @@ class Membership(TenantAwareModel):
         return "EXPIRED"
 
     # -----------------------------------------------------
+    # Computed Financial Properties
+    # -----------------------------------------------------
+
+    @property
+    def discount_amount(self):
+        if self.base_amount:
+            return max(self.base_amount - self.fee_amount, Decimal("0"))
+        return Decimal("0")
+
+    @property
+    def balance_amount(self):
+        return max(self.fee_amount - self.amount_paid, Decimal("0"))
+
+    # -----------------------------------------------------
     # Sync Status
     # -----------------------------------------------------
 
@@ -311,8 +367,10 @@ class Membership(TenantAwareModel):
 
         if self.lifecycle_status == "EXPIRED":
             self.status = "expired"
-        else:
+        elif self.payment_status == "paid":
             self.status = "active"
+        else:
+            self.status = "pending"
 
     def __str__(self):
         return f"{self.member} - {self.branch} ({self.status})"

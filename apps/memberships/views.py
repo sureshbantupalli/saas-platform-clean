@@ -53,10 +53,9 @@ class MembershipForm(forms.ModelForm):
 
     class Meta:
         model = Membership
-        fields = ["plan", "branch", "start_date", "end_date", "status"]
+        fields = ["plan", "branch", "start_date", "discount_type", "discount_value"]
         widgets = {
             "start_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
-            "end_date": forms.DateInput(attrs={"type": "date", "class": "form-control"}),
         }
 
     def __init__(self, *args, tenant=None, **kwargs):
@@ -73,8 +72,8 @@ class MembershipForm(forms.ModelForm):
             self.fields["branch"].queryset = Branch.objects.none()
             self.fields["plan"].queryset = MembershipPlan.objects.none()
 
-        # end_date is auto-calculated by model.save() from the plan; not required from user
-        self.fields["end_date"].required = False
+        self.fields["discount_value"].required = False
+        self.fields["discount_value"].initial = 0
 
         for field in self.fields.values():
             if not isinstance(field.widget, forms.DateInput):
@@ -91,7 +90,7 @@ class MembershipFormWithMember(MembershipForm):
     )
 
     class Meta(MembershipForm.Meta):
-        fields = ["member"] + MembershipForm.Meta.fields
+        fields = ["member"] + MembershipForm.Meta.fields  # type: ignore[assignment]
 
     def __init__(self, *args, tenant=None, **kwargs):
         super().__init__(*args, tenant=tenant, **kwargs)
@@ -146,8 +145,19 @@ class MembershipCreateView(CreateView):
         return super().form_valid(form)
 
     def get_success_url(self):
-        member = self.member or self.object.member
-        return reverse("members:member_detail", args=[member.id])
+        membership = self.object
+        member     = self.member or membership.member
+        # Redirect to payment_create pre-filled with membership context.
+        # Admin can record full or partial payment.
+        base = reverse("payments:payment_create")
+        return (
+            f"{base}"
+            f"?reference_type=membership"
+            f"&reference_id={membership.pk}"
+            f"&amount={membership.fee_amount}"
+            f"&member_id={member.pk}"
+            f"&purpose=membership"
+        )
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -213,6 +223,24 @@ class MembershipPlanForm(forms.ModelForm):
 # ==============================================
 # Membership Plan Views
 # ==============================================
+
+@login_required
+def membership_detail(request, pk):
+    """Financial breakdown for a single membership."""
+    membership = get_object_or_404(
+        Membership.base_objects, pk=pk, tenant=request.user.tenant
+    )
+    from apps.payments.models import Payment
+    payments = Payment.base_objects.filter(
+        reference_type="membership",
+        reference_id=membership.pk,
+        is_deleted=False,
+    ).order_by("-created_at")
+    return render(request, "memberships/membership_detail.html", {
+        "membership": membership,
+        "payments": payments,
+    })
+
 
 @login_required
 def plan_list(request):

@@ -60,16 +60,9 @@
             </div>
 
             <!-- Actions -->
-            <div class="mt-4 d-flex justify-content-between">
-
-                <a href="{% url 'members:member_list' %}" class="btn btn-outline-secondary">
-                    Cancel
-                </a>
-
-                <button type="submit" class="btn btn-primary px-5">
-                    Save
-                </button>
-
+            <div class="d-flex flex-row flex-nowrap justify-content-between align-items-center gap-3 pt-3 mt-2" style="border-top:1px solid #e2e8f0;">
+                <a href="{% url 'members:member_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Save Member</button>
             </div>
 
         </form>

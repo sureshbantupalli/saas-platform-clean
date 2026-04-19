@@ -4,10 +4,9 @@
 {% block content %}
 
 {% if form.errors %}
-
-<div class="alert alert-danger">
+<div class="alert alert-danger mb-4">
     <strong>Please correct the following errors:</strong>
-    <ul>
+    <ul class="mb-0 mt-1">
     {% for field in form %}
         {% for error in field.errors %}
             <li>{{ field.label }}: {{ error }}</li>
@@ -17,112 +16,89 @@
 </div>
 {% endif %}
 
-<div class="container mt-4">
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold mb-0">
+        {% if enquiry.pk %}Edit Enquiry{% else %}Add Enquiry{% endif %}
+    </h2>
+</div>
 
-```
-{% if enquiry.pk %}
-    <h2 class="mb-4">Edit Enquiry</h2>
-{% else %}
-    <h2 class="mb-4">Add Enquiry</h2>
-{% endif %}
+<div class="card shadow-sm border-0">
+    <div class="card-body p-4">
+        <form method="post">
+            {% csrf_token %}
 
-<form method="post">
-    {% csrf_token %}
+            <!-- Basic Info -->
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Full Name</label>
+                    {{ form.full_name }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Phone</label>
+                    {{ form.phone }}
+                </div>
+            </div>
 
-    <!-- Basic Info -->
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <label class="form-label">Full Name</label>
-            {{ form.full_name }}
-        </div>
+            <!-- Email + Source -->
+            <div class="row g-3 mb-3">
+                {% if form.email %}
+                <div class="col-md-6">
+                    <label class="form-label">Email</label>
+                    {{ form.email }}
+                </div>
+                {% endif %}
 
-        <div class="col-md-6">
-            <label class="form-label">Phone</label>
-            {{ form.phone }}
-        </div>
+                {% if form.source %}
+                <div class="col-md-6">
+                    <label class="form-label">Lead Source</label>
+                    {{ form.source }}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Stage + Assigned -->
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Stage</label>
+                    {{ form.current_stage }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Assigned To</label>
+                    {{ form.assigned_to }}
+                </div>
+            </div>
+
+            <!-- Lost Reason + Follow-up -->
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Lost Reason</label>
+                    {{ form.lost_reason }}
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Next Follow-up Date</label>
+                    {{ form.next_followup_date }}
+                </div>
+            </div>
+
+            <!-- Notes -->
+            <div class="mb-3">
+                <label class="form-label">Notes</label>
+                {{ form.notes }}
+            </div>
+
+            <!-- Actions -->
+            <div class="d-flex flex-row flex-nowrap justify-content-end align-items-center gap-3 pt-3 mt-2" style="border-top:1px solid #e2e8f0;">
+                {% if enquiry.pk %}
+                    <a href="{% url 'crm:enquiry_detail' enquiry.pk %}" class="btn btn-outline-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                {% else %}
+                    <a href="{% url 'crm:enquiry_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-success">Create Enquiry</button>
+                {% endif %}
+            </div>
+
+        </form>
     </div>
-
-    <!-- Email + Source -->
-    <div class="row mb-3">
-
-        {% if form.email %}
-        <div class="col-md-6">
-            <label class="form-label">Email</label>
-            {{ form.email }}
-        </div>
-        {% endif %}
-
-        {% if form.source %}
-        <div class="col-md-6">
-            <label class="form-label">Lead Source</label>
-            {{ form.source }}
-        </div>
-        {% endif %}
-
-    </div>
-
-    <!-- Stage + Assigned -->
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <label class="form-label">Stage</label>
-            {{ form.current_stage }}
-        </div>
-
-        <div class="col-md-6">
-            <label class="form-label">Assigned To</label>
-            {{ form.assigned_to }}
-        </div>
-    </div>
-
-    <!-- Lost Reason + Follow-up -->
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <label class="form-label">Lost Reason</label>
-            {{ form.lost_reason }}
-        </div>
-
-        <div class="col-md-6">
-            <label class="form-label">Next Follow-up Date</label>
-            {{ form.next_followup_date }}
-        </div>
-    </div>
-
-    <!-- Notes -->
-    <div class="mb-3">
-        <label class="form-label">Notes</label>
-        {{ form.notes }}
-    </div>
-
-    <!-- Buttons -->
-    <div class="mt-4 d-flex justify-content-end gap-2">
-
-        {% if enquiry.pk %}
-            <a href="{% url 'crm:enquiry_detail' enquiry.pk %}"
-               class="btn btn-outline-secondary">
-                Cancel
-            </a>
-        {% else %}
-            <a href="{% url 'crm:enquiry_list' %}"
-               class="btn btn-outline-secondary">
-                Cancel
-            </a>
-        {% endif %}
-
-        {% if enquiry.pk %}
-            <button type="submit" class="btn btn-primary">
-                Save Changes
-            </button>
-        {% else %}
-            <button type="submit" class="btn btn-success">
-                Create Enquiry
-            </button>
-        {% endif %}
-
-    </div>
-
-</form>
-```
-
 </div>
 
 {% endblock %}

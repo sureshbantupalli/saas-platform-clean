@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Payment Settings{% endblock %}
+
+{% block content %}
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show" role="alert">
+    {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Dismiss"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold mb-0">Settings — Payments</h2>
+    <a href="{% url 'payments:payment_list' %}" class="btn btn-outline-secondary btn-sm">
+        Back to Payments
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+
+                <h5 class="fw-semibold mb-1">Razorpay Configuration</h5>
+                <p class="text-muted small mb-4">
+                    Credentials are stored encrypted. Secrets are never shown after saving.
+                </p>
+
+                {% if config and config.is_active %}
+                <div class="alert alert-success py-2 small mb-4">
+                    <i class="bi bi-check-circle me-1"></i>
+                    Razorpay is <strong>active</strong> for this account.
+                </div>
+                {% elif config %}
+                <div class="alert alert-warning py-2 small mb-4">
+                    <i class="bi bi-pause-circle me-1"></i>
+                    Razorpay is configured but <strong>inactive</strong>. Enable below to start accepting online payments.
+                </div>
+                {% else %}
+                <div class="alert alert-secondary py-2 small mb-4">
+                    <i class="bi bi-info-circle me-1"></i>
+                    No Razorpay credentials saved yet. Add your keys from the
+                    <a href="https://dashboard.razorpay.com/app/keys" target="_blank" rel="noopener">Razorpay Dashboard</a>.
+                </div>
+                {% endif %}
+
+                <form method="post" autocomplete="off">
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger small">
+                        {% for e in form.non_field_errors %}{{ e }}{% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Key ID -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">{{ form.key_id.label }}</label>
+                        {{ form.key_id }}
+                        {% if form.key_id.errors %}
+                        <div class="text-danger small mt-1">{{ form.key_id.errors.0 }}</div>
+                        {% endif %}
+                        <div class="text-muted small mt-1">Starts with <code>rzp_live_</code> or <code>rzp_test_</code>.</div>
+                    </div>
+
+                    <!-- Key Secret -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">{{ form.key_secret.label }}</label>
+                        {{ form.key_secret }}
+                        {% if form.key_secret.errors %}
+                        <div class="text-danger small mt-1">{{ form.key_secret.errors.0 }}</div>
+                        {% endif %}
+                        <div class="text-muted small mt-1">{{ form.key_secret.help_text }}</div>
+                    </div>
+
+                    <!-- Webhook Secret -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">{{ form.webhook_secret.label }}</label>
+                        {{ form.webhook_secret }}
+                        {% if form.webhook_secret.errors %}
+                        <div class="text-danger small mt-1">{{ form.webhook_secret.errors.0 }}</div>
+                        {% endif %}
+                        <div class="text-muted small mt-1">{{ form.webhook_secret.help_text }}
+                            Configure this in the Razorpay Dashboard under Webhooks.
+                        </div>
+                    </div>
+
+                    <!-- Webhook URL hint -->
+                    <div class="alert alert-light border small mb-3 py-2">
+                        <strong>Webhook URL to register in Razorpay:</strong><br>
+                        <code>https://yourdomain.com/api/payments/webhook/?gateway=razorpay</code>
+                    </div>
+
+                    <!-- Enable -->
+                    <div class="mb-4 form-check">
+                        {{ form.is_active }}
+                        <label class="form-check-label fw-semibold" for="{{ form.is_active.id_for_label }}">
+                            {{ form.is_active.label }}
+                        </label>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-floppy me-1"></i>Save Settings
+                    </button>
+                </form>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Apply Bootstrap form-control class to all text inputs
+document.querySelectorAll('input[type=text], input[type=password]').forEach(el => {
+    el.classList.add('form-control');
+});
+document.querySelectorAll('input[type=checkbox]').forEach(el => {
+    el.classList.add('form-check-input');
+});
+</script>
+{% endblock %}

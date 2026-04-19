@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Intake Forms{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold mb-0">Intake Forms</h2>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createFormModal"
+            aria-label="Create new intake form">
+        <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>New Form
+    </button>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show" role="alert">
+    {{ msg }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Dismiss"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- Status legend -->
+<div class="d-flex gap-2 mb-4 flex-wrap">
+    <span class="badge bg-success py-2 px-3">Active — accepts responses</span>
+    <span class="badge bg-secondary py-2 px-3">Draft — editing in progress</span>
+    <span class="badge bg-light text-dark border py-2 px-3">Inactive — archived</span>
+    <small class="text-muted align-self-center ms-1">Only <strong>one</strong> form can be Active at a time.</small>
+</div>
+
+{% if forms %}
+<div class="row g-3">
+    {% for form in forms %}
+    <div class="col-md-4 col-sm-6">
+        <div class="card shadow-sm border-0 h-100 card-interactive">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="fw-semibold mb-0">{{ form.name }}</h6>
+                    {% if form.status == "active" %}
+                        <span class="badge bg-success">Active</span>
+                    {% elif form.status == "draft" %}
+                        <span class="badge bg-secondary">Draft</span>
+                    {% else %}
+                        <span class="badge bg-light text-dark border">Inactive</span>
+                    {% endif %}
+                </div>
+                {% if form.description %}
+                <p class="text-muted small mb-2">{{ form.description }}</p>
+                {% endif %}
+                <p class="text-muted small mb-3">
+                    <i class="bi bi-tag me-1" aria-hidden="true"></i>
+                    {{ form.get_entity_type_display }}
+                    &nbsp;·&nbsp;
+                    <i class="bi bi-list-ul me-1" aria-hidden="true"></i>
+                    {{ form.fields.count }} field{{ form.fields.count|pluralize }}
+                    {% if form.published_at %}
+                    &nbsp;·&nbsp;
+                    <i class="bi bi-calendar-check me-1" aria-hidden="true"></i>
+                    Published {{ form.published_at|date:"d M Y" }}
+                    {% endif %}
+                </p>
+                <div class="d-flex flex-row flex-nowrap gap-1">
+                    <a href="{% url 'intake:form_builder_detail' form.id %}"
+                       class="btn btn-outline-primary btn-sm flex-fill">
+                        <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>Edit
+                    </a>
+                    {% if form.status == "active" %}
+                    <a href="{% url 'intake:form_render' form.id %}"
+                       class="btn btn-outline-secondary btn-sm" target="_blank"
+                       aria-label="Preview {{ form.name }}">
+                        <i class="bi bi-eye" aria-hidden="true"></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-ui-checks-grid fs-1 text-muted mb-3 d-block" aria-hidden="true"></i>
+        <p class="text-muted mb-3">No intake forms yet. Create your first form to start collecting data.</p>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createFormModal">
+            <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Create First Form
+        </button>
+    </div>
+</div>
+{% endif %}
+
+<!-- Create Form Modal -->
+<div class="modal fade" id="createFormModal" tabindex="-1"
+     aria-labelledby="createFormModalLabel" aria-modal="true" role="dialog">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'intake:form_create' %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title fw-semibold" id="createFormModalLabel">New Intake Form</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="id_name" class="form-label">
+                            Form Name <span class="text-danger" aria-hidden="true">*</span>
+                        </label>
+                        <input type="text" id="id_name" name="name" class="form-control"
+                               placeholder="e.g. Yoga Student Intake" required autofocus>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_description" class="form-label">Description</label>
+                        <textarea id="id_description" name="description" class="form-control" rows="2"
+                                  placeholder="Short description of when this form is used"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_entity_type" class="form-label">Used For</label>
+                        <select id="id_entity_type" name="entity_type" class="form-select">
+                            <option value="member">Member</option>
+                            <option value="lead">Lead</option>
+                            <option value="generic">Generic</option>
+                        </select>
+                    </div>
+                    <div class="alert alert-info mb-0 small" role="note">
+                        <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                        New forms start as <strong>Draft</strong>. Add fields, then click
+                        <strong>Activate</strong> to make it live.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary"
+                            data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Create Draft
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

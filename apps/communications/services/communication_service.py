@@ -20,11 +20,13 @@ import logging
 
 from django.utils import timezone
 
+from datetime import timedelta
+
 from apps.communications.models import (
-    Channel, CommunicationLog, MessageStatus, MessageTemplate, TriggerRule,
+    Channel, CommunicationLog, MessageStatus, MessageTemplate, Priority, TriggerRule,
 )
 from apps.communications.services.event_schema import (
-    extract_context, validate_event_payload,
+    extract_context, make_dedupe_key, validate_event_payload,
 )
 from apps.communications.utils.conditions import evaluate_conditions
 from apps.communications.utils.renderer import render_template, extract_placeholders
@@ -66,6 +68,7 @@ def send_message(
     reference_type: str = "",
     reference_id: str = "",
     event_type: str = "",
+    dedupe_key: str = "",
 ) -> CommunicationLog:
     """
     Render the template with context, apply rate limit, pick the right adapter,
@@ -101,7 +104,39 @@ def send_message(
         reference_type  = reference_type,
         reference_id    = str(reference_id) if reference_id else "",
         last_attempt_at = timezone.now(),
+        next_attempt_at = timezone.now(),
+        priority        = getattr(template, "priority", Priority.MEDIUM),
+        dedupe_key      = dedupe_key,
     )
+
+    # ── Deduplication ─────────────────────────────────────────────────────────
+    if dedupe_key:
+        window = timezone.now() - timedelta(hours=24)
+        duplicate = (
+            CommunicationLog.base_objects
+            .filter(
+                tenant=tenant,
+                dedupe_key=dedupe_key,
+                status=MessageStatus.SENT,
+                created_at__gte=window,
+            )
+            .exists()
+        )
+        if duplicate:
+            log.status        = MessageStatus.SKIPPED
+            log.error_message = "duplicate: already sent within 24 h"
+            log.save()
+            logger.info(
+                "[Communications] Duplicate message suppressed",
+                extra={
+                    "reason":     "duplicate",
+                    "dedupe_key": dedupe_key,
+                    "event":      event_type,
+                    "tenant_id":  str(tenant.pk) if tenant else "",
+                    "channel":    channel,
+                },
+            )
+            return log
 
     # ── No recipient ───────────────────────────────────────────────────────────
     if not recipient:
@@ -181,7 +216,10 @@ def handle_event(event_name: str, payload: dict, tenant) -> None:
 
     New events are wired in without any code change — just add a TriggerRule.
     """
-    context = extract_context(payload)
+    context    = extract_context(payload)
+    entity_id  = payload.get("entity_id", "")
+    tenant_pk  = str(tenant.pk) if tenant else ""
+    dedupe_key = make_dedupe_key(tenant_pk, event_name, entity_id) if entity_id else ""
 
     # Validate expected fields — log missing ones, never raise
     missing_fields = validate_event_payload(event_name, context)
@@ -217,6 +255,7 @@ def handle_event(event_name: str, payload: dict, tenant) -> None:
                 reference_type = context.get("reference_type", payload.get("reference_type", "")),
                 reference_id   = context.get("reference_id", payload.get("reference_id", "")),
                 event_type     = event_name,
+                dedupe_key     = dedupe_key,
             )
         except Exception as exc:
             logger.exception(

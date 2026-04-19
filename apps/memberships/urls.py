@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     MembershipViewSet,
     MembershipCreateView,
+    membership_detail,
     plan_list,
     plan_create,
     plan_edit,
@@ -19,6 +20,9 @@ urlpatterns = [
 
     # Membership assignment (member → plan)
     path("add/", MembershipCreateView.as_view(), name="membership_add"),
+
+    # Membership detail (financial breakdown)
+    path("<uuid:pk>/", membership_detail, name="membership_detail"),
 
     # Membership Plan CRUD
     path("plans/", plan_list, name="plan_list"),

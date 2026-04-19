@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./venv/Scripts/python manage.py check)",
+      "Bash(./venv/Scripts/python -c ' *)",
+      "Bash(./venv/Scripts/python manage.py check --deploy)",
+      "Bash(./venv/Scripts/python manage.py runserver)",
+      "Bash(./venv/Scripts/python manage.py runserver 8000)",
+      "Bash(python C:/Users/bsure/projects/saas-platform-clean/manage.py check)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8000/members/)",
+      "Bash(python manage.py runserver)",
+      "Bash(python *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8000/)",
+      "Bash(xargs grep *)"
+    ]
+  }
+}

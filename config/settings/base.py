@@ -51,6 +51,8 @@ INSTALLED_APPS = [
     'apps.attendance',
     'apps.sessions',
     'apps.communications.apps.CommunicationsConfig',
+    'apps.analytics.apps.AnalyticsConfig',
+    'apps.actions.apps.ActionsConfig',
 
     'members',
     'crm.apps.CrmConfig',

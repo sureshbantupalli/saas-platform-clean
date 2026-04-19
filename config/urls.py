@@ -9,6 +9,7 @@ from django.urls import reverse_lazy
 
 # Custom Auth Views
 from apps.accounts.views import login_view, logout_view
+from apps.analytics.views import dashboard_api as analytics_dashboard_api
 
 # Test Views
 from apps.core.views import test_create_member, view_member
@@ -218,5 +219,26 @@ urlpatterns = [
     path(
         "communications/",
         include(("apps.communications.urls", "communications"), namespace="communications")
+    ),
+
+    # ==========================
+    # Analytics
+    # ==========================
+    path(
+        "analytics/",
+        include(("apps.analytics.urls", "analytics"), namespace="analytics")
+    ),
+
+    # ==========================
+    # Next Best Actions
+    # ==========================
+    path(
+        "api/actions/",
+        include(("apps.actions.urls", "actions"), namespace="actions")
+    ),
+    path(
+        "api/analytics/dashboard/",
+        analytics_dashboard_api,
+        name="api_analytics_dashboard",
     ),
 ]

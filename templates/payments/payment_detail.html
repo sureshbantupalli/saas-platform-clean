@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block title %}Payment {{ payment.id|truncatechars:10 }}{% endblock %}
+
+{% block content %}
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show" role="alert">
+    {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Dismiss"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">
+    <div>
+        <a href="{% url 'payments:payment_list' %}" class="text-muted text-decoration-none small">
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>All Payments
+        </a>
+        <h2 class="fw-bold mb-1 mt-1">Payment</h2>
+        <code class="small text-muted">{{ payment.id }}</code>
+    </div>
+
+    <!-- Action buttons — only shown for non-terminal statuses -->
+    {% if payment.status != "SUCCESS" and payment.status != "REFUNDED" and payment.status != "CANCELLED" %}
+    <div class="d-flex flex-row flex-nowrap gap-2">
+        <!-- Mark Success modal trigger -->
+        <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#successModal"
+                aria-haspopup="dialog">
+            <i class="bi bi-check-circle me-1" aria-hidden="true"></i>Mark as Paid
+        </button>
+        <!-- Mark Failed -->
+        <form method="post" action="{% url 'payments:payment_mark_failed' payment.pk %}"
+              onsubmit="return confirm('Mark this payment as failed?')">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger btn-sm">
+                <i class="bi bi-x-circle me-1" aria-hidden="true"></i>Mark Failed
+            </button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+
+<div class="row g-4">
+
+    <!-- Payment Info -->
+    <div class="col-md-5">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <h6 class="fw-semibold mb-3">Payment Details</h6>
+                <dl class="row mb-0">
+                    <dt class="col-5 text-muted small">Amount</dt>
+                    <dd class="col-7 fw-bold fs-5 mb-1">₹{{ payment.amount }} {{ payment.currency }}</dd>
+
+                    <dt class="col-5 text-muted small">Status</dt>
+                    <dd class="col-7 mb-1">
+                        {% if payment.status == "SUCCESS" %}
+                            <span class="badge bg-success fs-6">Paid</span>
+                        {% elif payment.status == "PENDING" %}
+                            <span class="badge bg-warning text-dark">Pending</span>
+                        {% elif payment.status == "CREATED" %}
+                            <span class="badge bg-secondary">Created</span>
+                        {% elif payment.status == "FAILED" %}
+                            <span class="badge bg-danger">Failed</span>
+                        {% elif payment.status == "CANCELLED" %}
+                            <span class="badge bg-dark">Cancelled</span>
+                        {% elif payment.status == "REFUNDED" %}
+                            <span class="badge bg-info text-dark">Refunded</span>
+                        {% endif %}
+                    </dd>
+
+                    <dt class="col-5 text-muted small">Purpose</dt>
+                    <dd class="col-7 mb-1">{{ payment.get_purpose_display }}</dd>
+
+                    <dt class="col-5 text-muted small">Reference</dt>
+                    <dd class="col-7 mb-1 font-monospace small">
+                        {% if payment.reference_type %}
+                            {{ payment.reference_type }} /
+                            {{ payment.reference_id|default:"—" }}
+                        {% else %}—{% endif %}
+                    </dd>
+
+                    <dt class="col-5 text-muted small">Gateway</dt>
+                    <dd class="col-7 mb-1">{{ payment.get_gateway_display }}</dd>
+
+                    <dt class="col-5 text-muted small">Method</dt>
+                    <dd class="col-7 mb-1">{{ payment.get_payment_method_display|default:"—" }}</dd>
+
+                    <dt class="col-5 text-muted small">Txn Ref</dt>
+                    <dd class="col-7 mb-1">{{ payment.payment_reference|default:"—" }}</dd>
+
+                    <dt class="col-5 text-muted small">Paid At</dt>
+                    <dd class="col-7 mb-1">{{ payment.paid_at|date:"d M Y H:i"|default:"—" }}</dd>
+
+                    <dt class="col-5 text-muted small">Created</dt>
+                    <dd class="col-7 mb-1">{{ payment.created_at|date:"d M Y H:i" }}</dd>
+
+                    {% if payment.notes %}
+                    <dt class="col-5 text-muted small">Notes</dt>
+                    <dd class="col-7 mb-1">{{ payment.notes }}</dd>
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <!-- Event Timeline -->
+    <div class="col-md-7">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <h6 class="fw-semibold mb-3">
+                    <i class="bi bi-clock-history me-1" aria-hidden="true"></i>Event Log
+                </h6>
+                <ul class="list-group list-group-flush">
+                    {% for event in events %}
+                    <li class="list-group-item px-0">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <span class="badge bg-light text-dark border small">{{ event.event_type }}</span>
+                                {% if event.payload %}
+                                <div class="font-monospace text-muted mt-1" style="font-size:0.75rem">
+                                    {{ event.payload }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            <small class="text-muted ms-3 text-nowrap">
+                                {{ event.created_at|date:"d M H:i" }}
+                            </small>
+                        </div>
+                    </li>
+                    {% empty %}
+                    <li class="list-group-item px-0 text-muted">No events yet.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% if membership %}
+<!-- Membership Financial Context -->
+<div class="row g-4 mt-1">
+    <div class="col-12">
+        <div class="card shadow-sm border-0">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-semibold mb-0">
+                        <i class="bi bi-person-badge me-1" aria-hidden="true"></i>
+                        Linked Membership — {{ membership.plan_name }}
+                    </h6>
+                    <a href="{% url 'membership_detail' membership.pk %}"
+                       class="btn btn-outline-secondary btn-sm">View Membership</a>
+                </div>
+                <div class="row g-3">
+                    <div class="col-sm-2">
+                        <div class="text-muted small">Plan Amount</div>
+                        <div class="fw-semibold">₹{{ membership.base_amount }}</div>
+                    </div>
+                    {% if membership.discount_amount > 0 %}
+                    <div class="col-sm-2">
+                        <div class="text-muted small">Discount</div>
+                        <div class="fw-semibold text-danger">− ₹{{ membership.discount_amount }}</div>
+                    </div>
+                    {% endif %}
+                    <div class="col-sm-2">
+                        <div class="text-muted small">Final Amount</div>
+                        <div class="fw-bold">₹{{ membership.fee_amount }}</div>
+                    </div>
+                    <div class="col-sm-2">
+                        <div class="text-muted small">Amount Paid</div>
+                        <div class="fw-semibold text-success">₹{{ membership.amount_paid }}</div>
+                    </div>
+                    <div class="col-sm-2">
+                        <div class="text-muted small">Balance Due</div>
+                        <div class="fw-bold {% if membership.balance_amount > 0 %}text-danger{% else %}text-success{% endif %}">
+                            ₹{{ membership.balance_amount }}
+                        </div>
+                    </div>
+                    <div class="col-sm-2">
+                        <div class="text-muted small">Payment Status</div>
+                        <div>
+                            {% if membership.payment_status == "paid" %}
+                                <span class="badge bg-success">Paid</span>
+                            {% elif membership.payment_status == "partial" %}
+                                <span class="badge bg-warning text-dark">Partial</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Unpaid</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                {% if membership.balance_amount > 0 and payment.status == "SUCCESS" %}
+                <div class="mt-3">
+                    <a href="{% url 'payments:payment_create' %}?reference_type=membership&reference_id={{ membership.pk }}&amount={{ membership.balance_amount }}&member_id={{ membership.member.pk }}&purpose=membership"
+                       class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>
+                        Record Another Payment (₹{{ membership.balance_amount }} remaining)
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Mark as Paid Modal -->
+<div class="modal fade" id="successModal" tabindex="-1"
+     aria-labelledby="successModalLabel" aria-modal="true" role="dialog">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'payments:payment_mark_success' payment.pk %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title fw-semibold" id="successModalLabel">
+                        <i class="bi bi-check-circle-fill text-success me-1" aria-hidden="true"></i>
+                        Mark Payment as Paid
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="pay_method" class="form-label">Payment Method</label>
+                        <select id="pay_method" name="payment_method" class="form-select">
+                            <option value="">— Select —</option>
+                            <option value="cash"         {% if payment.payment_method == "cash"          %}selected{% endif %}>Cash</option>
+                            <option value="upi"          {% if payment.payment_method == "upi"           %}selected{% endif %}>UPI</option>
+                            <option value="bank_transfer"{% if payment.payment_method == "bank_transfer" %}selected{% endif %}>Bank Transfer</option>
+                            <option value="card"         {% if payment.payment_method == "card"          %}selected{% endif %}>Card</option>
+                            <option value="online"       {% if payment.payment_method == "online"        %}selected{% endif %}>Online</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="pay_ref" class="form-label">Transaction Reference</label>
+                        <input type="text" id="pay_ref" name="payment_reference"
+                               class="form-control" placeholder="UPI txn ID, cheque no., etc."
+                               value="{{ payment.payment_reference }}">
+                    </div>
+                    <div class="alert alert-success small mb-0" role="note">
+                        <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                        This will activate the associated membership immediately.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-circle me-1" aria-hidden="true"></i>Confirm Payment
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

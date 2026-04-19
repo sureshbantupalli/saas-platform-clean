@@ -218,7 +218,13 @@ class PaymentService:
         if payment.gateway == PaymentGateway.RAZORPAY and not order_id:
             _logger.warning(
                 "Razorpay webhook rejected: missing order_id for razorpay payment",
-                extra={"reason": "missing_order_id", "gateway": "razorpay", "payment_id": str(payment.id)},
+                extra={
+                    "reason":     "missing_order_id",
+                    "gateway":    "razorpay",
+                    "payment_id": str(payment.id),
+                    "tenant_id":  str(payment.tenant_id),
+                    "event":      event,
+                },
             )
             raise PaymentError("Webhook rejected: razorpay payment requires order_id.")
 
@@ -247,6 +253,8 @@ class PaymentService:
                     "payment_id": str(payment.id),
                     "gateway":    "razorpay",
                     "order_id":   order_id,
+                    "tenant_id":  str(payment.tenant_id),
+                    "event":      event,
                 },
             )
             raise PaymentError("Invalid Razorpay webhook signature.")
@@ -273,6 +281,8 @@ class PaymentService:
                         "received":   payment_id,
                         "gateway":    "razorpay",
                         "order_id":   order_id,
+                        "tenant_id":  str(payment.tenant_id),
+                        "event":      event,
                     },
                 )
             PaymentEvent.objects.create(
@@ -297,6 +307,8 @@ class PaymentService:
                     "received":   order_id,
                     "gateway":    "razorpay",
                     "order_id":   order_id,
+                    "tenant_id":  str(payment.tenant_id),
+                    "event":      event,
                 },
             )
             PaymentEvent.objects.create(
@@ -331,12 +343,14 @@ class PaymentService:
                 _logger.error(
                     "Razorpay webhook rejected: gateway_payment_id conflict on PENDING payment",
                     extra={
-                        "reason":     "duplicate_or_conflict",
-                        "payment_id": str(payment.id),
-                        "expected":   payment.gateway_payment_id,
-                        "received":   payment_id,
-                        "gateway":    "razorpay",
-                        "order_id":   order_id,
+                        "reason":               "payment_id_conflict",
+                        "payment_id":           str(payment.id),
+                        "existing_payment_id":  payment.gateway_payment_id,
+                        "incoming_payment_id":  payment_id,
+                        "gateway":              "razorpay",
+                        "order_id":             order_id,
+                        "tenant_id":            str(payment.tenant_id),
+                        "event":                event,
                     },
                 )
                 PaymentEvent.objects.create(
@@ -366,6 +380,8 @@ class PaymentService:
                         "received":   amount_paise,
                         "gateway":    "razorpay",
                         "order_id":   order_id,
+                        "tenant_id":  str(payment.tenant_id),
+                        "event":      event,
                     },
                 )
                 PaymentEvent.objects.create(
@@ -397,6 +413,8 @@ class PaymentService:
                         "received":   currency_received,
                         "gateway":    "razorpay",
                         "order_id":   order_id,
+                        "tenant_id":  str(payment.tenant_id),
+                        "event":      event,
                     },
                 )
                 PaymentEvent.objects.create(

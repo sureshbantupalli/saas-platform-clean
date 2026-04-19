@@ -1114,3 +1114,417 @@ class EventRegistryTests(TestCase):
         from apps.communications.services.event_schema import validate_event_payload
         ctx = {"member_name": "R", "phone": "9", "plan_name": "Gold"}
         self.assertEqual(validate_event_payload("membership_activated", ctx), [])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 15. Exponential Backoff
+# ══════════════════════════════════════════════════════════════════════════════
+
+class BackoffTests(TestCase):
+    def setUp(self):
+        self.tenant = make_tenant("BackoffGym")
+
+    def test_initial_send_sets_next_attempt_at(self):
+        template = make_template(self.tenant)
+        with patch("apps.communications.adapters.sms.SMSAdapter.send"):
+            log = send_message(template, {"member_name": "A", "amount": "100", "phone": "9999"}, self.tenant)
+        self.assertIsNotNone(log.next_attempt_at)
+
+    def test_retry_failure_sets_exponential_next_attempt_at(self):
+        from apps.communications.services.retry_service import _retry_log, BASE_DELAY_MINUTES
+        from django.utils import timezone
+
+        template = make_template(self.tenant)
+        log = CommunicationLog.base_objects.create(
+            tenant=self.tenant,
+            channel=Channel.SMS,
+            recipient="9999999999",
+            message="Hi",
+            status=MessageStatus.FAILED,
+            retry_count=1,
+        )
+
+        with patch("apps.communications.adapters.sms.SMSAdapter.send", side_effect=Exception("fail")):
+            _retry_log(log)
+
+        log.refresh_from_db()
+        self.assertEqual(log.retry_count, 2)
+        expected_delay = BASE_DELAY_MINUTES * (2 ** (2 - 1))  # 10 min
+        delta = log.next_attempt_at - timezone.now()
+        self.assertAlmostEqual(delta.total_seconds() / 60, expected_delay, delta=1)
+
+    def test_retry_runner_skips_not_yet_due(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from apps.communications.services.retry_service import retry_failed_messages
+
+        future = timezone.now() + timedelta(hours=1)
+        CommunicationLog.base_objects.create(
+            tenant=self.tenant,
+            channel=Channel.SMS,
+            recipient="9999999999",
+            message="Hi",
+            status=MessageStatus.FAILED,
+            retry_count=0,
+            next_attempt_at=future,
+        )
+        count = retry_failed_messages(tenant=self.tenant)
+        self.assertEqual(count, 0)
+
+    def test_retry_runner_includes_null_next_attempt_at(self):
+        from apps.communications.services.retry_service import retry_failed_messages
+
+        CommunicationLog.base_objects.create(
+            tenant=self.tenant,
+            channel=Channel.SMS,
+            recipient="9999999999",
+            message="Hi",
+            status=MessageStatus.FAILED,
+            retry_count=0,
+            next_attempt_at=None,
+        )
+        with patch("apps.communications.adapters.sms.SMSAdapter.send"):
+            count = retry_failed_messages(tenant=self.tenant)
+        self.assertEqual(count, 1)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 16. Safe Rate Limit Fallback
+# ══════════════════════════════════════════════════════════════════════════════
+
+class SafeRateLimitFallbackTests(TestCase):
+    def setUp(self):
+        self.tenant = make_tenant("FallbackGym")
+        from apps.communications.services.rate_limiter import _fallback_counts
+        _fallback_counts.clear()
+
+    def test_db_error_falls_back_to_in_memory(self):
+        from apps.communications.services.rate_limiter import is_rate_limited
+        with patch(
+            "apps.communications.models.CommunicationLog.base_objects",
+        ) as mock_mgr:
+            mock_mgr.filter.return_value.exclude.return_value.count.side_effect = Exception("DB down")
+            result = is_rate_limited(self.tenant)
+        self.assertFalse(result)
+
+    def test_fallback_enforces_safe_limit(self):
+        from apps.communications.services import rate_limiter
+        from apps.communications.services.rate_limiter import _fallback_is_rate_limited
+        tenant_pk = str(self.tenant.pk)
+
+        with patch.object(rate_limiter, "_get_safe_limit", return_value=3):
+            for _ in range(3):
+                _fallback_is_rate_limited(tenant_pk)
+            result = _fallback_is_rate_limited(tenant_pk)
+
+        self.assertTrue(result)
+
+    def test_fallback_zero_safe_limit_always_allows(self):
+        from apps.communications.services import rate_limiter
+        from apps.communications.services.rate_limiter import _fallback_is_rate_limited
+        tenant_pk = str(self.tenant.pk)
+
+        with patch.object(rate_limiter, "_get_safe_limit", return_value=0):
+            for _ in range(20):
+                result = _fallback_is_rate_limited(tenant_pk)
+        self.assertFalse(result)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 17. Priority Ordering
+# ══════════════════════════════════════════════════════════════════════════════
+
+class PriorityOrderingTests(TestCase):
+    def setUp(self):
+        self.tenant = make_tenant("PrioGym")
+
+    def test_template_default_priority_is_medium(self):
+        from apps.communications.models import Priority
+        tpl = make_template(self.tenant)
+        self.assertEqual(tpl.priority, Priority.MEDIUM)
+
+    def test_log_inherits_template_priority(self):
+        from apps.communications.models import Priority
+        tpl = make_template(self.tenant)
+        tpl.priority = Priority.HIGH
+        tpl.save()
+        with patch("apps.communications.adapters.sms.SMSAdapter.send"):
+            log = send_message(tpl, {"member_name": "A", "amount": "1", "phone": "9"}, self.tenant)
+        self.assertEqual(log.priority, Priority.HIGH)
+
+    def test_retry_runner_orders_by_priority(self):
+        from apps.communications.models import Priority
+        from apps.communications.services.retry_service import retry_failed_messages
+
+        order = []
+
+        def recording_send(to, message, subject=""):
+            order.append(to)
+
+        CommunicationLog.base_objects.create(
+            tenant=self.tenant, channel=Channel.SMS, recipient="LOW",
+            message="m", status=MessageStatus.FAILED, retry_count=0, priority=Priority.LOW,
+        )
+        CommunicationLog.base_objects.create(
+            tenant=self.tenant, channel=Channel.SMS, recipient="HIGH",
+            message="m", status=MessageStatus.FAILED, retry_count=0, priority=Priority.HIGH,
+        )
+
+        with patch("apps.communications.adapters.sms.SMSAdapter.send", side_effect=recording_send):
+            retry_failed_messages(tenant=self.tenant)
+
+        self.assertEqual(order[0], "HIGH")
+        self.assertEqual(order[1], "LOW")
+
+    def test_priority_choices_ordering(self):
+        from apps.communications.models import Priority
+        self.assertLess(Priority.HIGH, Priority.MEDIUM)
+        self.assertLess(Priority.MEDIUM, Priority.LOW)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 18. Deduplication
+# ══════════════════════════════════════════════════════════════════════════════
+
+class DedupeTests(TestCase):
+    def setUp(self):
+        self.tenant = make_tenant("DedupeGym")
+
+    def test_make_dedupe_key_deterministic(self):
+        from apps.communications.services.event_schema import make_dedupe_key
+        k1 = make_dedupe_key("t1", "payment_success", "e1")
+        k2 = make_dedupe_key("t1", "payment_success", "e1")
+        self.assertEqual(k1, k2)
+        self.assertEqual(len(k1), 32)
+
+    def test_make_dedupe_key_differs_on_different_inputs(self):
+        from apps.communications.services.event_schema import make_dedupe_key
+        k1 = make_dedupe_key("t1", "payment_success", "e1")
+        k2 = make_dedupe_key("t1", "payment_success", "e2")
+        self.assertNotEqual(k1, k2)
+
+    def test_duplicate_send_suppressed_within_24h(self):
+        from apps.communications.services.event_schema import make_dedupe_key
+        template = make_template(self.tenant)
+
+        entity_id  = str(uuid.uuid4())
+        tenant_pk  = str(self.tenant.pk)
+        dedupe_key = make_dedupe_key(tenant_pk, "payment_success", entity_id)
+
+        CommunicationLog.base_objects.create(
+            tenant=self.tenant,
+            channel=Channel.SMS,
+            recipient="9999999999",
+            message="already sent",
+            status=MessageStatus.SENT,
+            dedupe_key=dedupe_key,
+        )
+
+        with patch("apps.communications.adapters.sms.SMSAdapter.send") as mock_send:
+            log = send_message(
+                template,
+                {"member_name": "R", "amount": "100", "phone": "9"},
+                self.tenant,
+                dedupe_key=dedupe_key,
+            )
+
+        mock_send.assert_not_called()
+        self.assertEqual(log.status, MessageStatus.SKIPPED)
+        self.assertIn("duplicate", log.error_message)
+
+    def test_first_send_not_suppressed(self):
+        from apps.communications.services.event_schema import make_dedupe_key
+        template = make_template(self.tenant)
+        dedupe_key = make_dedupe_key(str(self.tenant.pk), "payment_success", str(uuid.uuid4()))
+
+        with patch("apps.communications.adapters.sms.SMSAdapter.send"):
+            log = send_message(
+                template,
+                {"member_name": "R", "amount": "100", "phone": "9"},
+                self.tenant,
+                dedupe_key=dedupe_key,
+            )
+        self.assertEqual(log.status, MessageStatus.SENT)
+
+    def test_handle_event_passes_dedupe_key(self):
+        template = make_template(self.tenant)
+        make_rule(self.tenant, template, event_name="payment_success")
+
+        entity_id = str(uuid.uuid4())
+        payload = {
+            "event":       "payment_success",
+            "tenant_id":   str(self.tenant.pk),
+            "entity_type": "payment",
+            "entity_id":   entity_id,
+            "data": {
+                "member_name": "Raj",
+                "phone":       "9999999999",
+                "amount":      "500",
+            },
+        }
+
+        with patch("apps.communications.adapters.sms.SMSAdapter.send"):
+            handle_event("payment_success", payload, self.tenant)
+
+        log = CommunicationLog.base_objects.filter(tenant=self.tenant).last()
+        self.assertNotEqual(log.dedupe_key, "")
+        self.assertEqual(len(log.dedupe_key), 32)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 19. SKIPPED Status Semantics
+# ══════════════════════════════════════════════════════════════════════════════
+
+class SkippedStatusTests(TestCase):
+    def setUp(self):
+        self.tenant = make_tenant("SkipGym")
+
+    def test_duplicate_produces_skipped_not_failed(self):
+        from apps.communications.services.event_schema import make_dedupe_key
+        template = make_template(self.tenant)
+        dedupe_key = make_dedupe_key(str(self.tenant.pk), "payment_success", str(uuid.uuid4()))
+
+        CommunicationLog.base_objects.create(
+            tenant=self.tenant, channel=Channel.SMS, recipient="9",
+            message="already sent", status=MessageStatus.SENT, dedupe_key=dedupe_key,
+        )
+
+        with patch("apps.communications.adapters.sms.SMSAdapter.send") as mock_send:
+            log = send_message(
+                template,
+                {"member_name": "R", "amount": "1", "phone": "9"},
+                self.tenant,
+                dedupe_key=dedupe_key,
+            )
+
+        self.assertEqual(log.status, MessageStatus.SKIPPED)
+        mock_send.assert_not_called()
+
+    def test_skipped_reason_is_duplicate(self):
+        from apps.communications.services.event_schema import make_dedupe_key
+        template = make_template(self.tenant)
+        dedupe_key = make_dedupe_key(str(self.tenant.pk), "membership_activated", str(uuid.uuid4()))
+
+        CommunicationLog.base_objects.create(
+            tenant=self.tenant, channel=Channel.SMS, recipient="9",
+            message="sent", status=MessageStatus.SENT, dedupe_key=dedupe_key,
+        )
+
+        log = send_message(
+            template,
+            {"member_name": "R", "amount": "1", "phone": "9"},
+            self.tenant,
+            dedupe_key=dedupe_key,
+        )
+
+        self.assertIn("duplicate", log.error_message)
+
+    def test_skipped_log_is_not_retried(self):
+        from apps.communications.services.retry_service import retry_failed_messages
+
+        CommunicationLog.base_objects.create(
+            tenant=self.tenant, channel=Channel.SMS, recipient="9",
+            message="msg", status=MessageStatus.SKIPPED, retry_count=0,
+        )
+
+        with patch("apps.communications.adapters.sms.SMSAdapter.send") as mock_send:
+            count = retry_failed_messages(tenant=self.tenant)
+
+        self.assertEqual(count, 0)
+        mock_send.assert_not_called()
+
+    def test_can_retry_false_for_skipped(self):
+        log = CommunicationLog(status=MessageStatus.SKIPPED, retry_count=0)
+        self.assertFalse(log.can_retry)
+
+    def test_status_choices_includes_skipped(self):
+        values = [v for v, _ in MessageStatus.choices]
+        self.assertIn("SKIPPED", values)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 20. Backoff Cap
+# ══════════════════════════════════════════════════════════════════════════════
+
+class BackoffCapTests(TestCase):
+    def setUp(self):
+        self.tenant = make_tenant("CapGym")
+
+    def test_backoff_capped_at_max(self):
+        from apps.communications.services.retry_service import _backoff_minutes, MAX_BACKOFF_MINUTES
+        # retry_count=10 → uncapped would be 5 * 2^9 = 2560 min
+        self.assertEqual(_backoff_minutes(10), MAX_BACKOFF_MINUTES)
+
+    def test_small_retry_count_not_capped(self):
+        from apps.communications.services.retry_service import (
+            _backoff_minutes, BASE_DELAY_MINUTES, MAX_BACKOFF_MINUTES,
+        )
+        delay = _backoff_minutes(1)
+        self.assertEqual(delay, BASE_DELAY_MINUTES)
+        self.assertLess(delay, MAX_BACKOFF_MINUTES)
+
+    def test_retry_next_attempt_at_respects_cap(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from apps.communications.services.retry_service import _retry_log, MAX_BACKOFF_MINUTES
+
+        log = CommunicationLog.base_objects.create(
+            tenant=self.tenant, channel=Channel.SMS, recipient="9",
+            message="Hi", status=MessageStatus.FAILED, retry_count=9,
+        )
+
+        with patch("apps.communications.adapters.sms.SMSAdapter.send", side_effect=Exception("fail")):
+            _retry_log(log)
+
+        log.refresh_from_db()
+        delta = log.next_attempt_at - timezone.now()
+        # Should be at most MAX_BACKOFF_MINUTES + small epsilon
+        self.assertLessEqual(delta.total_seconds() / 60, MAX_BACKOFF_MINUTES + 1)
+
+    def test_backoff_cap_constant_is_60(self):
+        from apps.communications.services.retry_service import MAX_BACKOFF_MINUTES
+        self.assertEqual(MAX_BACKOFF_MINUTES, 60)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 21. Dedupe Key Flexibility
+# ══════════════════════════════════════════════════════════════════════════════
+
+class DedupeKeyFlexibilityTests(TestCase):
+    def test_default_key_unchanged(self):
+        """Omitting template_id produces the same key as the original implementation."""
+        import hashlib
+        from apps.communications.services.event_schema import make_dedupe_key
+        expected = hashlib.sha256("t1:payment_success:e1".encode()).hexdigest()[:32]
+        self.assertEqual(make_dedupe_key("t1", "payment_success", "e1"), expected)
+
+    def test_template_id_changes_key(self):
+        from apps.communications.services.event_schema import make_dedupe_key
+        key_no_tpl   = make_dedupe_key("t1", "payment_success", "e1")
+        key_with_tpl = make_dedupe_key("t1", "payment_success", "e1", template_id="tpl99")
+        self.assertNotEqual(key_no_tpl, key_with_tpl)
+
+    def test_different_templates_different_keys(self):
+        from apps.communications.services.event_schema import make_dedupe_key
+        k1 = make_dedupe_key("t1", "payment_success", "e1", template_id="tpl1")
+        k2 = make_dedupe_key("t1", "payment_success", "e1", template_id="tpl2")
+        self.assertNotEqual(k1, k2)
+
+    def test_same_template_same_key(self):
+        from apps.communications.services.event_schema import make_dedupe_key
+        k1 = make_dedupe_key("t1", "payment_success", "e1", template_id="tpl1")
+        k2 = make_dedupe_key("t1", "payment_success", "e1", template_id="tpl1")
+        self.assertEqual(k1, k2)
+
+    def test_empty_template_id_behaves_like_omitted(self):
+        from apps.communications.services.event_schema import make_dedupe_key
+        k_omitted = make_dedupe_key("t1", "payment_success", "e1")
+        k_empty   = make_dedupe_key("t1", "payment_success", "e1", template_id="")
+        self.assertEqual(k_omitted, k_empty)
+
+    def test_key_is_always_32_chars(self):
+        from apps.communications.services.event_schema import make_dedupe_key
+        k1 = make_dedupe_key("t1", "payment_success", "e1")
+        k2 = make_dedupe_key("t1", "payment_success", "e1", template_id="some-template-id")
+        self.assertEqual(len(k1), 32)
+        self.assertEqual(len(k2), 32)

@@ -1,65 +1,49 @@
-{% extends "platform/base.html" %}
-
-{% block title %}Session Templates{% endblock %}
+{% extends "base.html" %}
 
 {% block content %}
 
-<h2>Session Templates</h2>
-
-<div class="card mt-4">
-    <div class="card-body">
-
-```
-    <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
-        <h5>Available Templates</h5>
-        <a href="#" class="btn btn-primary">+ Add Template</a>
-    </div>
-
-    <table class="table table-striped">
-
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Duration</th>
-                <th>Capacity</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-
-        <tbody>
-
-            {% for template in templates %}
-
-            <tr>
-                <td>{{ template.name }}</td>
-                <td>{{ template.session_type.name }}</td>
-                <td>{{ template.duration_minutes }} min</td>
-                <td>{{ template.capacity }}</td>
-                <td>
-                    {% if template.is_active %}
-                        Active
-                    {% else %}
-                        Inactive
-                    {% endif %}
-                </td>
-            </tr>
-
-            {% empty %}
-
-            <tr>
-                <td colspan="5">No session templates found.</td>
-            </tr>
-
-            {% endfor %}
-
-        </tbody>
-
-    </table>
-
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Session Templates</h2>
+    <a href="#" class="btn btn-primary btn-sm">+ Add Template</a>
 </div>
-```
 
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Duration</th>
+                        <th>Capacity</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for template in templates %}
+                    <tr>
+                        <td>{{ template.name }}</td>
+                        <td>{{ template.session_type.name }}</td>
+                        <td>{{ template.duration_minutes }} min</td>
+                        <td>{{ template.capacity }}</td>
+                        <td>
+                            {% if template.is_active %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-4">No session templates found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
 {% endblock %}

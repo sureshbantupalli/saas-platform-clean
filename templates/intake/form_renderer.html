@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+{% load intake_extras %}
+{% block title %}{{ form.name }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-7">
+
+        {# ── Preview banner (shown for draft / inactive forms) ── #}
+        {% if is_preview %}
+        <div class="alert alert-warning d-flex align-items-center gap-2 mb-4" role="alert">
+            <i class="bi bi-eye-fill flex-shrink-0" aria-hidden="true"></i>
+            <div>
+                <strong>Preview mode</strong> — This form is
+                <strong>{{ form.status }}</strong> and will not accept live responses.
+                <a href="{% url 'intake:form_builder_detail' form.id %}" class="alert-link ms-1">
+                    Return to builder
+                </a>
+            </div>
+        </div>
+        {% endif %}
+
+        {# ── Form header ── #}
+        <div class="mb-4">
+            <h2 class="fw-bold mb-1">{{ form.name }}</h2>
+            {% if form.description %}
+            <p class="text-muted mb-0">{{ form.description }}</p>
+            {% endif %}
+        </div>
+
+        {# ── Top-level validation summary (shown on POST errors) ── #}
+        {% if errors %}
+        <div class="alert alert-danger" role="alert" aria-live="assertive">
+            <strong>Please correct the following before submitting:</strong>
+            <ul class="mb-0 mt-1">
+                {% for key, msg in errors.items %}
+                    {% if key != "__form__" %}
+                    <li>{{ msg }}</li>
+                    {% endif %}
+                {% endfor %}
+                {% if errors|get_item:"__form__" %}
+                <li>{{ errors|get_item:"__form__" }}</li>
+                {% endif %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {# ── The form ── #}
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <form method="post" novalidate aria-label="{{ form.name }}">
+                    {% csrf_token %}
+
+                    {# Hidden context fields — preserved through POST/redirect cycles #}
+                    <input type="hidden" name="entity_type" value="{{ entity_type }}">
+                    <input type="hidden" name="entity_id"   value="{{ entity_id }}">
+                    <input type="hidden" name="next"        value="{{ next_url }}">
+
+                    {# ── Dynamic fields ── #}
+                    {% for field in fields %}
+                    <div class="mb-4" id="field-group-{{ field.field_key }}">
+
+                        {# Label (boolean renders its own label inline) #}
+                        {% if field.field_type != "boolean" %}
+                        <label for="field_{{ field.field_key }}" class="form-label fw-medium">
+                            {{ field.label }}
+                            {% if field.is_required %}
+                            <span class="text-danger" aria-hidden="true">*</span>
+                            {% endif %}
+                        </label>
+                        {% endif %}
+
+                        {# ── text ── #}
+                        {% if field.field_type == "text" %}
+                        <input type="text"
+                               id="field_{{ field.field_key }}"
+                               name="{{ field.field_key }}"
+                               class="form-control{% if errors|get_item:field.field_key %} is-invalid{% endif %}"
+                               value="{{ prefill_data|get_item:field.field_key }}"
+                               placeholder="{{ field.placeholder }}"
+                               {% if field.is_required %}required aria-required="true"{% endif %}>
+
+                        {# ── textarea ── #}
+                        {% elif field.field_type == "textarea" %}
+                        <textarea id="field_{{ field.field_key }}"
+                                  name="{{ field.field_key }}"
+                                  class="form-control{% if errors|get_item:field.field_key %} is-invalid{% endif %}"
+                                  rows="3"
+                                  placeholder="{{ field.placeholder }}"
+                                  {% if field.is_required %}required aria-required="true"{% endif %}>{{ prefill_data|get_item:field.field_key }}</textarea>
+
+                        {# ── number ── #}
+                        {% elif field.field_type == "number" %}
+                        <input type="number"
+                               id="field_{{ field.field_key }}"
+                               name="{{ field.field_key }}"
+                               class="form-control{% if errors|get_item:field.field_key %} is-invalid{% endif %}"
+                               value="{{ prefill_data|get_item:field.field_key }}"
+                               placeholder="{{ field.placeholder }}"
+                               {% if field.is_required %}required aria-required="true"{% endif %}>
+
+                        {# ── date ── #}
+                        {% elif field.field_type == "date" %}
+                        <input type="date"
+                               id="field_{{ field.field_key }}"
+                               name="{{ field.field_key }}"
+                               class="form-control{% if errors|get_item:field.field_key %} is-invalid{% endif %}"
+                               value="{{ prefill_data|get_item:field.field_key }}"
+                               {% if field.is_required %}required aria-required="true"{% endif %}>
+
+                        {# ── select (dropdown) ── #}
+                        {% elif field.field_type == "select" %}
+                        {% with current_val=prefill_data|get_item:field.field_key %}
+                        <select id="field_{{ field.field_key }}"
+                                name="{{ field.field_key }}"
+                                class="form-select{% if errors|get_item:field.field_key %} is-invalid{% endif %}"
+                                {% if field.is_required %}required aria-required="true"{% endif %}>
+                            <option value="">
+                                {% if field.placeholder %}{{ field.placeholder }}{% else %}Select an option…{% endif %}
+                            </option>
+                            {% for opt in field.options %}
+                            <option value="{{ opt.value }}"
+                                    {% if current_val == opt.value %}selected{% endif %}>
+                                {{ opt.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% endwith %}
+
+                        {# ── multiselect (checkboxes) ── #}
+                        {% elif field.field_type == "multiselect" %}
+                        {% with current_list=prefill_data|get_item:field.field_key %}
+                        <div class="d-flex flex-column gap-1"
+                             role="group"
+                             aria-labelledby="label_{{ field.field_key }}">
+                            <span id="label_{{ field.field_key }}" class="visually-hidden">{{ field.label }}</span>
+                            {% for opt in field.options %}
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       id="field_{{ field.field_key }}_{{ forloop.counter }}"
+                                       name="{{ field.field_key }}"
+                                       value="{{ opt.value }}"
+                                       {% if opt.value|value_in:current_list %}checked{% endif %}>
+                                <label class="form-check-label"
+                                       for="field_{{ field.field_key }}_{{ forloop.counter }}">
+                                    {{ opt.label }}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endwith %}
+
+                        {# ── radio ── #}
+                        {% elif field.field_type == "radio" %}
+                        {% with current_val=prefill_data|get_item:field.field_key %}
+                        <div class="d-flex flex-column gap-1"
+                             role="radiogroup"
+                             aria-labelledby="label_{{ field.field_key }}">
+                            <span id="label_{{ field.field_key }}" class="visually-hidden">{{ field.label }}</span>
+                            {% for opt in field.options %}
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="radio"
+                                       id="field_{{ field.field_key }}_{{ forloop.counter }}"
+                                       name="{{ field.field_key }}"
+                                       value="{{ opt.value }}"
+                                       {% if current_val == opt.value %}checked{% endif %}
+                                       {% if field.is_required %}required{% endif %}>
+                                <label class="form-check-label"
+                                       for="field_{{ field.field_key }}_{{ forloop.counter }}">
+                                    {{ opt.label }}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endwith %}
+
+                        {# ── boolean (toggle switch) ── #}
+                        {% elif field.field_type == "boolean" %}
+                        {% with current_val=prefill_data|get_item:field.field_key %}
+                        <div class="form-check form-switch">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   role="switch"
+                                   id="field_{{ field.field_key }}"
+                                   name="{{ field.field_key }}"
+                                   {% if current_val %}checked{% endif %}>
+                            <label class="form-check-label fw-medium"
+                                   for="field_{{ field.field_key }}">
+                                {{ field.label }}
+                                {% if field.is_required %}
+                                <span class="text-danger" aria-hidden="true">*</span>
+                                {% endif %}
+                            </label>
+                        </div>
+                        {% endwith %}
+
+                        {# ── scale (star-style radio row) ── #}
+                        {% elif field.field_type == "scale" %}
+                        {% with sc=field.scale_config current_val=prefill_data|get_item:field.field_key %}
+                        <div class="d-flex align-items-center gap-3 flex-wrap"
+                             role="radiogroup"
+                             aria-labelledby="label_{{ field.field_key }}">
+                            <span id="label_{{ field.field_key }}" class="visually-hidden">{{ field.label }}</span>
+                            {% if sc.min_label %}
+                            <span class="text-muted small">{{ sc.min_label }}</span>
+                            {% endif %}
+                            {% for i in "12345"|make_list %}
+                            <div class="form-check form-check-inline mb-0">
+                                <input class="form-check-input"
+                                       type="radio"
+                                       id="field_{{ field.field_key }}_{{ i }}"
+                                       name="{{ field.field_key }}"
+                                       value="{{ i }}"
+                                       {% if current_val == i %}checked{% endif %}
+                                       {% if field.is_required %}required{% endif %}>
+                                <label class="form-check-label"
+                                       for="field_{{ field.field_key }}_{{ i }}">{{ i }}</label>
+                            </div>
+                            {% endfor %}
+                            {% if sc.max_label %}
+                            <span class="text-muted small">{{ sc.max_label }}</span>
+                            {% endif %}
+                        </div>
+                        {% endwith %}
+
+                        {% endif %}
+
+                        {# Help text #}
+                        {% if field.help_text %}
+                        <div class="form-text">{{ field.help_text }}</div>
+                        {% endif %}
+
+                        {# Per-field inline error — uses get_item filter, never crashes #}
+                        {% with field_error=errors|get_item:field.field_key %}
+                        {% if field_error %}
+                        <div class="invalid-feedback d-block" role="alert" aria-live="polite">
+                            <i class="bi bi-exclamation-circle me-1" aria-hidden="true"></i>{{ field_error }}
+                        </div>
+                        {% endif %}
+                        {% endwith %}
+
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="bi bi-ui-checks fs-2 d-block mb-2" aria-hidden="true"></i>
+                        This form has no fields configured yet.
+                    </div>
+                    {% endfor %}
+
+                    {# ── Submit / Cancel — always rendered, never a configurable field type ── #}
+                    <div class="d-flex flex-row flex-nowrap justify-content-between align-items-center pt-3 mt-3"
+                         style="border-top: 1px solid #e2e8f0;">
+
+                        <a href="{{ cancel_url }}"
+                           class="btn btn-outline-secondary"
+                           aria-label="Cancel and go back">
+                            <i class="bi bi-x-circle me-1" aria-hidden="true"></i>Cancel
+                        </a>
+
+                        {% if is_preview %}
+                        <button type="button" class="btn btn-secondary" disabled
+                                aria-disabled="true" title="Activate this form to accept responses">
+                            <i class="bi bi-lock me-1" aria-hidden="true"></i>Submit (preview only)
+                        </button>
+                        {% else %}
+                        <button type="submit" class="btn btn-primary"
+                                aria-label="Submit this form">
+                            <i class="bi bi-check-circle me-1" aria-hidden="true"></i>Submit
+                        </button>
+                        {% endif %}
+
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

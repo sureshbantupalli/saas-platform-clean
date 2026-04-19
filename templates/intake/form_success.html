@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Form Submitted{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 text-center py-5">
+        <div class="mb-4" style="font-size:3rem;line-height:1" aria-hidden="true">✅</div>
+        <h3 class="fw-bold mb-2">Response Submitted</h3>
+        <p class="text-muted mb-4">
+            Your response to <strong>{{ form.name }}</strong> has been recorded.
+        </p>
+        <div class="d-flex flex-row flex-nowrap justify-content-center gap-2">
+            {% if cancel_url %}
+            <a href="{{ cancel_url }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Back
+            </a>
+            {% endif %}
+            <a href="{% url 'intake:form_builder_list' %}" class="btn btn-outline-primary">
+                <i class="bi bi-ui-checks-grid me-1" aria-hidden="true"></i>All Forms
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

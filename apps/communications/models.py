@@ -12,6 +12,13 @@ class MessageStatus(models.TextChoices):
     PENDING = "PENDING", "Pending"
     SENT    = "SENT",    "Sent"
     FAILED  = "FAILED",  "Failed"
+    SKIPPED = "SKIPPED", "Skipped"  # intentional suppression (e.g. deduplication)
+
+
+class Priority(models.IntegerChoices):
+    HIGH   = 1, "High"
+    MEDIUM = 2, "Medium"
+    LOW    = 3, "Low"
 
 
 class MessageTemplate(TenantAwareModel):
@@ -24,6 +31,7 @@ class MessageTemplate(TenantAwareModel):
         blank=True,
         help_text="Optional documentation of expected placeholder variables.",
     )
+    priority  = models.IntegerField(choices=Priority.choices, default=Priority.MEDIUM)
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -71,6 +79,9 @@ class CommunicationLog(TenantAwareModel):
     error_message   = models.TextField(blank=True)
     retry_count     = models.PositiveSmallIntegerField(default=0)
     last_attempt_at = models.DateTimeField(null=True, blank=True)
+    next_attempt_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    priority        = models.IntegerField(choices=Priority.choices, default=Priority.MEDIUM)
+    dedupe_key      = models.CharField(max_length=64, blank=True, db_index=True)
 
     class Meta:
         db_table = "communication_logs"

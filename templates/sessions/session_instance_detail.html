@@ -1,123 +1,95 @@
-{% extends "platform/base.html" %}
-
-{% block title %}Session Detail{% endblock %}
+{% extends "base.html" %}
 
 {% block content %}
 
-<h2>Session Detail</h2>
-
-<div class="card mt-4">
-  <div class="card-body">
-
-```
-<h4>{{ instance.schedule.template.name }}</h4>
-
-<p>
-  Date: {{ instance.session_date }} <br>
-  Time: {{ instance.start_time }} <br>
-  Capacity: {{ instance.capacity }}
-</p>
-```
-
-  </div>
+<div class="mb-3">
+    <a href="{% url 'sessions:session_calendar' %}" class="text-muted text-decoration-none">&larr; Back to Calendar</a>
 </div>
 
-<div class="card mt-4">
-  <div class="card-body">
+<h2 class="mb-4">Session Detail</h2>
 
-```
-<h5>Bookings</h5>
-
-<table class="table table-striped">
-
-  <thead>
-    <tr>
-      <th>Member</th>
-      <th>Status</th>
-      <th>Source</th>
-    </tr>
-  </thead>
-
-  <tbody>
-
-    {% for booking in bookings %}
-
-    <tr>
-      <td>
-        {% if booking.member %}
-          {{ booking.member }}
-        {% else %}
-          {{ booking.guest_name }}
-        {% endif %}
-      </td>
-
-      <td>{{ booking.status }}</td>
-      <td>{{ booking.booking_source }}</td>
-    </tr>
-
-    {% empty %}
-
-    <tr>
-      <td colspan="3">No bookings yet.</td>
-    </tr>
-
-    {% endfor %}
-
-  </tbody>
-
-</table>
-```
-
-  </div>
+<div class="card mb-4">
+    <div class="card-body">
+        <h5 class="card-title">{{ instance.schedule.template.name }}</h5>
+        <div class="row g-2 mt-1">
+            <div class="col-6 col-md-3">
+                <small class="text-muted d-block">Date</small>
+                <strong>{{ instance.session_date }}</strong>
+            </div>
+            <div class="col-6 col-md-3">
+                <small class="text-muted d-block">Time</small>
+                <strong>{{ instance.start_time }}</strong>
+            </div>
+            <div class="col-6 col-md-3">
+                <small class="text-muted d-block">Capacity</small>
+                <strong>{{ instance.capacity }}</strong>
+            </div>
+            <div class="col-6 col-md-3">
+                <small class="text-muted d-block">Status</small>
+                <strong>{{ instance.status }}</strong>
+            </div>
+        </div>
+    </div>
 </div>
 
-<div class="card mt-4">
-  <div class="card-body">
+<div class="card mb-4">
+    <div class="card-header"><h6 class="mb-0">Bookings</h6></div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Member</th>
+                        <th>Status</th>
+                        <th>Source</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for booking in bookings %}
+                    <tr>
+                        <td>{% if booking.member %}{{ booking.member }}{% else %}{{ booking.guest_name }}{% endif %}</td>
+                        <td>{{ booking.status }}</td>
+                        <td>{{ booking.booking_source }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3" class="text-center text-muted py-3">No bookings yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
-```
-<h5>Attendance</h5>
-
-<table class="table table-striped">
-
-  <thead>
-    <tr>
-      <th>Member</th>
-      <th>Status</th>
-      <th>Marked By</th>
-    </tr>
-  </thead>
-
-  <tbody>
-
-    {% for record in attendance %}
-
-    <tr>
-      <td>
-        {% if record.member %}
-          {{ record.member }}
-        {% else %}
-          {{ record.guest_name }}
-        {% endif %}
-      </td>
-
-      <td>{{ record.status }}</td>
-      <td>{{ record.attendance_source }}</td>
-    </tr>
-
-    {% empty %}
-
-    <tr>
-      <td colspan="3">No attendance recorded.</td>
-    </tr>
-
-    {% endfor %}
-
-  </tbody>
-
-</table>
-```
-
-  </div>
+<div class="card">
+    <div class="card-header"><h6 class="mb-0">Attendance</h6></div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Member</th>
+                        <th>Status</th>
+                        <th>Marked By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in attendance %}
+                    <tr>
+                        <td>{% if record.member %}{{ record.member }}{% else %}{{ record.guest_name }}{% endif %}</td>
+                        <td>{{ record.status }}</td>
+                        <td>{{ record.attendance_source }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3" class="text-center text-muted py-3">No attendance recorded.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
 {% endblock %}

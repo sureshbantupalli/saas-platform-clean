@@ -420,6 +420,15 @@
             <span>Message Logs</span>
         </a>
 
+        <div class="nav-section" aria-hidden="true">Analytics</div>
+
+        <a href="{% url 'analytics:dashboard' %}" role="listitem"
+           class="sidebar-link{% if '/analytics/' in request.path %} active{% endif %}"
+           {% if '/analytics/' in request.path %}aria-current="page"{% endif %}>
+            <i class="bi bi-bar-chart-line-fill" aria-hidden="true"></i>
+            <span>Dashboard</span>
+        </a>
+
         <div class="nav-section" aria-hidden="true">Forms</div>
 
         <a href="{% url 'intake:form_builder_list' %}" role="listitem"

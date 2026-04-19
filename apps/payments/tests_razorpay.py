@@ -798,3 +798,56 @@ class WebhookProductionHardeningTests(TestCase):
         self.payment.refresh_from_db()
         self.assertEqual(self.payment.status, PaymentStatus.SUCCESS)
         self.assertEqual(self.payment.gateway_payment_id, "pay_LEGIT")
+
+    def test_currency_mismatch_logs_structured_data(self):
+        """Currency mismatch log must contain reason, expected, received, tenant_id, event."""
+        body = {
+            "event": "payment.captured",
+            "payload": {"payment": {"entity": {
+                "id":       "pay_CUR2",
+                "order_id": "order_PROD001",
+                "amount":   250000,
+                "currency": "USD",
+            }}},
+        }
+        with self.assertLogs("apps.payments", level="WARNING") as cm:
+            _post_webhook(self.client, body)
+        record = next(
+            r for r in cm.records
+            if getattr(r, "reason", None) == "currency_mismatch"
+        )
+        self.assertEqual(record.expected,  "INR")
+        self.assertEqual(record.received,  "USD")
+        self.assertEqual(record.gateway,   "razorpay")
+        self.assertEqual(record.order_id,  "order_PROD001")
+        self.assertEqual(record.tenant_id, str(self.tenant.pk))
+        self.assertEqual(record.event,     "payment.captured")
+
+    def test_payment_id_conflict_on_pending_logs_structured_data(self):
+        """PENDING payment_id conflict must log reason=payment_id_conflict with existing/incoming ids."""
+        Payment.base_objects.filter(pk=self.payment.pk).update(gateway_payment_id="pay_STORED")
+        self.payment.refresh_from_db()
+
+        body = _webhook_body("payment.captured", "order_PROD001", "pay_INTRUDER", 250000)
+        with self.assertLogs("apps.payments", level="ERROR") as cm:
+            _post_webhook(self.client, body)
+        record = next(
+            r for r in cm.records
+            if getattr(r, "reason", None) == "payment_id_conflict"
+        )
+        self.assertEqual(record.existing_payment_id, "pay_STORED")
+        self.assertEqual(record.incoming_payment_id, "pay_INTRUDER")
+        self.assertEqual(record.tenant_id,           str(self.tenant.pk))
+        self.assertEqual(record.event,               "payment.captured")
+
+    def test_amount_mismatch_log_includes_tenant_id_and_event(self):
+        """Amount mismatch log must include tenant_id and event fields."""
+        body = _webhook_body("payment.captured", "order_PROD001", "pay_X", 100)
+        with self.assertLogs("apps.payments", level="WARNING") as cm:
+            _post_webhook(self.client, body)
+        record = next(
+            r for r in cm.records
+            if getattr(r, "reason", None) == "amount_mismatch"
+        )
+        self.assertEqual(record.tenant_id, str(self.tenant.pk))
+        self.assertEqual(record.event,     "payment.captured")

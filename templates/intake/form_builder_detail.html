@@ -1,0 +1,464 @@
+{% extends "base.html" %}
+{% block title %}{{ form.name }} — Form Builder{% endblock %}
+
+{% block content %}
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show" role="alert">
+    {{ msg }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Dismiss"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-3">
+    <div>
+        <a href="{% url 'intake:form_builder_list' %}" class="text-muted text-decoration-none small">
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>All Forms
+        </a>
+        <h2 class="fw-bold mb-1 mt-1">{{ form.name }}</h2>
+        {% if form.status == "active" %}
+            <span class="badge bg-success">
+                <i class="bi bi-check-circle me-1" aria-hidden="true"></i>Active
+            </span>
+            {% if form.published_at %}
+            <span class="text-muted small ms-2">Published {{ form.published_at|date:"d M Y, H:i" }}</span>
+            {% endif %}
+        {% elif form.status == "draft" %}
+            <span class="badge bg-secondary">
+                <i class="bi bi-pencil me-1" aria-hidden="true"></i>Draft
+            </span>
+        {% else %}
+            <span class="badge bg-light text-dark border">
+                <i class="bi bi-archive me-1" aria-hidden="true"></i>Inactive
+            </span>
+        {% endif %}
+    </div>
+
+    <!-- Lifecycle action buttons -->
+    <div class="d-flex flex-row flex-nowrap gap-2 align-items-center">
+
+        {% if form.status == "active" %}
+        <!-- Preview link -->
+        <a href="{% url 'intake:form_render' form.id %}" class="btn btn-outline-secondary btn-sm"
+           target="_blank" aria-label="Preview live form">
+            <i class="bi bi-eye me-1" aria-hidden="true"></i>Preview
+        </a>
+        <!-- Deactivate -->
+        <form method="post" action="{% url 'intake:form_deactivate' form.id %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-warning btn-sm"
+                    onclick="return confirm('Deactivate this form? It will stop accepting responses.')">
+                <i class="bi bi-pause-circle me-1" aria-hidden="true"></i>Deactivate
+            </button>
+        </form>
+
+        {% elif form.status == "draft" %}
+        <!-- Save Draft (no-op if already draft, but confirms save) -->
+        <span class="text-muted small align-self-center">
+            <i class="bi bi-cloud-check me-1" aria-hidden="true"></i>Auto-saved
+        </span>
+        <!-- Activate -->
+        <form method="post" action="{% url 'intake:form_activate' form.id %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-success btn-sm">
+                <i class="bi bi-play-circle me-1" aria-hidden="true"></i>Activate Form
+            </button>
+        </form>
+
+        {% else %}
+        <!-- Inactive: can re-activate -->
+        <form method="post" action="{% url 'intake:form_activate' form.id %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-success btn-sm">
+                <i class="bi bi-play-circle me-1" aria-hidden="true"></i>Re-activate
+            </button>
+        </form>
+        {% endif %}
+
+        <!-- Always: Add Field -->
+        <button class="btn btn-primary btn-sm" id="addFieldBtn">
+            <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Add Field
+        </button>
+    </div>
+</div>
+
+<!-- Activation hint for draft forms -->
+{% if form.status == "draft" %}
+<div class="alert alert-info d-flex align-items-center gap-2 mb-4" role="note">
+    <i class="bi bi-info-circle-fill flex-shrink-0" aria-hidden="true"></i>
+    <span>
+        This form is a <strong>Draft</strong>. It won't appear to users until you
+        click <strong>Activate Form</strong>. Activating will automatically deactivate
+        any currently active form.
+    </span>
+</div>
+{% endif %}
+
+<div class="row g-4">
+    <!-- Left: Field List -->
+    <div class="col-md-7">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-transparent border-bottom d-flex justify-content-between align-items-center py-2 px-3">
+                <span class="fw-medium small text-muted">Fields</span>
+                <span class="badge bg-light text-dark border" id="fieldCountBadge">
+                    {{ fields.count }} field{{ fields.count|pluralize }}
+                </span>
+            </div>
+            <div class="card-body p-0">
+                <div id="fieldList">
+                    {% for field in fields %}
+                    <div class="field-row d-flex align-items-center gap-3 p-3 border-bottom"
+                         data-field-id="{{ field.id }}">
+                        <i class="bi bi-grip-vertical text-muted" style="cursor:grab;font-size:1.1rem"
+                           aria-hidden="true"></i>
+                        <div class="flex-grow-1 min-w-0">
+                            <div class="fw-medium text-truncate">{{ field.label }}</div>
+                            <small class="text-muted">
+                                {{ field.get_field_type_display }}
+                                &nbsp;·&nbsp;<code class="small">{{ field.field_key }}</code>
+                                {% if field.is_required %}
+                                &nbsp;·&nbsp;<span class="text-danger small">Required</span>
+                                {% endif %}
+                            </small>
+                        </div>
+                        <div class="d-flex flex-row flex-nowrap gap-1">
+                            <button class="btn btn-outline-secondary btn-sm edit-field-btn"
+                                    data-field-id="{{ field.id }}"
+                                    data-label="{{ field.label }}"
+                                    data-field-key="{{ field.field_key }}"
+                                    data-field-type="{{ field.field_type }}"
+                                    data-placeholder="{{ field.placeholder }}"
+                                    data-help-text="{{ field.help_text }}"
+                                    data-is-required="{{ field.is_required|yesno:'true,false' }}"
+                                    data-options='{{ field.options|default:"[]" }}'
+                                    data-scale-config='{{ field.scale_config|default:"{}" }}'
+                                    aria-label="Edit {{ field.label }}">
+                                <i class="bi bi-pencil" aria-hidden="true"></i>
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm delete-field-btn"
+                                    data-field-id="{{ field.id }}"
+                                    aria-label="Delete {{ field.label }}">
+                                <i class="bi bi-trash" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-5 text-muted" id="emptyState">
+                        <i class="bi bi-ui-checks fs-1 d-block mb-2" aria-hidden="true"></i>
+                        <p class="mb-2">No fields yet.</p>
+                        <button class="btn btn-primary btn-sm" id="addFieldBtnEmpty">
+                            <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Add First Field
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Field Editor Panel -->
+    <div class="col-md-5">
+        <div class="card shadow-sm border-0 sticky-top" style="top:76px" id="fieldEditorPanel">
+            <div class="card-header bg-transparent border-bottom py-2 px-3">
+                <span class="fw-medium small" id="editorTitle">Select a field to edit</span>
+            </div>
+            <div class="card-body" id="editorBody">
+                <p class="text-muted small mb-0 text-center py-4">
+                    Click <strong>Add Field</strong> to create a new field,<br>
+                    or click <i class="bi bi-pencil" aria-hidden="true"></i> on an existing field to edit it.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Field editor form template (hidden) -->
+<template id="editorFormTemplate">
+<form id="fieldEditorForm" novalidate class="needs-validation">
+    <input type="hidden" id="editingFieldId" value="">
+
+    <div class="mb-3">
+        <label for="fieldLabel" class="form-label fw-medium">
+            Label <span class="text-danger" aria-hidden="true">*</span>
+        </label>
+        <input type="text" id="fieldLabel" class="form-control" placeholder="e.g. Full Name" required autofocus>
+    </div>
+
+    <div class="mb-3">
+        <label for="fieldKey" class="form-label fw-medium">
+            Field Key <span class="text-danger" aria-hidden="true">*</span>
+        </label>
+        <input type="text" id="fieldKey" class="form-control font-monospace"
+               placeholder="full_name" required>
+        <div class="form-text">Lowercase, underscores only. Used for prefill & storage.</div>
+    </div>
+
+    <div class="mb-3">
+        <label for="fieldType" class="form-label fw-medium">Field Type</label>
+        <select id="fieldType" class="form-select">
+            {# choices injected by JS #}
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label for="fieldPlaceholder" class="form-label">Placeholder</label>
+        <input type="text" id="fieldPlaceholder" class="form-control" placeholder="Optional hint text">
+    </div>
+
+    <div class="mb-3">
+        <label for="fieldHelpText" class="form-label">Help Text</label>
+        <input type="text" id="fieldHelpText" class="form-control" placeholder="Shown below the field">
+    </div>
+
+    <div class="mb-3 d-none" id="optionsSection">
+        <label for="fieldOptions" class="form-label fw-medium">Options</label>
+        <textarea id="fieldOptions" class="form-control font-monospace small" rows="4"
+                  placeholder="Morning|morning&#10;Evening|evening&#10;Label|value"></textarea>
+        <div class="form-text">One option per line. Format: <code>Display Label|stored_value</code></div>
+    </div>
+
+    <div class="mb-3 d-none" id="scaleSection">
+        <label class="form-label fw-medium">Scale Configuration</label>
+        <div class="row g-2">
+            <div class="col-6"><label class="form-label small">Min</label>
+                <input type="number" id="scaleMin" class="form-control form-control-sm" value="1"></div>
+            <div class="col-6"><label class="form-label small">Max</label>
+                <input type="number" id="scaleMax" class="form-control form-control-sm" value="5"></div>
+            <div class="col-6"><label class="form-label small">Min Label</label>
+                <input type="text" id="scaleMinLabel" class="form-control form-control-sm" placeholder="Poor"></div>
+            <div class="col-6"><label class="form-label small">Max Label</label>
+                <input type="text" id="scaleMaxLabel" class="form-control form-control-sm" placeholder="Excellent"></div>
+        </div>
+    </div>
+
+    <div class="mb-4">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="fieldRequired">
+            <label class="form-check-label" for="fieldRequired">Required field</label>
+        </div>
+    </div>
+
+    <div class="d-flex flex-row flex-nowrap gap-2">
+        <button type="button" class="btn btn-outline-secondary flex-fill" id="cancelFieldBtn">
+            Cancel
+        </button>
+        <button type="submit" class="btn btn-primary flex-fill" id="saveFieldBtn">
+            <i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save Field
+        </button>
+    </div>
+</form>
+</template>
+
+<script>
+(function () {
+    const FORM_ID   = "{{ form.id }}";
+    const CSRF      = "{{ csrf_token }}";
+    const fieldTypeChoices = [
+        {% for value, label in field_type_choices %}
+        { value: "{{ value }}", label: "{{ label }}" },
+        {% endfor %}
+    ];
+
+    const createUrl = `/intake/${FORM_ID}/fields/create/`;
+    const updateUrl = id => `/intake/${FORM_ID}/fields/${id}/update/`;
+    const deleteUrl = id => `/intake/${FORM_ID}/fields/${id}/delete/`;
+
+    const fieldList   = document.getElementById("fieldList");
+    const editorBody  = document.getElementById("editorBody");
+    const editorTitle = document.getElementById("editorTitle");
+    const tpl         = document.getElementById("editorFormTemplate");
+
+    let activeForm = null;  // the <form> element currently in the panel
+
+    // ── Open editor panel ─────────────────────────────────────────────────────
+    function openEditor(fieldData) {
+        editorTitle.textContent = fieldData.id ? "Edit Field" : "New Field";
+        const clone = tpl.content.cloneNode(true);
+        editorBody.innerHTML = "";
+        editorBody.appendChild(clone);
+        activeForm = document.getElementById("fieldEditorForm");
+
+        // Populate field type options
+        const typeSelect = document.getElementById("fieldType");
+        fieldTypeChoices.forEach(({ value, label }) => {
+            const opt = document.createElement("option");
+            opt.value = value;
+            opt.textContent = label;
+            typeSelect.appendChild(opt);
+        });
+
+        // Populate values if editing
+        if (fieldData.id) {
+            document.getElementById("editingFieldId").value = fieldData.id;
+            document.getElementById("fieldLabel").value = fieldData.label || "";
+            document.getElementById("fieldKey").value = fieldData.field_key || "";
+            typeSelect.value = fieldData.field_type || "text";
+            document.getElementById("fieldPlaceholder").value = fieldData.placeholder || "";
+            document.getElementById("fieldHelpText").value = fieldData.help_text || "";
+            document.getElementById("fieldRequired").checked = fieldData.is_required || false;
+
+            const opts = fieldData.options || [];
+            document.getElementById("fieldOptions").value =
+                opts.map(o => `${o.label}|${o.value}`).join("\n");
+
+            const sc = fieldData.scale_config || {};
+            document.getElementById("scaleMin").value = sc.min || 1;
+            document.getElementById("scaleMax").value = sc.max || 5;
+            document.getElementById("scaleMinLabel").value = sc.min_label || "";
+            document.getElementById("scaleMaxLabel").value = sc.max_label || "";
+        }
+
+        toggleTypeExtras(typeSelect.value);
+        typeSelect.addEventListener("change", e => toggleTypeExtras(e.target.value));
+
+        // Auto-derive field_key from label for new fields
+        document.getElementById("fieldLabel").addEventListener("input", function () {
+            if (!document.getElementById("editingFieldId").value) {
+                document.getElementById("fieldKey").value = this.value
+                    .toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+            }
+        });
+
+        document.getElementById("cancelFieldBtn").addEventListener("click", closeEditor);
+        activeForm.addEventListener("submit", handleSave);
+        document.getElementById("fieldLabel").focus();
+    }
+
+    function closeEditor() {
+        editorTitle.textContent = "Select a field to edit";
+        editorBody.innerHTML =
+            `<p class="text-muted small mb-0 text-center py-4">
+                Click <strong>Add Field</strong> to create a new field,<br>
+                or click the edit icon on an existing field.
+             </p>`;
+        activeForm = null;
+    }
+
+    function toggleTypeExtras(type) {
+        const optionTypes = ["select", "multiselect", "radio"];
+        document.getElementById("optionsSection")
+            .classList.toggle("d-none", !optionTypes.includes(type));
+        document.getElementById("scaleSection")
+            .classList.toggle("d-none", type !== "scale");
+    }
+
+    // ── Save field ────────────────────────────────────────────────────────────
+    function handleSave(e) {
+        e.preventDefault();
+        const type = document.getElementById("fieldType").value;
+
+        let options = [];
+        if (["select", "multiselect", "radio"].includes(type)) {
+            options = document.getElementById("fieldOptions").value
+                .split("\n").map(l => l.trim()).filter(Boolean)
+                .map(l => {
+                    const [label, value] = l.split("|");
+                    return { label: label.trim(), value: (value || label).trim() };
+                });
+        }
+
+        let scaleConfig = {};
+        if (type === "scale") {
+            scaleConfig = {
+                min:       parseInt(document.getElementById("scaleMin").value) || 1,
+                max:       parseInt(document.getElementById("scaleMax").value) || 5,
+                min_label: document.getElementById("scaleMinLabel").value,
+                max_label: document.getElementById("scaleMaxLabel").value,
+            };
+        }
+
+        const label = document.getElementById("fieldLabel").value.trim();
+        const key   = document.getElementById("fieldKey").value.trim();
+
+        if (!label || !key) {
+            document.getElementById("fieldLabel").classList.toggle("is-invalid", !label);
+            document.getElementById("fieldKey").classList.toggle("is-invalid", !key);
+            return;
+        }
+
+        const payload = {
+            label,
+            field_key:    key,
+            field_type:   type,
+            placeholder:  document.getElementById("fieldPlaceholder").value.trim(),
+            help_text:    document.getElementById("fieldHelpText").value.trim(),
+            is_required:  document.getElementById("fieldRequired").checked,
+            options,
+            scale_config: scaleConfig,
+        };
+
+        const id  = document.getElementById("editingFieldId").value;
+        const url = id ? updateUrl(id) : createUrl;
+        const btn = document.getElementById("saveFieldBtn");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving…';
+
+        fetch(url, {
+            method:  "POST",
+            headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+            body:    JSON.stringify(payload),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) { alert(data.error); btn.disabled = false; return; }
+            location.reload();
+        })
+        .catch(() => { btn.disabled = false; btn.textContent = "Save Field"; });
+    }
+
+    // ── Field list delegation ─────────────────────────────────────────────────
+    fieldList.addEventListener("click", function (e) {
+        const editBtn = e.target.closest(".edit-field-btn");
+        const delBtn  = e.target.closest(".delete-field-btn");
+
+        if (editBtn) {
+            let opts = [], sc = {};
+            try { opts = JSON.parse(editBtn.dataset.options || "[]"); } catch {}
+            try { sc   = JSON.parse(editBtn.dataset.scaleConfig || "{}"); } catch {}
+            openEditor({
+                id:           editBtn.dataset.fieldId,
+                label:        editBtn.dataset.label,
+                field_key:    editBtn.dataset.fieldKey,
+                field_type:   editBtn.dataset.fieldType,
+                placeholder:  editBtn.dataset.placeholder,
+                help_text:    editBtn.dataset.helpText,
+                is_required:  editBtn.dataset.isRequired === "true",
+                options:      opts,
+                scale_config: sc,
+            });
+        }
+
+        if (delBtn) {
+            const id = delBtn.dataset.fieldId;
+            if (!confirm("Delete this field? This cannot be undone.")) return;
+            delBtn.disabled = true;
+            fetch(deleteUrl(id), {
+                method: "POST", headers: { "X-CSRFToken": CSRF }
+            })
+            .then(r => r.json())
+            .then(() => {
+                const row = fieldList.querySelector(`.field-row[data-field-id="${id}"]`);
+                if (row) row.remove();
+                // Update count badge
+                const badge = document.getElementById("fieldCountBadge");
+                if (badge) {
+                    const n = fieldList.querySelectorAll(".field-row").length;
+                    badge.textContent = `${n} field${n !== 1 ? "s" : ""}`;
+                }
+                closeEditor();
+            });
+        }
+    });
+
+    // ── Add Field buttons ─────────────────────────────────────────────────────
+    document.getElementById("addFieldBtn").addEventListener("click", () => openEditor({}));
+    const emptyBtn = document.getElementById("addFieldBtnEmpty");
+    if (emptyBtn) emptyBtn.addEventListener("click", () => openEditor({}));
+
+})();
+</script>
+
+{% endblock %}

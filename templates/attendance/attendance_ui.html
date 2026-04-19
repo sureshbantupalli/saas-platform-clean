@@ -1,337 +1,198 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Attendance</title>
+{% extends "base.html" %}
+{% load static %}
 
-    <style>
-        body {
-            font-family: Arial;
-            padding: 20px;
-            background: #f5f5f5;
-        }
+{% block content %}
 
-        input, select {
-            width: 300px;
-            padding: 10px;
-            font-size: 16px;
-        }
+<form method="post" style="display:none;">{% csrf_token %}</form>
 
-        .result-item {
-            background: white;
-            padding: 8px;
-            margin-top: 5px;
-            cursor: pointer;
-            border: 1px solid #ddd;
-        }
+<h2 class="mb-3">Attendance</h2>
 
-        .card {
-            background: white;
-            padding: 15px;
-            margin-top: 20px;
-            width: 300px;
-            border-radius: 5px;
-        }
+<!-- Mode Switch -->
+<div class="btn-group mb-4" role="group" aria-label="Attendance mode">
+    <input type="radio" class="btn-check" name="mode" id="modeWalkin" value="walkin" checked>
+    <label class="btn btn-outline-primary" for="modeWalkin">Walk-in</label>
 
-        .btn {
-            padding: 10px;
-            background: green;
-            color: white;
-            border: none;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 10px;
-        }
-
-        .btn:disabled {
-            background: gray;
-        }
-
-        .mode-switch {
-            margin-bottom: 20px;
-        }
-
-        .success {
-            display:none;
-            background:#d4edda;
-            color:#155724;
-            padding:10px;
-            margin-top:10px;
-            border-radius:5px;
-        }
-    </style>
-</head>
-
-<body>
-
-<form method="post" style="display:none;">
-    {% csrf_token %}
-</form>
-
-<h2>Attendance</h2>
-
-<div class="mode-switch">
-    <label>
-        <input type="radio" name="mode" value="walkin" checked onchange="switchMode()"> Walk-in
-    </label>
-
-    <label style="margin-left: 20px;">
-        <input type="radio" name="mode" value="session" onchange="switchMode()"> Session
-    </label>
+    <input type="radio" class="btn-check" name="mode" id="modeSession" value="session">
+    <label class="btn btn-outline-primary" for="modeSession">Session</label>
 </div>
 
-<!-- WALK-IN -->
+<!-- WALK-IN SECTION -->
 <div id="walkin-section">
-
-    <input type="text" id="search" placeholder="Search member..." />
-    <div id="results"></div>
-
-    <div id="member-card" class="card" style="display:none;">
-        <h3 id="name"></h3>
-        <p id="phone"></p>
-
-        <p id="plan">Plan: -</p>
-        <p id="sessions">Remaining Sessions: -</p>
-
-        <button id="markBtn" class="btn" onclick="markAttendance()">Mark Present</button>
-        <p id="warning" style="color:red; display:none;">No sessions remaining</p>
-
-        <!-- ✅ MOVED INSIDE CARD -->
-        <div id="successMsg" class="success">
-            Attendance marked successfully
+    <div class="card mb-3">
+        <div class="card-body">
+            <label class="form-label fw-semibold">Search Member</label>
+            <input type="text" id="search" class="form-control" placeholder="Type name or phone…">
+            <div id="results" class="mt-2"></div>
         </div>
     </div>
 
+    <div id="member-card" class="card" style="display:none;">
+        <div class="card-body">
+            <h5 id="name" class="card-title mb-1"></h5>
+            <p id="phone" class="text-muted small mb-2"></p>
+            <div class="row g-2 mb-3">
+                <div class="col-6">
+                    <small class="text-muted d-block">Plan</small>
+                    <strong id="plan">—</strong>
+                </div>
+                <div class="col-6">
+                    <small class="text-muted d-block">Remaining Sessions</small>
+                    <strong id="sessions">—</strong>
+                </div>
+            </div>
+            <p id="warning" class="text-danger small" style="display:none;">No sessions remaining</p>
+            <button id="markBtn" class="btn btn-success w-100" onclick="markAttendance()">Mark Present</button>
+            <div id="successMsg" class="alert alert-success mt-3" style="display:none;">
+                Attendance marked successfully
+            </div>
+        </div>
+    </div>
 </div>
 
-<!-- SESSION -->
+<!-- SESSION SECTION -->
 <div id="session-section" style="display:none;">
-    <h3>Select Session</h3>
-    <select id="sessionSelect">
-        <option value="">-- Select Session --</option>
-    </select>
+    <div class="card mb-3">
+        <div class="card-body">
+            <label class="form-label fw-semibold">Select Session</label>
+            <select id="sessionSelect" class="form-select">
+                <option value="">— Select Session —</option>
+            </select>
+        </div>
+    </div>
     <div id="session-members"></div>
 </div>
 
 <script>
-
 let selectedMemberId = null;
 
-/* =========================
-   CSRF
-========================= */
 function getCSRFToken() {
     const name = "csrftoken";
-    const cookies = document.cookie.split(";");
-
-    for (let cookie of cookies) {
+    for (let cookie of document.cookie.split(";")) {
         cookie = cookie.trim();
-        if (cookie.startsWith(name + "=")) {
-            return cookie.substring(name.length + 1);
-        }
+        if (cookie.startsWith(name + "=")) return cookie.substring(name.length + 1);
     }
     return null;
 }
 
-/* =========================
-   MODE SWITCH
-========================= */
-function switchMode() {
-    const mode = document.querySelector('input[name="mode"]:checked').value;
-
-    document.getElementById("walkin-section").style.display = mode === "walkin" ? "block" : "none";
-    document.getElementById("session-section").style.display = mode === "session" ? "block" : "none";
-
-    if (mode === "session") loadSessions();
-}
-
-/* =========================
-   SEARCH
-========================= */
-document.getElementById("search").addEventListener("input", function() {
-
-    const query = this.value;
-
-    fetch(`/attendance/api/search-members/?q=${query}`, {
-        credentials: "include"
-    })
-    .then(res => res.json())
-    .then(data => {
-
-        let html = "";
-
-        data.forEach(m => {
-            html += `
-                <div class="result-item"
-                     onclick='selectMember(${JSON.stringify(m)})'>
-                     ${m.name} (${m.phone || 'No phone'})
-                </div>
-            `;
-        });
-
-        document.getElementById("results").innerHTML = html;
+document.querySelectorAll('input[name="mode"]').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+        const mode = this.value;
+        document.getElementById("walkin-section").style.display = mode === "walkin" ? "block" : "none";
+        document.getElementById("session-section").style.display = mode === "session" ? "block" : "none";
+        if (mode === "session") loadSessions();
     });
 });
 
-/* =========================
-   SELECT MEMBER
-========================= */
+document.getElementById("search").addEventListener("input", function() {
+    const query = this.value;
+    fetch(`/attendance/api/search-members/?q=${query}`, { credentials: "include" })
+        .then(res => res.json())
+        .then(data => {
+            let html = "";
+            data.forEach(m => {
+                html += `<div class="list-group-item list-group-item-action" style="cursor:pointer;"
+                              onclick='selectMember(${JSON.stringify(m)})'>
+                              <strong>${m.name}</strong> <span class="text-muted small">${m.phone || ''}</span>
+                         </div>`;
+            });
+            document.getElementById("results").innerHTML = html ? `<div class="list-group">${html}</div>` : "";
+        });
+});
+
 function selectMember(member) {
-
     selectedMemberId = member.id;
-
     document.getElementById("member-card").style.display = "block";
-
     document.getElementById("name").innerText = member.name;
-    document.getElementById("phone").innerText = member.phone;
-
-    document.getElementById("plan").innerText = "Plan: " + member.plan;
-    document.getElementById("sessions").innerText = "Remaining Sessions: " + member.remaining_sessions;
+    document.getElementById("phone").innerText = member.phone || "";
+    document.getElementById("plan").innerText = member.plan || "—";
+    document.getElementById("sessions").innerText = member.remaining_sessions;
 
     const btn = document.getElementById("markBtn");
     const warning = document.getElementById("warning");
-
-    if (member.remaining_sessions <= 0) {
-        btn.disabled = true;
-        warning.style.display = "block";
-    } else {
-        btn.disabled = false;
-        warning.style.display = "none";
-    }
-
+    const noSessions = member.remaining_sessions <= 0;
+    btn.disabled = noSessions;
+    warning.style.display = noSessions ? "block" : "none";
     document.getElementById("results").innerHTML = "";
+    document.getElementById("successMsg").style.display = "none";
 }
 
-/* =========================
-   MARK ATTENDANCE
-========================= */
 async function markAttendance() {
-
-    if (!selectedMemberId) {
-        alert("Please select a member first");
-        return;
-    }
-
+    if (!selectedMemberId) return;
     const res = await fetch('/attendance/api/mark-attendance/', {
         method: "POST",
         credentials: "same-origin",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": getCSRFToken()
-        },
-        body: JSON.stringify({
-            member_id: selectedMemberId,
-            attendance_type: "walkin"
-        })
+        headers: { "Content-Type": "application/json", "X-CSRFToken": getCSRFToken() },
+        body: JSON.stringify({ member_id: selectedMemberId, attendance_type: "walkin" })
     });
-
     const data = await res.json();
-
     if (data.message) {
-
         const msg = document.getElementById("successMsg");
         msg.style.display = "block";
+        setTimeout(() => { msg.style.display = "none"; }, 2000);
 
-        setTimeout(() => {
-            msg.style.display = "none";
-        }, 2000);
-
-        let sessionsText = document.getElementById("sessions").innerText;
-        let current = parseInt(sessionsText.replace("Remaining Sessions: ", ""));
-
+        const sessEl = document.getElementById("sessions");
+        let current = parseInt(sessEl.innerText) || 0;
         let updated = Math.max(current - 1, 0);
-
-        document.getElementById("sessions").innerText = "Remaining Sessions: " + updated;
-
-        const btn = document.getElementById("markBtn");
-        const warning = document.getElementById("warning");
-
+        sessEl.innerText = updated;
         if (updated <= 0) {
-            btn.disabled = true;
-            warning.style.display = "block";
+            document.getElementById("markBtn").disabled = true;
+            document.getElementById("warning").style.display = "block";
         }
-
     } else {
-        alert("❌ " + JSON.stringify(data));
+        alert("Error: " + JSON.stringify(data));
     }
 }
 
-/* =========================
-   LOAD SESSIONS
-========================= */
 function loadSessions() {
-
     fetch("/attendance/api/bookings/")
-    .then(res => res.json())
-    .then(data => {
-
-        let html = '<option value="">-- Select Session --</option>';
-
-        data.forEach(session => {
-            html += `<option value="${session.id}">${session.name || 'Session'}</option>`;
+        .then(res => res.json())
+        .then(data => {
+            let html = '<option value="">— Select Session —</option>';
+            data.forEach(session => {
+                html += `<option value="${session.id}">${session.name || 'Session'}</option>`;
+            });
+            document.getElementById("sessionSelect").innerHTML = html;
         });
-
-        document.getElementById("sessionSelect").innerHTML = html;
-    });
 }
 
-/* =========================
-   LOAD SESSION MEMBERS
-========================= */
 document.getElementById("sessionSelect").addEventListener("change", function() {
-
     const bookingId = this.value;
     if (!bookingId) return;
-
     fetch(`/attendance/api/sessions/${bookingId}/members/`)
-    .then(res => res.json())
-    .then(data => {
-
-        let html = "<h4>Members</h4>";
-
-        data.members.forEach(m => {
-            html += `
-                <div class="card">
-                    <b>${m.name}</b>
-                    <button class="btn" onclick="markSessionAttendance('${bookingId}', '${m.id}')">
-                        Mark Present
-                    </button>
-                </div>
-            `;
+        .then(res => res.json())
+        .then(data => {
+            let html = '<h6 class="mb-2">Members</h6>';
+            data.members.forEach(m => {
+                html += `<div class="card mb-2">
+                    <div class="card-body d-flex justify-content-between align-items-center py-2">
+                        <strong>${m.name}</strong>
+                        <button class="btn btn-sm btn-success"
+                                onclick="markSessionAttendance('${bookingId}', '${m.id}')">
+                            Mark Present
+                        </button>
+                    </div>
+                </div>`;
+            });
+            document.getElementById("session-members").innerHTML = html;
         });
-
-        document.getElementById("session-members").innerHTML = html;
-    });
 });
 
-/* =========================
-   MARK SESSION ATTENDANCE
-========================= */
 function markSessionAttendance(bookingId, memberId) {
-
     fetch("/attendance/api/mark-attendance/", {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": getCSRFToken()
-        },
+        headers: { "Content-Type": "application/json", "X-CSRFToken": getCSRFToken() },
         credentials: "include",
-        body: JSON.stringify({
-            member_id: memberId,
-            booking_id: bookingId,
-            attendance_type: "session"
-        })
+        body: JSON.stringify({ member_id: memberId, booking_id: bookingId, attendance_type: "session" })
     })
     .then(res => res.json())
     .then(data => {
         if (data.message) {
-            alert("✅ Session attendance marked!");
+            alert("Attendance marked!");
         } else {
-            alert(data.error);
+            alert(data.error || "Error marking attendance");
         }
     });
 }
-
 </script>
 
-</body>
-</html>
+{% endblock %}

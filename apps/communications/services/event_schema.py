@@ -21,6 +21,7 @@ Wire format (what handle_event() receives as payload):
 The "data" dict is used as the template rendering context.
 """
 from __future__ import annotations
+import hashlib
 from dataclasses import dataclass, field
 
 
@@ -140,3 +141,28 @@ def validate_event_payload(event_name: str, context: dict) -> list:
 
 def get_event_definition(event_name: str) -> EventDefinition | None:
     return EVENT_REGISTRY.get(event_name)
+
+
+def make_dedupe_key(
+    tenant_id: str,
+    event_name: str,
+    entity_id: str,
+    *,
+    template_id: str = "",
+) -> str:
+    """
+    SHA-256 fingerprint (32 hex chars) used to detect duplicate sends within 24 h.
+
+    Default (no template_id): one dedupe key per tenant+event+entity — all
+    templates for the same event share the key, so only the first fires.
+
+    With template_id: one dedupe key per tenant+event+entity+template — each
+    template fires once independently. Use this when multiple templates handle
+    the same event for different channels or audiences.
+
+    Backward compatible: omitting template_id produces the same key as before.
+    """
+    parts = f"{tenant_id}:{event_name}:{entity_id}"
+    if template_id:
+        parts = f"{parts}:{template_id}"
+    return hashlib.sha256(parts.encode()).hexdigest()[:32]
