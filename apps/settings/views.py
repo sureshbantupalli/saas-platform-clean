@@ -115,8 +115,11 @@ def payments_settings(request):
 @login_required
 @_require_tenant
 def communications_settings(request):
-    # TODO: apply @require_permission("settings.view") once RBAC is enforced
-    # TODO: load channel configs (Phase 4 – Communications)
+    from apps.settings.whatsapp.models import Tone, CTAStyle
+    from apps.settings.whatsapp.services import WhatsAppSettingsService
+
+    wa_settings = WhatsAppSettingsService.get_settings(request.tenant)
+
     channels = [
         {
             'key':         'sms',
@@ -137,7 +140,20 @@ def communications_settings(request):
             'description': 'Configure SMTP or transactional email (SendGrid, SES, etc.)',
         },
     ]
+
+    if request.method == 'POST' and 'save_whatsapp' in request.POST:
+        WhatsAppSettingsService.save_settings(request.tenant, {
+            'tone':              request.POST.get('tone',              'FRIENDLY'),
+            'signature_enabled': request.POST.get('signature_enabled') == 'on',
+            'cta_style':         request.POST.get('cta_style',         'NONE'),
+        })
+        messages.success(request, 'WhatsApp branding settings saved.')
+        return redirect('settings:communications')
+
     return render(request, 'settings/communications.html', {
-        'active_tab': 'communications',
-        'channels':   channels,
+        'active_tab':  'communications',
+        'channels':    channels,
+        'wa_settings': wa_settings,
+        'tone_choices': Tone.choices,
+        'cta_choices':  CTAStyle.choices,
     })

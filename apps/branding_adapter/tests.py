@@ -511,3 +511,244 @@ class BrandingCacheIsolationTest(TestCase):
         ctx_b = BrandingAdapter.get_branding_context(self.tenant_b)
         self.assertEqual(ctx_a['primary_color'], '#ff0000')
         self.assertEqual(ctx_b['primary_color'], '#0000ff')
+
+
+# ── WhatsAppBrandingAdapter ───────────────────────────────────────────────────
+
+class WhatsAppAdapterTest(TestCase):
+    """Unit tests for WhatsAppBrandingAdapter.format_message()."""
+
+    def setUp(self):
+        _, self.tenant = make_tenant_user('WATest')
+        cache.clear()
+
+    # helper
+    def _make_settings(self, **kwargs):
+        from apps.settings.whatsapp.models import TenantWhatsAppSettings
+        defaults = dict(
+            tone='FRIENDLY',
+            signature_enabled=True,
+            cta_style='NONE',
+            template_overrides={},
+        )
+        defaults.update(kwargs)
+        obj, _ = TenantWhatsAppSettings.objects.get_or_create(tenant=self.tenant)
+        for k, v in defaults.items():
+            setattr(obj, k, v)
+        obj.save()
+        cache.delete(f'wa_settings:{self.tenant.pk}')
+        return obj
+
+    def _fmt(self, content='Hello.', context=None, event='test.event'):
+        from apps.branding_adapter.whatsapp_adapter import WhatsAppBrandingAdapter
+        return WhatsAppBrandingAdapter.format_message(
+            event=event, content=content, context=context or {}, tenant=self.tenant,
+        )
+
+    # ── tone ──────────────────────────────────────────────────────────────────
+
+    def test_friendly_tone_prepends_hi_greeting(self):
+        self._make_settings(tone='FRIENDLY')
+        result = self._fmt(context={'member_name': 'Alice'})
+        self.assertTrue(result.startswith('Hi Alice!'))
+
+    def test_formal_tone_prepends_dear_greeting(self):
+        self._make_settings(tone='FORMAL')
+        result = self._fmt(context={'member_name': 'Alice'})
+        self.assertTrue(result.startswith('Dear Alice,'))
+
+    def test_minimal_tone_has_no_greeting(self):
+        self._make_settings(tone='MINIMAL')
+        result = self._fmt(content='Your membership is active.', context={})
+        self.assertFalse(result.startswith('Hi') or result.startswith('Dear'))
+        self.assertIn('Your membership is active.', result)
+
+    def test_greeting_uses_name_key_fallback(self):
+        self._make_settings(tone='FRIENDLY')
+        result = self._fmt(context={'name': 'Bob'})
+        self.assertIn('Hi Bob!', result)
+
+    def test_greeting_empty_name_graceful(self):
+        self._make_settings(tone='FRIENDLY')
+        result = self._fmt(context={})
+        self.assertIn('Hi !', result)
+
+    # ── signature ────────────────────────────────────────────────────────────
+
+    def test_signature_enabled_appends_brand_name(self):
+        self._make_settings(signature_enabled=True)
+        result = self._fmt()
+        self.assertIn(f'— {self.tenant.name}', result)
+
+    def test_signature_disabled_excludes_brand_name(self):
+        self._make_settings(signature_enabled=False)
+        result = self._fmt()
+        self.assertNotIn('—', result)
+
+    # ── CTA ───────────────────────────────────────────────────────────────────
+
+    def test_cta_pay_now_with_payment_link(self):
+        self._make_settings(cta_style='PAY_NOW')
+        result = self._fmt(context={'payment_link': 'https://pay.example.com/abc'})
+        self.assertIn('Click here to pay: https://pay.example.com/abc', result)
+
+    def test_cta_pay_now_without_link_no_cta(self):
+        self._make_settings(cta_style='PAY_NOW')
+        result = self._fmt(context={})
+        self.assertNotIn('Click here to pay', result)
+
+    def test_cta_confirm_appends_reply_yes(self):
+        self._make_settings(cta_style='CONFIRM')
+        result = self._fmt()
+        self.assertIn('Reply YES to confirm.', result)
+
+    def test_cta_contact_with_phone(self):
+        self._make_settings(cta_style='CONTACT')
+        result = self._fmt(context={'support_phone': '+911234567890'})
+        self.assertIn('Call us at +911234567890', result)
+
+    def test_cta_none_adds_nothing(self):
+        self._make_settings(cta_style='NONE')
+        result = self._fmt(content='Done.', context={})
+        self.assertNotIn('Click here', result)
+        self.assertNotIn('Reply YES', result)
+        self.assertNotIn('Call us', result)
+
+    # ── template overrides ───────────────────────────────────────────────────
+
+    def test_event_override_replaces_content(self):
+        self._make_settings(
+            template_overrides={'membership.activated': 'Custom: {{member_name}} activated!'},
+        )
+        result = self._fmt(
+            content='Generic content.',
+            context={'member_name': 'Carol'},
+            event='membership.activated',
+        )
+        self.assertIn('Custom: Carol activated!', result)
+        self.assertNotIn('Generic content.', result)
+
+    def test_no_override_uses_content(self):
+        self._make_settings(template_overrides={})
+        result = self._fmt(content='Default content.', context={})
+        self.assertIn('Default content.', result)
+
+    def test_unmatched_event_override_uses_content(self):
+        self._make_settings(template_overrides={'other.event': 'Other.'})
+        result = self._fmt(content='My content.', event='membership.activated', context={})
+        self.assertIn('My content.', result)
+
+    # ── variable substitution ────────────────────────────────────────────────
+
+    def test_placeholder_substituted_in_body(self):
+        self._make_settings(tone='MINIMAL', signature_enabled=False)
+        result = self._fmt(content='Hi {{member_name}}, amount: {{amount}}',
+                           context={'member_name': 'Dave', 'amount': '500'})
+        self.assertIn('Hi Dave, amount: 500', result)
+
+    def test_missing_placeholder_renders_empty(self):
+        self._make_settings(tone='MINIMAL', signature_enabled=False)
+        result = self._fmt(content='Amount: {{amount}}', context={})
+        self.assertNotIn('{{amount}}', result)
+
+    # ── fallback with no settings record ─────────────────────────────────────
+
+    def test_no_settings_record_uses_defaults(self):
+        from apps.branding_adapter.whatsapp_adapter import WhatsAppBrandingAdapter
+        # No TenantWhatsAppSettings created — falls back to FRIENDLY + signature
+        result = WhatsAppBrandingAdapter.format_message(
+            event='test', content='Hello.', context={'member_name': 'Eve'}, tenant=self.tenant,
+        )
+        self.assertIn('Hi Eve!', result)
+        self.assertIn('Hello.', result)
+        self.assertIn(f'— {self.tenant.name}', result)
+
+    # ── tenant isolation ──────────────────────────────────────────────────────
+
+    def test_different_tenants_independent_settings(self):
+        from apps.settings.whatsapp.models import TenantWhatsAppSettings
+        from apps.branding_adapter.whatsapp_adapter import WhatsAppBrandingAdapter
+        _, tenant_b = make_tenant_user('WATest2')
+
+        self._make_settings(tone='FORMAL')
+        TenantWhatsAppSettings.objects.get_or_create(tenant=tenant_b)
+        obj_b = TenantWhatsAppSettings.objects.get(tenant=tenant_b)
+        obj_b.tone = 'MINIMAL'
+        obj_b.signature_enabled = False
+        obj_b.save()
+        cache.delete(f'wa_settings:{tenant_b.pk}')
+
+        result_a = WhatsAppBrandingAdapter.format_message(
+            event='test', content='Body.', context={'member_name': 'X'}, tenant=self.tenant,
+        )
+        result_b = WhatsAppBrandingAdapter.format_message(
+            event='test', content='Body.', context={'member_name': 'X'}, tenant=tenant_b,
+        )
+        self.assertIn('Dear X,', result_a)
+        self.assertNotIn('Dear', result_b)
+
+
+# ── WhatsApp communication_service integration ────────────────────────────────
+
+class WhatsAppCommunicationServiceTest(TestCase):
+    """Integration: send_message applies WhatsApp branding for WHATSAPP channel."""
+
+    def setUp(self):
+        from apps.communications.models import MessageTemplate, Channel
+        _, self.tenant = make_tenant_user('WAIntegTest')
+        cache.clear()
+        self.template = MessageTemplate.objects.create(
+            tenant=self.tenant,
+            name='WA Membership',
+            channel=Channel.WHATSAPP,
+            content='Your membership {{plan}} is now active.',
+        )
+
+    def test_whatsapp_message_has_greeting(self):
+        from apps.communications.services.communication_service import send_message
+        log = send_message(
+            template=self.template,
+            context={'member_name': 'Frank', 'plan': 'Gold', 'phone': '+911234567890'},
+            tenant=self.tenant,
+        )
+        self.assertIn('Hi Frank!', log.message)
+        self.assertIn('Gold', log.message)
+
+    def test_whatsapp_message_has_signature_by_default(self):
+        from apps.communications.services.communication_service import send_message
+        log = send_message(
+            template=self.template,
+            context={'member_name': 'Grace', 'plan': 'Silver', 'phone': '+911234567890'},
+            tenant=self.tenant,
+        )
+        self.assertIn(f'— {self.tenant.name}', log.message)
+
+    def test_whatsapp_message_not_html(self):
+        from apps.communications.services.communication_service import send_message
+        log = send_message(
+            template=self.template,
+            context={'member_name': 'Hank', 'plan': 'Basic', 'phone': '+911234567890'},
+            tenant=self.tenant,
+        )
+        self.assertNotIn('<!DOCTYPE html>', log.message)
+        self.assertNotIn('<p>', log.message)
+
+    def test_whatsapp_uses_template_override_from_settings(self):
+        from apps.settings.whatsapp.models import TenantWhatsAppSettings
+        from apps.communications.services.communication_service import send_message
+        TenantWhatsAppSettings.objects.create(
+            tenant=self.tenant,
+            tone='MINIMAL',
+            signature_enabled=False,
+            cta_style='NONE',
+            template_overrides={'membership.activated': 'Custom WA: {{member_name}}'},
+        )
+        cache.delete(f'wa_settings:{self.tenant.pk}')
+        log = send_message(
+            template=self.template,
+            context={'member_name': 'Ivy', 'plan': 'Gold', 'phone': '+911234567890'},
+            tenant=self.tenant,
+            event_type='membership.activated',
+        )
+        self.assertIn('Custom WA: Ivy', log.message)
+        self.assertNotIn('Your membership', log.message)

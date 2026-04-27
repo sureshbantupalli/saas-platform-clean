@@ -89,6 +89,15 @@ def send_message(
         branding_ctx = BrandingAdapter.get_branding_context(tenant)
         message      = render_branded_email(template.content, context, tenant)
         text_message = render_branded_email_text(template.content, context, tenant)
+    elif channel == Channel.WHATSAPP:
+        from apps.branding_adapter.whatsapp_adapter import WhatsAppBrandingAdapter
+        branding_ctx = {}
+        message      = WhatsAppBrandingAdapter.format_message(
+            event=event_type,
+            content=template.content,
+            context=context,
+            tenant=tenant,
+        )
     else:
         branding_ctx = {}
         message      = render_template(template.content, context)

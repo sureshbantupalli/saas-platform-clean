@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'apps.settings.roles.apps.RolesConfig',
     'apps.settings.vocabulary.apps.VocabularyConfig',
     'apps.settings.branding.apps.BrandingConfig',
+    'apps.settings.whatsapp.apps.WhatsAppSettingsConfig',
 
     'members',
     'crm.apps.CrmConfig',
