@@ -471,3 +471,42 @@ class PaymentService:
             .order_by("-created_at")
             .first()
         )
+
+    # ── Record Offline Payment ────────────────────────────────────────────────
+
+    @staticmethod
+    @transaction.atomic
+    def record_offline_payment(
+        *,
+        tenant,
+        amount: Decimal,
+        purpose: str,
+        reference_type: str = "",
+        reference_id=None,
+        payment_method: str = None,
+        payment_reference: str = "",
+        notes: str = "",
+        created_by=None,
+    ) -> Payment:
+        """
+        Atomically create an offline payment and immediately mark it SUCCESS.
+        Used by staff when recording cash / UPI / card payments collected in person.
+        The membership activation signal fires on commit — no intermediate CREATED state.
+        """
+        payment = PaymentService.create_payment(
+            tenant=tenant,
+            amount=amount,
+            purpose=purpose,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            gateway=PaymentGateway.OFFLINE,
+            payment_method=payment_method,
+            payment_reference=payment_reference,
+            notes=notes,
+            created_by=created_by,
+        )
+        return PaymentService.mark_payment_success(
+            payment,
+            payment_method=payment_method,
+            payment_reference=payment_reference,
+        )

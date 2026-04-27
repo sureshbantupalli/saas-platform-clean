@@ -126,7 +126,7 @@
                                 <td>{{ membership.final_end_date }}</td>
                                 <td>
                                     {% if membership.balance_amount > 0 %}
-                                    <a href="{% url 'payments:payment_create' %}?reference_type=membership&reference_id={{ membership.pk }}&amount={{ membership.balance_amount }}&member_id={{ member.id }}&purpose=membership"
+                                    <a href="{% url 'payments:payment_record' %}?member_id={{ member.id }}&reference_id={{ membership.pk }}"
                                        class="btn btn-outline-success btn-sm">
                                         Pay ₹{{ membership.balance_amount }}
                                     </a>
@@ -160,10 +160,16 @@
                     <h5 class="fw-semibold mb-0">
                         <i class="bi bi-credit-card me-1" aria-hidden="true"></i>Payments
                     </h5>
-                    <a href="{% url 'payments:payment_create' %}?member_id={{ member.id }}"
-                       class="btn btn-outline-primary btn-sm">
-                        <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Record Payment
-                    </a>
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'members:member_payments' member.pk %}"
+                           class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-clock-history me-1" aria-hidden="true"></i>Full History
+                        </a>
+                        <a href="{% url 'payments:payment_record' %}?member_id={{ member.id }}"
+                           class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Record Payment
+                        </a>
+                    </div>
                 </div>
 
                 <div class="table-responsive">

@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Pay ₹{{ payment.amount }}{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-center gap-2 mb-4">
+    <a href="{% url 'payments:payment_detail' payment.pk %}" class="text-muted text-decoration-none small">
+        <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Payment
+    </a>
+    <i class="bi bi-chevron-right text-muted" style="font-size:.7rem;"></i>
+    <span class="small fw-medium">Checkout</span>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show" role="alert">
+    {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Dismiss"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="row g-4 justify-content-center">
+    <div class="col-md-6 col-lg-5">
+
+        <!-- Payment Summary Card -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-body p-4">
+                <div class="text-center mb-4">
+                    <div class="fw-bold display-6 mb-1">₹{{ payment.amount }}</div>
+                    <div class="text-muted small">{{ payment.currency }}</div>
+                </div>
+
+                <dl class="row small mb-0">
+                    {% if membership %}
+                    <dt class="col-5 text-muted">Member</dt>
+                    <dd class="col-7 mb-1">{{ membership.member.first_name }} {{ membership.member.last_name }}</dd>
+                    <dt class="col-5 text-muted">Plan</dt>
+                    <dd class="col-7 mb-1">{{ membership.plan_name }}</dd>
+                    <dt class="col-5 text-muted">Branch</dt>
+                    <dd class="col-7 mb-1">{{ membership.branch.name }}</dd>
+                    {% endif %}
+                    <dt class="col-5 text-muted">Payment ID</dt>
+                    <dd class="col-7 mb-0 font-monospace" style="font-size:.75rem">{{ payment.id }}</dd>
+                </dl>
+            </div>
+        </div>
+
+        {% if rzp_error %}
+        <!-- Gateway error -->
+        <div class="alert alert-danger" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>
+            <strong>Payment gateway error:</strong> {{ rzp_error }}
+            <div class="mt-2">
+                <a href="{% url 'payments:payment_detail' payment.pk %}"
+                   class="btn btn-outline-danger btn-sm">Back to Payment</a>
+            </div>
+        </div>
+
+        {% elif order_id %}
+        <!-- Razorpay Checkout -->
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4 text-center">
+                <p class="text-muted small mb-4">
+                    Complete your payment securely via Razorpay.
+                    Cards, UPI, net banking, and wallets are supported.
+                </p>
+                <button id="rzpPayBtn" class="btn btn-primary btn-lg w-100 mb-3">
+                    <i class="bi bi-shield-lock me-2" aria-hidden="true"></i>Pay ₹{{ payment.amount }}
+                </button>
+                <div class="text-muted small">
+                    <i class="bi bi-lock-fill me-1" aria-hidden="true"></i>
+                    Secured by Razorpay
+                </div>
+            </div>
+        </div>
+
+        <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+        <script>
+        document.getElementById('rzpPayBtn').addEventListener('click', function () {
+            var options = {
+                key:         '{{ rzp_key }}',
+                amount:      {{ amount_paise }},
+                currency:    '{{ payment.currency }}',
+                name:        '{{ tenant_branding.login_title|default:request.tenant.name|escapejs }}',
+                description: 'Payment #{{ payment.id|truncatechars:8 }}',
+                order_id:    '{{ order_id }}',
+                prefill: {
+                    {% if membership %}
+                    name:  '{{ membership.member.first_name|escapejs }} {{ membership.member.last_name|escapejs }}',
+                    email: '{{ membership.member.email|default:""|escapejs }}',
+                    contact: '{{ membership.member.phone|default:""|escapejs }}',
+                    {% endif %}
+                },
+                theme: { color: '{{ b_primary }}' },
+                handler: function (response) {
+                    // Webhook handles verification and state update.
+                    // Redirect to payment detail for status confirmation.
+                    window.location.href = '{% url "payments:payment_detail" payment.pk %}?razorpay_payment_id=' +
+                        encodeURIComponent(response.razorpay_payment_id);
+                },
+                modal: {
+                    ondismiss: function () {
+                        document.getElementById('rzpPayBtn').disabled = false;
+                    }
+                }
+            };
+            this.disabled = true;
+            var rzp = new Razorpay(options);
+            rzp.open();
+        });
+        </script>
+
+        {% else %}
+        <div class="alert alert-warning" role="alert">
+            No Razorpay order found for this payment. Please contact support.
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+{% endblock %}

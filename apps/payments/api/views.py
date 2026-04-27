@@ -188,3 +188,58 @@ def webhook(request):
         return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     return Response({"status": "ok", "payment_id": str(payment.pk)})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def generate_checkout_link(request):
+    """
+    POST /api/payments/generate-checkout-link/
+
+    Body: { "payment_id": "<uuid>" }
+
+    Creates a Razorpay order for an existing CREATED/PENDING payment and
+    returns the checkout page URL that staff can share with the member.
+    """
+    payment_id = (request.data or {}).get("payment_id")
+    if not payment_id:
+        return Response({"detail": "payment_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        payment = Payment.base_objects.get(
+            pk=payment_id,
+            tenant=request.user.tenant,
+            is_deleted=False,
+        )
+    except Payment.DoesNotExist:
+        return Response({"detail": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if payment.status not in ("CREATED", "PENDING"):
+        return Response(
+            {"detail": f"Cannot generate checkout link for a {payment.get_status_display()} payment."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Create / reuse gateway order
+    if not payment.gateway_order_id:
+        try:
+            config     = get_active_payment_config(request.user.tenant, "razorpay")
+            order_data = RazorpayAdapter(config).create_order(payment)
+            PaymentService.mark_pending(payment, gateway_order_id=order_data["order_id"])
+        except PaymentConfigError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except RazorpayError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+    from django.urls import reverse
+    from django.conf import settings as django_settings
+    site_url     = getattr(django_settings, "SITE_URL", "").rstrip("/")
+    checkout_url = f"{site_url}{reverse('payments:payment_checkout', kwargs={'pk': payment.pk})}"
+
+    return Response({
+        "payment_id":    str(payment.pk),
+        "checkout_url":  checkout_url,
+        "order_id":      payment.gateway_order_id,
+        "amount":        str(payment.amount),
+        "currency":      payment.currency,
+    })

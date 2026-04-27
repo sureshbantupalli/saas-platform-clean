@@ -212,3 +212,66 @@ def member_delete(request, pk):
         "members/member_confirm_delete.html",
         {"member": member}
     )
+
+# ─── Member Payment History ───────────────────────────────────────────────────
+
+@require_permission("members", "view")
+def member_payments(request, pk):
+    """
+    GET /members/<pk>/payments/
+    Shows all payments linked to any of this member's memberships.
+    Accessible to staff only (same permission gate as member_detail).
+    """
+    from apps.payments.models import Payment, PaymentStatus
+    from apps.memberships.models import Membership
+
+    member = MemberService.get_by_id(request.user, pk)
+    if not member:
+        raise Http404("Member not found")
+
+    # All memberships for this member (any status)
+    memberships = list(
+        Membership.base_objects
+        .filter(member=member, is_deleted=False)
+        .select_related("plan")
+        .order_by("-created_at")
+    )
+    mem_ids = [m.pk for m in memberships]
+
+    # Build membership lookup by pk for display in payment rows
+    membership_map = {m.pk: m for m in memberships}
+
+    # All payments referencing any of their memberships
+    payments = (
+        Payment.base_objects
+        .filter(
+            tenant=request.user.tenant,
+            reference_type="membership",
+            reference_id__in=mem_ids,
+            is_deleted=False,
+        )
+        .order_by("-created_at")
+    )
+
+    # Attach membership to each payment for template display
+    payment_rows = []
+    for p in payments:
+        payment_rows.append({
+            "payment":    p,
+            "membership": membership_map.get(p.reference_id),
+        })
+
+    # Totals
+    from django.db.models import Sum, Q
+    totals = payments.aggregate(
+        total_paid=Sum("amount", filter=Q(status=PaymentStatus.SUCCESS)),
+        total_pending=Sum("amount", filter=Q(status__in=[PaymentStatus.CREATED, PaymentStatus.PENDING])),
+    )
+
+    return render(request, "members/member_payments.html", {
+        "member":       member,
+        "payment_rows": payment_rows,
+        "memberships":  memberships,
+        "total_paid":   totals["total_paid"] or 0,
+        "total_pending": totals["total_pending"] or 0,
+    })

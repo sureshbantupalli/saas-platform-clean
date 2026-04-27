@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}Record Payment{% endblock %}
+
+{% block content %}
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show" role="alert">
+    {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Dismiss"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="d-flex align-items-center gap-2 mb-4">
+    <a href="{% url 'payments:payment_list' %}" class="text-muted text-decoration-none small">
+        <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Payments
+    </a>
+    <i class="bi bi-chevron-right text-muted" style="font-size:.7rem;"></i>
+    <h2 class="fw-bold mb-0 h5">Record Offline Payment</h2>
+</div>
+
+<div class="row g-4">
+
+    <!-- Left: Form -->
+    <div class="col-lg-7">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <form method="post" id="recordForm">
+                    {% csrf_token %}
+
+                    <!-- Member -->
+                    <div class="mb-3">
+                        <label for="id_member" class="form-label fw-medium">
+                            Member <span class="text-danger" aria-hidden="true">*</span>
+                        </label>
+                        <select id="id_member" name="member_id" class="form-select" required>
+                            <option value="">— Select member —</option>
+                            {% for m in all_members %}
+                            <option value="{{ m.pk }}"
+                                {% if pre_member and pre_member.pk == m.pk %}selected{% endif %}>
+                                {{ m.first_name }} {{ m.last_name }}
+                                {% if m.phone %} · {{ m.phone }}{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Membership (populated by JS) -->
+                    <div class="mb-3" id="membershipRow" {% if not pre_membership %}style="display:none"{% endif %}>
+                        <label for="id_membership" class="form-label fw-medium">Membership</label>
+                        <select id="id_membership" name="reference_id" class="form-select">
+                            <option value="">— No linked membership —</option>
+                            {% if pre_membership %}
+                            <option value="{{ pre_membership.pk }}" selected>
+                                {{ pre_membership.plan_name }} ({{ pre_membership.get_status_display }}) — ₹{{ pre_membership.balance_amount }} due
+                            </option>
+                            {% endif %}
+                        </select>
+                        <div class="form-text" id="balanceHint"></div>
+                    </div>
+
+                    <!-- Amount -->
+                    <div class="mb-3">
+                        <label for="id_amount" class="form-label fw-medium">
+                            Amount (₹) <span class="text-danger" aria-hidden="true">*</span>
+                        </label>
+                        <input type="number" id="id_amount" name="amount"
+                               class="form-control" step="0.01" min="0.01"
+                               value="{% if pre_membership %}{{ pre_membership.balance_amount }}{% endif %}"
+                               required placeholder="0.00">
+                    </div>
+
+                    <!-- Payment Method -->
+                    <div class="mb-3">
+                        <label for="id_method" class="form-label fw-medium">
+                            Payment Method <span class="text-danger" aria-hidden="true">*</span>
+                        </label>
+                        <div class="d-flex flex-wrap gap-2" id="methodBtns">
+                            {% for val, label in method_choices %}
+                            <input type="radio" class="btn-check" name="payment_method"
+                                   id="method_{{ val }}" value="{{ val }}" autocomplete="off"
+                                   {% if val == "cash" %}checked{% endif %}>
+                            <label class="btn btn-outline-secondary btn-sm" for="method_{{ val }}">
+                                {% if val == "cash" %}<i class="bi bi-cash me-1" aria-hidden="true"></i>
+                                {% elif val == "upi" %}<i class="bi bi-phone me-1" aria-hidden="true"></i>
+                                {% elif val == "card" %}<i class="bi bi-credit-card me-1" aria-hidden="true"></i>
+                                {% elif val == "bank_transfer" %}<i class="bi bi-bank me-1" aria-hidden="true"></i>
+                                {% else %}<i class="bi bi-wifi me-1" aria-hidden="true"></i>{% endif %}
+                                {{ label }}
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Reference -->
+                    <div class="mb-3">
+                        <label for="id_ref" class="form-label">
+                            Transaction Reference
+                            <span class="text-muted fw-normal small ms-1">(UPI txn ID, cheque no., etc.)</span>
+                        </label>
+                        <input type="text" id="id_ref" name="payment_reference"
+                               class="form-control" placeholder="Optional">
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="mb-4">
+                        <label for="id_notes" class="form-label">Notes</label>
+                        <textarea id="id_notes" name="notes" class="form-control" rows="2"
+                                  placeholder="Optional notes"></textarea>
+                    </div>
+
+                    <div class="alert alert-info small py-2 mb-3" role="note">
+                        <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                        Payment will be marked <strong>Paid</strong> immediately and the linked
+                        membership will activate automatically.
+                    </div>
+
+                    <div class="d-flex gap-2 justify-content-end pt-3"
+                         style="border-top:1px solid #e2e8f0;">
+                        <a href="{% url 'payments:payment_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-success px-4">
+                            <i class="bi bi-check-circle me-1" aria-hidden="true"></i>Record Payment
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Membership summary (shown when a membership is selected) -->
+    <div class="col-lg-5" id="membershipSummary" style="display:none">
+        <div class="card shadow-sm border-0">
+            <div class="card-body">
+                <h6 class="fw-semibold mb-3">
+                    <i class="bi bi-person-badge me-1" aria-hidden="true"></i>Membership Summary
+                </h6>
+                <dl class="row mb-0 small" id="summaryContent">
+                    <dt class="col-7 text-muted">Plan Amount</dt>
+                    <dd class="col-5 text-end mb-1" id="sumBase">—</dd>
+                    <dt class="col-7 text-muted">Already Paid</dt>
+                    <dd class="col-5 text-end mb-1 text-success" id="sumPaid">—</dd>
+                    <dt class="col-7 fw-semibold border-top pt-1">Balance Due</dt>
+                    <dd class="col-5 text-end fw-bold border-top pt-1 mb-0" id="sumBalance">—</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const memberSel     = document.getElementById('id_member');
+    const memRow        = document.getElementById('membershipRow');
+    const memSel        = document.getElementById('id_membership');
+    const amountInput   = document.getElementById('id_amount');
+    const balanceHint   = document.getElementById('balanceHint');
+    const summary       = document.getElementById('membershipSummary');
+    const sumBase       = document.getElementById('sumBase');
+    const sumPaid       = document.getElementById('sumPaid');
+    const sumBalance    = document.getElementById('sumBalance');
+
+    // Fetch memberships when member changes
+    memberSel.addEventListener('change', function () {
+        const memberId = this.value;
+        if (!memberId) {
+            memRow.style.display = 'none';
+            summary.style.display = 'none';
+            return;
+        }
+        fetch(`{% url 'payments:member_memberships_json' %}?member_id=${memberId}`)
+            .then(r => r.json())
+            .then(data => {
+                memSel.innerHTML = '<option value="">— No linked membership —</option>';
+                data.memberships.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.label;
+                    opt.dataset.balance = m.balance_amount;
+                    opt.dataset.fee     = m.fee_amount;
+                    opt.dataset.paid    = m.amount_paid;
+                    memSel.appendChild(opt);
+                });
+                memRow.style.display = data.memberships.length ? '' : 'none';
+                if (data.memberships.length === 1) {
+                    memSel.value = data.memberships[0].id;
+                    memSel.dispatchEvent(new Event('change'));
+                } else {
+                    summary.style.display = 'none';
+                }
+            });
+    });
+
+    // Update amount + summary when membership changes
+    memSel.addEventListener('change', function () {
+        const opt = this.options[this.selectedIndex];
+        if (!opt || !opt.value) {
+            summary.style.display = 'none';
+            balanceHint.textContent = '';
+            return;
+        }
+        const bal = parseFloat(opt.dataset.balance || 0);
+        amountInput.value = bal.toFixed(2);
+        amountInput.max   = bal;
+        balanceHint.textContent = `Balance due: ₹${bal.toFixed(2)}`;
+        sumBase.textContent    = `₹${parseFloat(opt.dataset.fee  || 0).toFixed(2)}`;
+        sumPaid.textContent    = `₹${parseFloat(opt.dataset.paid || 0).toFixed(2)}`;
+        sumBalance.textContent = `₹${bal.toFixed(2)}`;
+        sumBalance.className   = bal > 0 ? 'col-5 text-end fw-bold border-top pt-1 mb-0 text-danger'
+                                         : 'col-5 text-end fw-bold border-top pt-1 mb-0 text-success';
+        summary.style.display = '';
+    });
+
+    // Pre-fire if a membership was pre-selected server-side
+    {% if pre_member %}
+    memberSel.dispatchEvent(new Event('change'));
+    {% endif %}
+    {% if pre_membership %}
+    document.addEventListener('DOMContentLoaded', function () {
+        summary.style.display = '';
+        sumBase.textContent    = '₹{{ pre_membership.fee_amount }}';
+        sumPaid.textContent    = '₹{{ pre_membership.amount_paid }}';
+        sumBalance.textContent = '₹{{ pre_membership.balance_amount }}';
+    });
+    {% endif %}
+}());
+</script>
+{% endblock %}

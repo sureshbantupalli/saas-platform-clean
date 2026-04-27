@@ -192,7 +192,7 @@
 
                 {% if membership.balance_amount > 0 and payment.status == "SUCCESS" %}
                 <div class="mt-3">
-                    <a href="{% url 'payments:payment_create' %}?reference_type=membership&reference_id={{ membership.pk }}&amount={{ membership.balance_amount }}&member_id={{ membership.member.pk }}&purpose=membership"
+                    <a href="{% url 'payments:payment_record' %}?member_id={{ membership.member.pk }}&reference_id={{ membership.pk }}"
                        class="btn btn-outline-primary btn-sm">
                         <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>
                         Record Another Payment (₹{{ membership.balance_amount }} remaining)

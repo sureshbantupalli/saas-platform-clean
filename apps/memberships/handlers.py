@@ -62,15 +62,39 @@ def on_payment_success(sender, payment, **kwargs):
         new_payment_status = "unpaid"
         new_status = "pending"
 
-    Membership.base_objects.filter(pk=membership.pk).update(
-        amount_paid=total_paid,
-        payment_status=new_payment_status,
-        status=new_status,
-        updated_at=timezone.now(),
-    )
+    update_fields = {
+        "amount_paid":    total_paid,
+        "payment_status": new_payment_status,
+        "status":         new_status,
+        "updated_at":     timezone.now(),
+    }
+
+    # Renewal: expired membership now fully paid — push dates forward from today
+    # so the lifecycle engine re-activates it without creating a new membership.
+    if new_status == "active" and membership.status == "expired":
+        import datetime
+        from dateutil.relativedelta import relativedelta
+        today = datetime.date.today()
+        plan  = membership.plan
+        cycle = plan.billing_cycle_type
+        n     = plan.billing_interval
+        if cycle == "DAILY":
+            new_end = today + datetime.timedelta(days=n)
+        elif cycle == "WEEKLY":
+            new_end = today + datetime.timedelta(weeks=n)
+        elif cycle == "MONTHLY":
+            new_end = today + relativedelta(months=n)
+        elif cycle == "YEARLY":
+            new_end = today + relativedelta(years=n)
+        else:
+            span    = (membership.end_date - membership.start_date).days if membership.end_date and membership.start_date else 30
+            new_end = today + datetime.timedelta(days=span)
+        update_fields["start_date"] = today
+        update_fields["end_date"]   = new_end
+
+    Membership.base_objects.filter(pk=membership.pk).update(**update_fields)
 
     if new_status == "active":
-        # Refresh to get the updated instance for the signal
         fresh = Membership.base_objects.get(pk=membership.pk)
         from apps.memberships.signals import membership_activated
         transaction.on_commit(
