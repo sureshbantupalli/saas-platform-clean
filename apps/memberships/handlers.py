@@ -57,10 +57,14 @@ def on_payment_success(sender, payment, **kwargs):
         new_status = "active"
     elif total_paid > 0:
         new_payment_status = "partial"
-        new_status = "pending"
+        # Partial payment on an expired membership keeps it expired —
+        # the dates are in the past so "pending" would be misleading and the
+        # lifecycle engine would immediately flip it back anyway.
+        # Only a *full* payment on an expired membership triggers renewal.
+        new_status = "expired" if membership.status == "expired" else "pending"
     else:
         new_payment_status = "unpaid"
-        new_status = "pending"
+        new_status = "expired" if membership.status == "expired" else "pending"
 
     update_fields = {
         "amount_paid":    total_paid,

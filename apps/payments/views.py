@@ -101,14 +101,23 @@ def payment_detail(request, pk):
     payment = get_object_or_404(
         Payment.base_objects, pk=pk, tenant=request.user.tenant, is_deleted=False
     )
-    events = payment.events.order_by("created_at")
+    events     = payment.events.order_by("created_at")
     membership = _get_membership_context(
         payment.reference_type, payment.reference_id, request.user.tenant
     )
+    member = None
+    if membership:
+        try:
+            from members.models import Member
+            member = Member.base_objects.get(pk=membership.member_id, is_deleted=False)
+        except Exception:
+            pass
+
     return render(request, "payments/payment_detail.html", {
         "payment":    payment,
         "events":     events,
         "membership": membership,
+        "member":     member,
     })
 
 
@@ -460,29 +469,33 @@ def payment_checkout(request, pk):
         messages.error(request, f"Cannot checkout a {payment.get_status_display()} payment.")
         return redirect("payments:payment_detail", pk=payment.pk)
 
-    # Create or reuse Razorpay order
-    order_id  = payment.gateway_order_id
+    # Idempotent order creation — select_for_update prevents duplicate Razorpay orders
+    # if the same checkout page is loaded twice in rapid succession.
+    from django.db import transaction as _tx
+    from apps.payments.gateways.razorpay_adapter import RazorpayAdapter, RazorpayError
+    from apps.payments.services.config_service import get_active_payment_config, PaymentConfigError
+
+    order_id  = ""
     rzp_key   = ""
     rzp_error = None
 
-    if not order_id:
-        try:
-            from apps.payments.gateways.razorpay_adapter import RazorpayAdapter, RazorpayError
-            from apps.payments.services.config_service import get_active_payment_config, PaymentConfigError
-            config     = get_active_payment_config(request.user.tenant, "razorpay")
-            order_data = RazorpayAdapter(config).create_order(payment)
-            PaymentService.mark_pending(payment, gateway_order_id=order_data["order_id"])
-            order_id = order_data["order_id"]
-            rzp_key  = order_data["key"]
-        except Exception as exc:
-            rzp_error = str(exc)
-    else:
-        try:
-            from apps.payments.services.config_service import get_active_payment_config, PaymentConfigError
-            config  = get_active_payment_config(request.user.tenant, "razorpay")
-            rzp_key = config.key_id
-        except Exception:
-            rzp_error = "Razorpay is not configured for this account."
+    try:
+        config = get_active_payment_config(request.user.tenant, "razorpay")
+        with _tx.atomic():
+            locked = Payment.base_objects.select_for_update().get(pk=payment.pk)
+            if locked.gateway_order_id:
+                order_id = locked.gateway_order_id
+            else:
+                order_data = RazorpayAdapter(config).create_order(locked)
+                PaymentService.mark_pending(locked, gateway_order_id=order_data["order_id"])
+                order_id = order_data["order_id"]
+        rzp_key = config.key_id
+    except PaymentConfigError as exc:
+        rzp_error = str(exc)
+    except RazorpayError as exc:
+        rzp_error = str(exc)
+    except Exception as exc:
+        rzp_error = "Unexpected error setting up checkout. Please try again."
 
     membership = _get_membership_context(payment.reference_type, payment.reference_id, request.user.tenant)
 

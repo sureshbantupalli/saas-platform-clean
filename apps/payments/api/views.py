@@ -3,8 +3,10 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from django.db import transaction
+
 from apps.payments.gateways.razorpay_adapter import RazorpayAdapter, RazorpayError
-from apps.payments.models import Payment, PaymentGateway
+from apps.payments.models import Payment, PaymentGateway, PaymentStatus
 from apps.payments.services.config_service import get_active_payment_config, PaymentConfigError
 from apps.payments.serializers import (
     CreatePaymentSerializer,
@@ -214,22 +216,26 @@ def generate_checkout_link(request):
     except Payment.DoesNotExist:
         return Response({"detail": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    if payment.status not in ("CREATED", "PENDING"):
+    if payment.status not in (PaymentStatus.CREATED, PaymentStatus.PENDING):
         return Response(
             {"detail": f"Cannot generate checkout link for a {payment.get_status_display()} payment."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # Create / reuse gateway order
-    if not payment.gateway_order_id:
-        try:
-            config     = get_active_payment_config(request.user.tenant, "razorpay")
-            order_data = RazorpayAdapter(config).create_order(payment)
-            PaymentService.mark_pending(payment, gateway_order_id=order_data["order_id"])
-        except PaymentConfigError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        except RazorpayError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+    # Idempotent order creation: select_for_update prevents two concurrent calls
+    # from both seeing gateway_order_id="" and both creating separate Razorpay orders.
+    try:
+        with transaction.atomic():
+            locked = Payment.base_objects.select_for_update().get(pk=payment.pk)
+            if not locked.gateway_order_id:
+                config     = get_active_payment_config(request.user.tenant, "razorpay")
+                order_data = RazorpayAdapter(config).create_order(locked)
+                PaymentService.mark_pending(locked, gateway_order_id=order_data["order_id"])
+            payment = locked  # use the locked (refreshed) instance from here on
+    except PaymentConfigError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    except RazorpayError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
     from django.urls import reverse
     from django.conf import settings as django_settings

@@ -15,7 +15,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.payments.models import Payment, PaymentEvent, PaymentStatus, PaymentGateway
-from apps.payments.signals import payment_success, payment_failed
+from apps.payments.signals import payment_success, payment_failed, payment_refunded
 
 
 class PaymentError(Exception):
@@ -145,6 +145,51 @@ class PaymentService:
             payload={"reason": reason},
         )
         transaction.on_commit(lambda: payment_failed.send(sender=Payment, payment=payment))
+        return payment
+
+    # ── Mark Refunded ─────────────────────────────────────────────────────────
+
+    @staticmethod
+    @transaction.atomic
+    def mark_payment_refunded(
+        payment: Payment,
+        refund_id: str = "",
+        refund_amount: Decimal = None,
+    ) -> Payment:
+        """
+        Transition SUCCESS → REFUNDED.
+        Only a payment that was previously captured can be refunded.
+        Fires payment_refunded signal after commit so downstream can
+        reverse membership credit or send a comms event.
+        """
+        if payment.status != PaymentStatus.SUCCESS:
+            raise PaymentError(
+                f"Cannot refund a {payment.get_status_display()} payment "
+                "(only SUCCESS payments can be refunded)."
+            )
+        if refund_amount is None:
+            refund_amount = payment.amount  # full refund by default
+
+        payment.status = PaymentStatus.REFUNDED
+        payment.save(update_fields=["status", "updated_at"])
+        PaymentEvent.objects.create(
+            payment=payment,
+            event_type="REFUND_RECEIVED",
+            payload={
+                "refund_id":     refund_id,
+                "refund_amount": str(refund_amount),
+            },
+        )
+        _amt   = refund_amount
+        _rid   = refund_id
+        transaction.on_commit(
+            lambda: payment_refunded.send(
+                sender=Payment,
+                payment=payment,
+                refund_amount=_amt,
+                refund_id=_rid,
+            )
+        )
         return payment
 
     # ── Handle Webhook (Razorpay / Stripe) ────────────────────────────────────
@@ -444,6 +489,65 @@ class PaymentService:
 
         elif event == "payment.failed":
             PaymentService.mark_payment_failed(payment, reason=event)
+
+        elif event in ("payment.refunded", "refund.created", "refund.processed", "refund.failed"):
+            # ── Refund / reversal events ──────────────────────────────────────
+            # Extract refund details from whichever entity is present.
+            # Razorpay sends "refund" entity for refund.* events and
+            # "payment" entity for payment.refunded. Both carry the amount.
+            refund_entity = payload.get("payload", {}).get("refund", {}).get("entity", {})
+            refund_id     = refund_entity.get("id", "")
+            refund_paise  = refund_entity.get("amount") or entity.get("amount_refunded")
+            refund_amount = Decimal(refund_paise) / 100 if refund_paise else payment.amount
+
+            _logger.info(
+                "Razorpay refund event received",
+                extra={
+                    "event":       event,
+                    "payment_id":  str(payment.id),
+                    "refund_id":   refund_id,
+                    "refund_paise": refund_paise,
+                    "tenant_id":   str(payment.tenant_id),
+                    "order_id":    order_id,
+                },
+            )
+
+            # Only transition SUCCESS → REFUNDED; log all others as REFUND_RECEIVED
+            # so the audit trail is complete even for partial-refund scenarios.
+            if event in ("payment.refunded", "refund.processed") and payment.status == PaymentStatus.SUCCESS:
+                PaymentService.mark_payment_refunded(
+                    payment,
+                    refund_id=refund_id,
+                    refund_amount=refund_amount,
+                )
+            else:
+                # Partial refund, pending refund, or refund on non-SUCCESS — log only
+                PaymentEvent.objects.create(
+                    payment=payment,
+                    event_type="REFUND_RECEIVED",
+                    payload={
+                        "event":          event,
+                        "refund_id":      refund_id,
+                        "refund_amount":  str(refund_amount),
+                        "payment_status": payment.status,
+                    },
+                )
+
+        else:
+            # Unrecognised event — log it so operators can see it without crashing
+            _logger.info(
+                "Razorpay webhook: unrecognised event (no action taken)",
+                extra={
+                    "event":      event,
+                    "payment_id": str(payment.id),
+                    "tenant_id":  str(payment.tenant_id),
+                },
+            )
+            PaymentEvent.objects.create(
+                payment=payment,
+                event_type="WEBHOOK_IGNORED",
+                payload={"event": event, "reason": "unrecognised_event"},
+            )
 
         return payment
 
