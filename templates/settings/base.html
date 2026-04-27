@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Settings{% if settings_title %} — {{ settings_title }}{% endif %}{% endblock %}
+
+{% block content %}
+<style>
+/* ── Settings layout ──────────────────────────────────────────────────────── */
+.settings-layout {
+    display: flex;
+    gap: 28px;
+    align-items: flex-start;
+}
+
+/* Left nav panel */
+.settings-sidebar {
+    width: 210px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 88px;   /* topbar height + gutter */
+}
+
+.settings-sidebar-heading {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    padding: 4px 10px;
+    margin-top: 14px;
+    margin-bottom: 2px;
+}
+.settings-sidebar-heading:first-child { margin-top: 4px; }
+
+.settings-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    color: #475569;
+    font-size: 13.5px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.13s, color 0.13s;
+    white-space: nowrap;
+}
+
+.settings-nav-link i {
+    font-size: 14px;
+    opacity: 0.7;
+    flex-shrink: 0;
+    transition: opacity 0.13s;
+}
+
+.settings-nav-link:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+.settings-nav-link:hover i { opacity: 1; }
+
+.settings-nav-link.active {
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-weight: 600;
+}
+.settings-nav-link.active i { opacity: 1; }
+
+.settings-nav-link.disabled {
+    opacity: 0.38;
+    pointer-events: none;
+    cursor: default;
+}
+
+.settings-nav-soon {
+    font-size: 0.65rem;
+    background: #e2e8f0;
+    color: #64748b;
+    padding: 1px 5px;
+    border-radius: 99px;
+    font-weight: 600;
+    margin-left: auto;
+    letter-spacing: 0.02em;
+}
+
+/* Right content area */
+.settings-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.settings-page-header {
+    margin-bottom: 24px;
+}
+.settings-page-header h5 {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 2px;
+}
+.settings-page-header p {
+    font-size: 0.825rem;
+    color: #64748b;
+    margin: 0;
+}
+
+.settings-section {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+}
+.settings-section-title {
+    font-size: 0.825rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #94a3b8;
+    margin-bottom: 14px;
+}
+
+/* Mobile: stack vertically */
+@media (max-width: 767.98px) {
+    .settings-layout { flex-direction: column; gap: 16px; }
+    .settings-sidebar { width: 100%; position: static; display: flex; flex-wrap: wrap; gap: 4px; }
+    .settings-sidebar-heading { display: none; }
+    .settings-nav-link { font-size: 12.5px; padding: 6px 10px; }
+}
+</style>
+
+<div class="d-flex align-items-center gap-2 mb-4">
+    <a href="{% url 'settings:general' %}" class="text-muted text-decoration-none" style="font-size:0.82rem;">
+        <i class="bi bi-gear me-1" aria-hidden="true"></i>Settings
+    </a>
+    {% block settings_breadcrumb %}{% endblock %}
+</div>
+
+<div class="settings-layout">
+
+    {# ── Left sidebar nav ─────────────────────────────────────────── #}
+    <aside class="settings-sidebar" aria-label="Settings navigation">
+
+        <div class="settings-sidebar-heading">Workspace</div>
+
+        <a href="{% url 'settings:general' %}"
+           class="settings-nav-link{% if active_tab == 'general' %} active{% endif %}">
+            <i class="bi bi-sliders2" aria-hidden="true"></i>
+            General
+        </a>
+
+        <div class="settings-sidebar-heading">Integrations</div>
+
+        <a href="{% url 'settings:payments' %}"
+           class="settings-nav-link{% if active_tab == 'payments' %} active{% endif %}">
+            <i class="bi bi-credit-card" aria-hidden="true"></i>
+            Payments
+        </a>
+
+        <a href="{% url 'settings:communications' %}"
+           class="settings-nav-link{% if active_tab == 'communications' %} active{% endif %}">
+            <i class="bi bi-chat-square-dots" aria-hidden="true"></i>
+            Communications
+        </a>
+
+        <div class="settings-sidebar-heading">Access</div>
+
+        <a href="{% url 'settings:roles:list' %}"
+           class="settings-nav-link{% if active_tab == 'roles' or '/settings/roles' in request.path %} active{% endif %}">
+            <i class="bi bi-shield-lock" aria-hidden="true"></i>
+            Roles &amp; Permissions
+        </a>
+
+        <div class="settings-sidebar-heading">Customisation</div>
+
+        <a href="{% url 'settings:vocabulary:vocabulary' %}"
+           class="settings-nav-link{% if active_tab == 'vocabulary' %} active{% endif %}">
+            <i class="bi bi-translate" aria-hidden="true"></i>
+            Vocabulary
+        </a>
+
+        <a href="{% url 'settings:branding:branding' %}"
+           class="settings-nav-link{% if active_tab == 'branding' %} active{% endif %}">
+            <i class="bi bi-palette" aria-hidden="true"></i>
+            Branding
+        </a>
+
+        <div class="settings-sidebar-heading">Coming Soon</div>
+
+        <span class="settings-nav-link disabled" title="Not yet available">
+            <i class="bi bi-journal-text" aria-hidden="true"></i>
+            Audit Log
+            <span class="settings-nav-soon">Soon</span>
+        </span>
+        {# TODO: path('audit/', ...) — Phase 6 #}
+
+    </aside>
+
+    {# ── Right content panel ──────────────────────────────────────── #}
+    <div class="settings-content">
+        {% if messages %}
+        {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show py-2 mb-3" role="alert">
+            {{ msg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {% block settings_content %}{% endblock %}
+    </div>
+
+</div>
+{% endblock %}

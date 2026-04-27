@@ -6,10 +6,10 @@
 
     <!-- Header + Add Button -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="mb-0">Enquiries</h2>
+        <h2 class="mb-0">{{ labels.enquiry.plural|default:"Enquiries" }}</h2>
 
         <a href="{% url 'crm:enquiry_add' %}" class="btn btn-success">
-            + Add Enquiry
+            + Add {{ labels.enquiry.singular|default:"Enquiry" }}
         </a>
     </div>
 
@@ -143,7 +143,7 @@
                     {% empty %}
                     <tr>
                         <td colspan="5" class="text-center py-4">
-                            No enquiries found.
+                            No {{ labels.enquiry.plural|lower|default:"enquiries" }} found.
                         </td>
                     </tr>
                     {% endfor %}

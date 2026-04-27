@@ -13,6 +13,25 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'css/design-system.css' %}">
 
+    {# ── Tenant favicon ──────────────────────────────────────────── #}
+    {% if tenant_branding and tenant_branding.whitelabel_enabled and tenant_branding.favicon %}
+    <link rel="icon" type="image/x-icon" href="{{ tenant_branding.favicon.url }}">
+    {% endif %}
+
+    {# ── Tenant CSS variables (branding) ─────────────────────────── #}
+    <style>
+    :root {
+      --primary-color:     {{ b_primary }};
+      --primary-rgb:       {{ b_primary_rgb }};
+      --primary-hover:     {{ b_primary_hover }};
+      --secondary-color:   {{ b_secondary }};
+      --secondary-hover:   {{ b_secondary_hover }};
+    }
+    </style>
+    {% if tenant_branding and tenant_branding.whitelabel_enabled and tenant_branding.custom_css %}
+    <style id="tenant-custom-css">{{ tenant_branding.custom_css }}</style>
+    {% endif %}
+
     <style>
     /* ─── Skip link ─────────────────────────────────────────────── */
     .skip-link {
@@ -91,17 +110,45 @@
     .sidebar-nav::-webkit-scrollbar { width: 3px; }
     .sidebar-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
 
-    /* ─── Nav section labels ─────────────────────────────────────── */
-    .nav-section {
-        margin-top: 18px;
-        padding: 0 18px 5px;
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: #475569;
+    /* ─── Nav section separators & toggles ─────────────────────── */
+    .nav-section-sep {
+        height: 1px;
+        background: rgba(255,255,255,0.07);
+        margin: 10px 10px 0;
     }
-    .nav-section:first-child { margin-top: 8px; }
+
+    .nav-section-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        background: none;
+        border: none;
+        padding: 8px 14px 5px 18px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #9ca3af;
+        cursor: pointer;
+        transition: color 0.15s;
+        line-height: 1;
+    }
+    .nav-section-toggle:hover { color: #e2e8f0; }
+
+    .nav-chevron {
+        font-size: 10px;
+        opacity: 0.5;
+        flex-shrink: 0;
+        transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.15s;
+    }
+    .nav-section-toggle[aria-expanded="true"] .nav-chevron {
+        transform: rotate(180deg);
+        opacity: 0.8;
+    }
+    .nav-section-toggle:hover .nav-chevron { opacity: 0.8; }
+
+    .nav-group { overflow: hidden; }
 
     /* ─── Sidebar links — use .sidebar-link NOT Bootstrap .nav-link ─ */
     .sidebar-link {
@@ -133,7 +180,7 @@
     }
 
     .sidebar-link:hover {
-        background-color: rgba(255,255,255,0.07);
+        background-color: rgba(255,255,255,0.08);
         color: #fff;
     }
 
@@ -271,196 +318,249 @@
 
     <div class="sidebar-brand">
         <a href="{% url 'crm:dashboard' %}" aria-label="SaaS Platform — go to dashboard">
+            {% if tenant_branding and tenant_branding.whitelabel_enabled and tenant_branding.logo %}
+            <img src="{{ tenant_branding.logo.url }}"
+                 alt="Logo"
+                 style="width:30px;height:30px;border-radius:8px;object-fit:contain;flex-shrink:0;"
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+            <div class="brand-mark" aria-hidden="true" style="display:none;">S</div>
+            {% else %}
             <div class="brand-mark" aria-hidden="true">S</div>
+            {% endif %}
             <span class="brand-name">SaaS Platform</span>
         </a>
     </div>
 
-    <div class="sidebar-nav" role="list">
+    <div class="sidebar-nav">
 
-        <div class="nav-section" aria-hidden="true">Members</div>
+        {# ── Members ── #}
+        <div class="nav-section-sep"></div>
+        <button class="nav-section-toggle" data-bs-toggle="collapse"
+                data-bs-target="#grpMembers" aria-expanded="true" aria-controls="grpMembers">
+            Members <i class="bi bi-chevron-down nav-chevron" aria-hidden="true"></i>
+        </button>
+        <div class="collapse show nav-group" id="grpMembers">
+            <a href="{% url 'members:member_list' %}"
+               class="sidebar-link{% if request.path == '/members/' or request.path|slice:':9' == '/members/' and '/members/add' not in request.path %} active{% endif %}"
+               {% if request.path == '/members/' or request.path|slice:':9' == '/members/' and '/members/add' not in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-people-fill" aria-hidden="true"></i><span>All Members</span>
+            </a>
+            <a href="{% url 'members:member_create' %}"
+               class="sidebar-link{% if '/members/create' in request.path %} active{% endif %}"
+               {% if '/members/create' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-person-plus" aria-hidden="true"></i><span>Add Member</span>
+            </a>
+        </div>
 
-        <a href="{% url 'members:member_list' %}" role="listitem"
-           class="sidebar-link{% if request.path == '/members/' or request.path|slice:':9' == '/members/' and '/members/add' not in request.path %} active{% endif %}"
-           {% if request.path == '/members/' or request.path|slice:':9' == '/members/' and '/members/add' not in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-people-fill" aria-hidden="true"></i>
-            <span>All Members</span>
-        </a>
+        {# ── Memberships ── #}
+        <div class="nav-section-sep"></div>
+        <button class="nav-section-toggle" data-bs-toggle="collapse"
+                data-bs-target="#grpMemberships" aria-expanded="true" aria-controls="grpMemberships">
+            Memberships <i class="bi bi-chevron-down nav-chevron" aria-hidden="true"></i>
+        </button>
+        <div class="collapse show nav-group" id="grpMemberships">
+            <a href="{% url 'plan_list' %}"
+               class="sidebar-link{% if '/memberships/plans' in request.path and 'create' not in request.path and 'edit' not in request.path %} active{% endif %}"
+               {% if '/memberships/plans' in request.path and 'create' not in request.path and 'edit' not in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-card-checklist" aria-hidden="true"></i><span>Plans</span>
+            </a>
+            <a href="{% url 'plan_create' %}"
+               class="sidebar-link{% if '/memberships/plans/create' in request.path %} active{% endif %}"
+               {% if '/memberships/plans/create' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-plus-circle" aria-hidden="true"></i><span>New Plan</span>
+            </a>
+            <a href="{% url 'membership_add' %}"
+               class="sidebar-link{% if request.path == '/memberships/add/' %} active{% endif %}"
+               {% if request.path == '/memberships/add/' %}aria-current="page"{% endif %}>
+                <i class="bi bi-person-badge" aria-hidden="true"></i><span>Assign Membership</span>
+            </a>
+        </div>
 
-        <a href="{% url 'members:member_create' %}" role="listitem"
-           class="sidebar-link{% if '/members/create' in request.path %} active{% endif %}"
-           {% if '/members/create' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-person-plus" aria-hidden="true"></i>
-            <span>Add Member</span>
-        </a>
+        {# ── Sessions ── #}
+        <div class="nav-section-sep"></div>
+        <button class="nav-section-toggle" data-bs-toggle="collapse"
+                data-bs-target="#grpSessions" aria-expanded="true" aria-controls="grpSessions">
+            Sessions <i class="bi bi-chevron-down nav-chevron" aria-hidden="true"></i>
+        </button>
+        <div class="collapse show nav-group" id="grpSessions">
+            <a href="{% url 'sessions:session_calendar' %}"
+               class="sidebar-link{% if '/sessions/calendar' in request.path %} active{% endif %}"
+               {% if '/sessions/calendar' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-calendar-week" aria-hidden="true"></i><span>Calendar</span>
+            </a>
+            <a href="{% url 'sessions:session_templates_list' %}"
+               class="sidebar-link{% if '/sessions/templates' in request.path %} active{% endif %}"
+               {% if '/sessions/templates' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-layout-text-window" aria-hidden="true"></i><span>Templates</span>
+            </a>
+            <a href="{% url 'sessions:session_schedules_list' %}"
+               class="sidebar-link{% if '/sessions/schedules' in request.path %} active{% endif %}"
+               {% if '/sessions/schedules' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-calendar2-check" aria-hidden="true"></i><span>Schedules</span>
+            </a>
+        </div>
 
-        <div class="nav-section" aria-hidden="true">Memberships</div>
+        {# ── Bookings ── #}
+        <div class="nav-section-sep"></div>
+        <button class="nav-section-toggle" data-bs-toggle="collapse"
+                data-bs-target="#grpBookings" aria-expanded="true" aria-controls="grpBookings">
+            Bookings <i class="bi bi-chevron-down nav-chevron" aria-hidden="true"></i>
+        </button>
+        <div class="collapse show nav-group" id="grpBookings">
+            <a href="{% url 'bookings:booking_list' %}"
+               class="sidebar-link{% if '/bookings/' in request.path %} active{% endif %}"
+               {% if '/bookings/' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-bookmark-check" aria-hidden="true"></i><span>Bookings</span>
+            </a>
+        </div>
 
-        <a href="{% url 'plan_list' %}" role="listitem"
-           class="sidebar-link{% if '/memberships/plans' in request.path and 'create' not in request.path and 'edit' not in request.path %} active{% endif %}"
-           {% if '/memberships/plans' in request.path and 'create' not in request.path and 'edit' not in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-card-checklist" aria-hidden="true"></i>
-            <span>Plans</span>
-        </a>
+        {# ── Attendance ── #}
+        <div class="nav-section-sep"></div>
+        <button class="nav-section-toggle" data-bs-toggle="collapse"
+                data-bs-target="#grpAttendance" aria-expanded="true" aria-controls="grpAttendance">
+            Attendance <i class="bi bi-chevron-down nav-chevron" aria-hidden="true"></i>
+        </button>
+        <div class="collapse show nav-group" id="grpAttendance">
+            <a href="{% url 'attendance_ui' %}"
+               class="sidebar-link{% if '/attendance/ui' in request.path %} active{% endif %}"
+               {% if '/attendance/ui' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-clipboard2-check" aria-hidden="true"></i><span>Mark Attendance</span>
+            </a>
+        </div>
 
-        <a href="{% url 'plan_create' %}" role="listitem"
-           class="sidebar-link{% if '/memberships/plans/create' in request.path %} active{% endif %}"
-           {% if '/memberships/plans/create' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-plus-circle" aria-hidden="true"></i>
-            <span>New Plan</span>
-        </a>
+        {# ── CRM ── #}
+        <div class="nav-section-sep"></div>
+        <button class="nav-section-toggle" data-bs-toggle="collapse"
+                data-bs-target="#grpCRM" aria-expanded="true" aria-controls="grpCRM">
+            CRM <i class="bi bi-chevron-down nav-chevron" aria-hidden="true"></i>
+        </button>
+        <div class="collapse show nav-group" id="grpCRM">
+            <a href="{% url 'crm:dashboard' %}"
+               class="sidebar-link{% if '/crm/dashboard' in request.path %} active{% endif %}"
+               {% if '/crm/dashboard' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-speedometer2" aria-hidden="true"></i><span>Dashboard</span>
+            </a>
+            <a href="{% url 'crm:enquiry_list' %}"
+               class="sidebar-link{% if '/crm/enquiries' in request.path %} active{% endif %}"
+               {% if '/crm/enquiries' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-chat-square-dots" aria-hidden="true"></i><span>Enquiries</span>
+            </a>
+            <a href="{% url 'crm:enquiry_kanban' %}"
+               class="sidebar-link{% if '/crm/kanban' in request.path %} active{% endif %}"
+               {% if '/crm/kanban' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-kanban" aria-hidden="true"></i><span>Pipeline</span>
+            </a>
+            <a href="{% url 'crm:followup_queue' %}"
+               class="sidebar-link{% if '/crm/followups' in request.path %} active{% endif %}"
+               {% if '/crm/followups' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-telephone-outbound" aria-hidden="true"></i><span>Follow-up Queue</span>
+            </a>
+        </div>
 
-        <a href="{% url 'membership_add' %}" role="listitem"
-           class="sidebar-link{% if request.path == '/memberships/add/' %} active{% endif %}"
-           {% if request.path == '/memberships/add/' %}aria-current="page"{% endif %}>
-            <i class="bi bi-person-badge" aria-hidden="true"></i>
-            <span>Assign Membership</span>
-        </a>
+        {# ── Finance ── #}
+        <div class="nav-section-sep"></div>
+        <button class="nav-section-toggle" data-bs-toggle="collapse"
+                data-bs-target="#grpFinance" aria-expanded="true" aria-controls="grpFinance">
+            Finance <i class="bi bi-chevron-down nav-chevron" aria-hidden="true"></i>
+        </button>
+        <div class="collapse show nav-group" id="grpFinance">
+            <a href="{% url 'payments:payment_list' %}"
+               class="sidebar-link{% if '/payments/' in request.path %} active{% endif %}"
+               {% if '/payments/' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-credit-card" aria-hidden="true"></i><span>Payments</span>
+            </a>
+        </div>
 
-        <div class="nav-section" aria-hidden="true">Sessions</div>
+        {# ── Communications ── #}
+        <div class="nav-section-sep"></div>
+        <button class="nav-section-toggle" data-bs-toggle="collapse"
+                data-bs-target="#grpComms" aria-expanded="true" aria-controls="grpComms">
+            Communications <i class="bi bi-chevron-down nav-chevron" aria-hidden="true"></i>
+        </button>
+        <div class="collapse show nav-group" id="grpComms">
+            <a href="{% url 'communications:template_list' %}"
+               class="sidebar-link{% if '/communications/templates' in request.path %} active{% endif %}"
+               {% if '/communications/templates' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-chat-square-text" aria-hidden="true"></i><span>Templates</span>
+            </a>
+            <a href="{% url 'communications:trigger_list' %}"
+               class="sidebar-link{% if '/communications/triggers' in request.path %} active{% endif %}"
+               {% if '/communications/triggers' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-lightning-charge" aria-hidden="true"></i><span>Triggers</span>
+            </a>
+            <a href="{% url 'communications:log_list' %}"
+               class="sidebar-link{% if '/communications/logs' in request.path %} active{% endif %}"
+               {% if '/communications/logs' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-journal-check" aria-hidden="true"></i><span>Message Logs</span>
+            </a>
+        </div>
 
-        <a href="{% url 'sessions:session_calendar' %}" role="listitem"
-           class="sidebar-link{% if '/sessions/calendar' in request.path %} active{% endif %}"
-           {% if '/sessions/calendar' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-calendar-week" aria-hidden="true"></i>
-            <span>Calendar</span>
-        </a>
+        {# ── Analytics ── #}
+        <div class="nav-section-sep"></div>
+        <button class="nav-section-toggle" data-bs-toggle="collapse"
+                data-bs-target="#grpAnalytics" aria-expanded="true" aria-controls="grpAnalytics">
+            Analytics <i class="bi bi-chevron-down nav-chevron" aria-hidden="true"></i>
+        </button>
+        <div class="collapse show nav-group" id="grpAnalytics">
+            <a href="{% url 'analytics:dashboard' %}"
+               class="sidebar-link{% if '/analytics/' in request.path %} active{% endif %}"
+               {% if '/analytics/' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-bar-chart-line-fill" aria-hidden="true"></i><span>Dashboard</span>
+            </a>
+        </div>
 
-        <a href="{% url 'sessions:session_templates_list' %}" role="listitem"
-           class="sidebar-link{% if '/sessions/templates' in request.path %} active{% endif %}"
-           {% if '/sessions/templates' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-layout-text-window" aria-hidden="true"></i>
-            <span>Templates</span>
-        </a>
+        {# ── Settings ── #}
+        <div class="nav-section-sep"></div>
+        <button class="nav-section-toggle" data-bs-toggle="collapse"
+                data-bs-target="#grpSettings" aria-expanded="true" aria-controls="grpSettings">
+            Settings <i class="bi bi-chevron-down nav-chevron" aria-hidden="true"></i>
+        </button>
+        <div class="collapse show nav-group" id="grpSettings">
+            <a href="{% url 'settings:general' %}"
+               class="sidebar-link{% if '/settings/' in request.path %} active{% endif %}"
+               {% if '/settings/' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-gear" aria-hidden="true"></i><span>Settings</span>
+            </a>
+        </div>
 
-        <a href="{% url 'sessions:session_schedules_list' %}" role="listitem"
-           class="sidebar-link{% if '/sessions/schedules' in request.path %} active{% endif %}"
-           {% if '/sessions/schedules' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-calendar2-check" aria-hidden="true"></i>
-            <span>Schedules</span>
-        </a>
-
-        <div class="nav-section" aria-hidden="true">Bookings</div>
-
-        <a href="{% url 'bookings:booking_list' %}" role="listitem"
-           class="sidebar-link{% if '/bookings/' in request.path %} active{% endif %}"
-           {% if '/bookings/' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-bookmark-check" aria-hidden="true"></i>
-            <span>Bookings</span>
-        </a>
-
-        <div class="nav-section" aria-hidden="true">Attendance</div>
-
-        <a href="{% url 'attendance_ui' %}" role="listitem"
-           class="sidebar-link{% if '/attendance/ui' in request.path %} active{% endif %}"
-           {% if '/attendance/ui' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-clipboard2-check" aria-hidden="true"></i>
-            <span>Mark Attendance</span>
-        </a>
-
-        <div class="nav-section" aria-hidden="true">CRM</div>
-
-        <a href="{% url 'crm:dashboard' %}" role="listitem"
-           class="sidebar-link{% if '/crm/dashboard' in request.path %} active{% endif %}"
-           {% if '/crm/dashboard' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-speedometer2" aria-hidden="true"></i>
-            <span>Dashboard</span>
-        </a>
-
-        <a href="{% url 'crm:enquiry_list' %}" role="listitem"
-           class="sidebar-link{% if '/crm/enquiries' in request.path %} active{% endif %}"
-           {% if '/crm/enquiries' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-chat-square-dots" aria-hidden="true"></i>
-            <span>Enquiries</span>
-        </a>
-
-        <a href="{% url 'crm:enquiry_kanban' %}" role="listitem"
-           class="sidebar-link{% if '/crm/kanban' in request.path %} active{% endif %}"
-           {% if '/crm/kanban' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-kanban" aria-hidden="true"></i>
-            <span>Pipeline</span>
-        </a>
-
-        <a href="{% url 'crm:followup_queue' %}" role="listitem"
-           class="sidebar-link{% if '/crm/followups' in request.path %} active{% endif %}"
-           {% if '/crm/followups' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-telephone-outbound" aria-hidden="true"></i>
-            <span>Follow-up Queue</span>
-        </a>
-
-        <div class="nav-section" aria-hidden="true">Finance</div>
-
-        <a href="{% url 'payments:payment_list' %}" role="listitem"
-           class="sidebar-link{% if '/payments/' in request.path %} active{% endif %}"
-           {% if '/payments/' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-credit-card" aria-hidden="true"></i>
-            <span>Payments</span>
-        </a>
-
-        <div class="nav-section" aria-hidden="true">Communications</div>
-
-        <a href="{% url 'communications:template_list' %}" role="listitem"
-           class="sidebar-link{% if '/communications/templates' in request.path %} active{% endif %}"
-           {% if '/communications/templates' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-chat-square-text" aria-hidden="true"></i>
-            <span>Templates</span>
-        </a>
-
-        <a href="{% url 'communications:trigger_list' %}" role="listitem"
-           class="sidebar-link{% if '/communications/triggers' in request.path %} active{% endif %}"
-           {% if '/communications/triggers' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-lightning-charge" aria-hidden="true"></i>
-            <span>Triggers</span>
-        </a>
-
-        <a href="{% url 'communications:log_list' %}" role="listitem"
-           class="sidebar-link{% if '/communications/logs' in request.path %} active{% endif %}"
-           {% if '/communications/logs' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-journal-check" aria-hidden="true"></i>
-            <span>Message Logs</span>
-        </a>
-
-        <div class="nav-section" aria-hidden="true">Analytics</div>
-
-        <a href="{% url 'analytics:dashboard' %}" role="listitem"
-           class="sidebar-link{% if '/analytics/' in request.path %} active{% endif %}"
-           {% if '/analytics/' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-bar-chart-line-fill" aria-hidden="true"></i>
-            <span>Dashboard</span>
-        </a>
-
-        <div class="nav-section" aria-hidden="true">Forms</div>
-
-        <a href="{% url 'intake:form_builder_list' %}" role="listitem"
-           class="sidebar-link{% if '/intake/' in request.path %} active{% endif %}"
-           {% if '/intake/' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-ui-checks-grid" aria-hidden="true"></i>
-            <span>Intake Forms</span>
-        </a>
+        {# ── Forms ── #}
+        <div class="nav-section-sep"></div>
+        <button class="nav-section-toggle" data-bs-toggle="collapse"
+                data-bs-target="#grpForms" aria-expanded="true" aria-controls="grpForms">
+            Forms <i class="bi bi-chevron-down nav-chevron" aria-hidden="true"></i>
+        </button>
+        <div class="collapse show nav-group" id="grpForms">
+            <a href="{% url 'intake:form_builder_list' %}"
+               class="sidebar-link{% if '/intake/' in request.path %} active{% endif %}"
+               {% if '/intake/' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-ui-checks-grid" aria-hidden="true"></i><span>Intake Forms</span>
+            </a>
+        </div>
 
         {% if request.user.is_platform_admin %}
-        <div class="nav-section" aria-hidden="true">Platform</div>
-
-        <a href="{% url 'monitoring:lifecycle_dashboard' %}" role="listitem"
-           class="sidebar-link{% if '/monitoring/' in request.path %} active{% endif %}"
-           {% if '/monitoring/' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-activity" aria-hidden="true"></i>
-            <span>Lifecycle Monitor</span>
-        </a>
-
-        <a href="/platform/dashboard/" role="listitem"
-           class="sidebar-link{% if '/platform/dashboard' in request.path %} active{% endif %}"
-           {% if '/platform/dashboard' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>
-            <span>Platform Dashboard</span>
-        </a>
-
-        <a href="/platform/tenants/" role="listitem"
-           class="sidebar-link{% if '/platform/tenants' in request.path %} active{% endif %}"
-           {% if '/platform/tenants' in request.path %}aria-current="page"{% endif %}>
-            <i class="bi bi-building" aria-hidden="true"></i>
-            <span>Tenants</span>
-        </a>
+        {# ── Platform ── #}
+        <div class="nav-section-sep"></div>
+        <button class="nav-section-toggle" data-bs-toggle="collapse"
+                data-bs-target="#grpPlatform" aria-expanded="true" aria-controls="grpPlatform">
+            Platform <i class="bi bi-chevron-down nav-chevron" aria-hidden="true"></i>
+        </button>
+        <div class="collapse show nav-group" id="grpPlatform">
+            <a href="{% url 'monitoring:lifecycle_dashboard' %}"
+               class="sidebar-link{% if '/monitoring/' in request.path %} active{% endif %}"
+               {% if '/monitoring/' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-activity" aria-hidden="true"></i><span>Lifecycle Monitor</span>
+            </a>
+            <a href="/platform/dashboard/"
+               class="sidebar-link{% if '/platform/dashboard' in request.path %} active{% endif %}"
+               {% if '/platform/dashboard' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i><span>Platform Dashboard</span>
+            </a>
+            <a href="/platform/tenants/"
+               class="sidebar-link{% if '/platform/tenants' in request.path %} active{% endif %}"
+               {% if '/platform/tenants' in request.path %}aria-current="page"{% endif %}>
+                <i class="bi bi-building" aria-hidden="true"></i><span>Tenants</span>
+            </a>
+        </div>
         {% endif %}
 
     </div>
@@ -520,6 +620,8 @@
 
 </main>
 
+{% block modals %}{% endblock %}
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
 <script>
 (function () {
@@ -561,7 +663,31 @@
         if (topbar) topbar.classList.toggle('scrolled', window.scrollY > 4);
     }, { passive: true });
 }());
+
+// ── Collapsible sidebar groups: restore state after Bootstrap loads ──
+window.addEventListener('load', function () {
+    var groups = document.querySelectorAll('.sidebar-nav .collapse');
+    groups.forEach(function (el) {
+        var btn = document.querySelector('[data-bs-target="#' + el.id + '"]');
+        var hasActive = el.querySelector('.sidebar-link.active');
+
+        // Always keep the active section open; restore others from sessionStorage
+        if (!hasActive && sessionStorage.getItem('sb_' + el.id) === '0') {
+            var instance = bootstrap.Collapse.getOrCreateInstance(el, { toggle: false });
+            instance.hide();
+        }
+
+        el.addEventListener('hidden.bs.collapse', function () {
+            sessionStorage.setItem('sb_' + el.id, '0');
+        });
+        el.addEventListener('shown.bs.collapse', function () {
+            sessionStorage.removeItem('sb_' + el.id);
+        });
+    });
+});
 </script>
+
+{% block extra_js %}{% endblock %}
 
 </body>
 </html>

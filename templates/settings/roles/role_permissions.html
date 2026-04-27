@@ -1,0 +1,166 @@
+{% extends "settings/base.html" %}
+{% block settings_title %}Permissions — {{ role.name }}{% endblock %}
+{% block settings_breadcrumb %}
+<i class="bi bi-chevron-right text-muted mx-1" style="font-size:0.7rem;"></i>
+<a href="{% url 'settings:roles:list' %}" style="font-size:0.82rem;">Roles</a>
+<i class="bi bi-chevron-right text-muted mx-1" style="font-size:0.7rem;"></i>
+<span style="font-size:0.82rem;">Permissions</span>
+{% endblock %}
+
+{% block settings_content %}
+<div class="settings-page-header">
+  <h5>Permissions — {{ role.name }}</h5>
+  <p>Check the permissions for this role. Dependencies are auto-selected.</p>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show py-2">
+  {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<form method="post" id="permForm">
+  {% csrf_token %}
+
+  <div class="d-flex gap-2 mb-3">
+    <button type="button" id="btnSelectAll" class="btn btn-sm btn-outline-secondary">Select All</button>
+    <button type="button" id="btnClearAll"  class="btn btn-sm btn-outline-secondary">Clear All</button>
+  </div>
+
+  {% for module, perms in by_module.items %}
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header d-flex align-items-center gap-2 py-2">
+      <i class="bi bi-grid-3x3-gap text-muted" aria-hidden="true"></i>
+      <span class="fw-semibold text-uppercase" style="font-size:0.75rem;letter-spacing:.06em;">
+        {{ module }}
+      </span>
+    </div>
+    <div class="card-body py-2">
+      {% for perm in perms %}
+      <div class="form-check py-1 perm-row{% if perm.code in granted_codes %} perm-granted{% endif %}"
+           id="row-{{ perm.code|slugify }}"
+           data-code="{{ perm.code }}">
+        <input class="form-check-input perm-cb"
+               type="checkbox"
+               id="perm-{{ perm.code|slugify }}"
+               name="permissions"
+               value="{{ perm.code }}"
+               data-code="{{ perm.code }}"
+               {% if perm.code in granted_codes %}checked{% endif %}>
+        <label class="form-check-label d-flex align-items-start gap-2 w-100"
+               for="perm-{{ perm.code|slugify }}" style="cursor:pointer;">
+          <div>
+            <span class="fw-semibold small">{{ perm.label }}</span>
+            <code class="d-block text-muted" style="font-size:0.72rem;">{{ perm.code }}</code>
+            {% if perm.description %}
+            <span class="text-muted" style="font-size:0.78rem;">{{ perm.description }}</span>
+            {% endif %}
+            {% if perm.depends_on.all %}
+            <div class="mt-1">
+              {% for dep in perm.depends_on.all %}
+              <span class="badge bg-warning-subtle text-warning-emphasis me-1" style="font-size:0.68rem;">
+                requires: {{ dep.code }}
+              </span>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+        </label>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="d-flex gap-2 mt-3">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-circle me-1"></i>Save Permissions
+    </button>
+    <a href="{% url 'settings:roles:list' %}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  // dep_map:  { code → [dependency codes] }   (what a perm needs)
+  // rev_map:  { code → [dependent codes] }    (what needs a perm)
+  const depMap = {{ dep_map_json|safe }};
+  const revMap = {{ rev_map_json|safe }};
+
+  function cb(code) {
+    return document.querySelector('.perm-cb[data-code="' + CSS.escape(code) + '"]');
+  }
+
+  // When a checkbox is checked → auto-check all transitive dependencies
+  function autoSelect(code) {
+    const deps = depMap[code] || [];
+    deps.forEach(function (depCode) {
+      const el = cb(depCode);
+      if (el && !el.checked) {
+        el.checked = true;
+        highlight(depCode, true);
+        autoSelect(depCode);   // recurse
+      }
+    });
+  }
+
+  // When a checkbox is unchecked → uncheck all dependents that were relying on it
+  function autoClear(code) {
+    const dependents = revMap[code] || [];
+    dependents.forEach(function (depCode) {
+      const el = cb(depCode);
+      if (el && el.checked) {
+        el.checked = false;
+        highlight(depCode, false);
+        autoClear(depCode);    // recurse
+      }
+    });
+  }
+
+  function highlight(code, on) {
+    const row = document.getElementById('row-' + CSS.escape(code));
+    if (row) row.classList.toggle('perm-auto', on);
+  }
+
+  document.querySelectorAll('.perm-cb').forEach(function (el) {
+    el.addEventListener('change', function () {
+      if (el.checked) {
+        autoSelect(el.dataset.code);
+      } else {
+        const blocked = (revMap[el.dataset.code] || []).filter(function (c) {
+          const dep = cb(c);
+          return dep && dep.checked;
+        });
+        if (blocked.length) {
+          const names = blocked.join(', ');
+          if (!confirm('Removing this permission will also remove:\n' + names + '\n\nContinue?')) {
+            el.checked = true;
+            return;
+          }
+          autoClear(el.dataset.code);
+        }
+      }
+    });
+  });
+
+  document.getElementById('btnSelectAll').addEventListener('click', function () {
+    document.querySelectorAll('.perm-cb').forEach(function (el) { el.checked = true; });
+  });
+  document.getElementById('btnClearAll').addEventListener('click', function () {
+    document.querySelectorAll('.perm-cb').forEach(function (el) { el.checked = false; });
+  });
+}());
+</script>
+<style>
+.perm-row { border-radius: 6px; padding: 6px 8px; transition: background 0.15s; }
+.perm-row:hover { background: #f8fafc; }
+.perm-granted  { background: #f0fdf4; }
+.perm-auto     { background: #fffbeb; }
+</style>
+{% endblock %}

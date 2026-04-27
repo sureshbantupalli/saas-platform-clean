@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h4 class="fw-bold mb-0">Settings</h4>
+    <p class="text-muted small mb-0">Configure your workspace</p>
+  </div>
+</div>
+
+<div class="row g-3">
+  {% for section in sections %}
+  <div class="col-12 col-md-6 col-xl-4">
+    <a href="{% url section.url_name %}" class="text-decoration-none">
+      <div class="card border-0 shadow-sm h-100 card-interactive">
+        <div class="card-body p-4">
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <div class="rounded-3 p-2 bg-primary bg-opacity-10">
+              <i class="bi {{ section.icon }} fs-4 text-primary" aria-hidden="true"></i>
+            </div>
+            <div>
+              <h6 class="fw-semibold mb-0">{{ section.title }}</h6>
+              <span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size:0.7rem;">
+                Phase {{ section.phase }}
+              </span>
+            </div>
+          </div>
+          <p class="text-muted small mb-0">{{ section.description }}</p>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+
+  {# Placeholder cards for upcoming phases #}
+  {% for label in "Payments,Communications,Vocabulary,Branding,Audit Log"|split:"," %}
+  <div class="col-12 col-md-6 col-xl-4">
+    <div class="card border-0 shadow-sm h-100 opacity-50">
+      <div class="card-body p-4">
+        <div class="d-flex align-items-center gap-3 mb-3">
+          <div class="rounded-3 p-2 bg-secondary bg-opacity-10">
+            <i class="bi bi-clock fs-4 text-muted" aria-hidden="true"></i>
+          </div>
+          <div>
+            <h6 class="fw-semibold mb-0 text-muted">{{ label }}</h6>
+            <span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size:0.7rem;">Coming soon</span>
+          </div>
+        </div>
+        <p class="text-muted small mb-0">This settings section is being built.</p>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

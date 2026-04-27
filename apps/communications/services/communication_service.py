@@ -74,10 +74,34 @@ def send_message(
     Render the template with context, apply rate limit, pick the right adapter,
     send, and write a CommunicationLog. Always returns a log — never raises.
     """
+    from django.conf import settings
+
     channel   = template.channel
     recipient = _resolve_recipient(channel, context)
-    message   = render_template(template.content, context)
-    subject   = render_template(template.subject, context) if template.subject else ""
+    text_message = ""
+
+    if channel == Channel.EMAIL:
+        from apps.branding_adapter.email_renderer import (
+            render_branded_email, render_branded_email_text,
+        )
+        from apps.branding_adapter.branding_adapter import BrandingAdapter
+
+        branding_ctx = BrandingAdapter.get_branding_context(tenant)
+        message      = render_branded_email(template.content, context, tenant)
+        text_message = render_branded_email_text(template.content, context, tenant)
+    else:
+        branding_ctx = {}
+        message      = render_template(template.content, context)
+
+    subject = render_template(template.subject, context) if template.subject else ""
+
+    # Optional: prefix subject with brand name — set COMMS_BRAND_EMAIL_SUBJECT=True to enable
+    if (channel == Channel.EMAIL
+            and subject
+            and getattr(settings, 'COMMS_BRAND_EMAIL_SUBJECT', False)):
+        brand_name = branding_ctx.get('brand_name', '')
+        if brand_name:
+            subject = f'[{brand_name}] {subject}'
 
     # Warn on missing template placeholders so operators can fix templates
     missing = extract_placeholders(template.content) - set(context.keys())
@@ -183,7 +207,7 @@ def send_message(
 
     # ── Send ───────────────────────────────────────────────────────────────────
     try:
-        adapter.send(to=recipient, message=message, subject=subject)
+        adapter.send(to=recipient, message=message, subject=subject, text=text_message)
         log.status = MessageStatus.SENT
     except Exception as exc:
         log.status        = MessageStatus.FAILED

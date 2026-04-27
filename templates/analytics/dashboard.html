@@ -87,7 +87,7 @@
     <div class="col-6 col-md-3">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body">
-          <p class="text-muted small mb-1">Total Members</p>
+          <p class="text-muted small mb-1">Total {{ labels.member.plural|default:"Members" }}</p>
           <h3 class="fw-bold mb-0">{{ data.summary.total_members }}</h3>
           <p class="text-success small mb-0 mt-1">
             <i class="bi bi-person-plus"></i> {{ data.summary.new_members_last_30_days }} new (30d)
@@ -99,7 +99,7 @@
     <div class="col-6 col-md-3">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body">
-          <p class="text-muted small mb-1">Active Members</p>
+          <p class="text-muted small mb-1">Active {{ labels.member.plural|default:"Members" }}</p>
           <h3 class="fw-bold mb-0">{{ data.summary.active_members }}</h3>
           <p class="text-muted small mb-0 mt-1">
             <i class="bi bi-graph-up"></i> {{ data.retention.retention_rate }}% retention
@@ -127,10 +127,10 @@
     <div class="col-6 col-md-3">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body">
-          <p class="text-muted small mb-1">Lead Conversion</p>
+          <p class="text-muted small mb-1">{{ labels.lead.singular|default:"Lead" }} Conversion</p>
           <h3 class="fw-bold mb-0">{{ data.summary.conversion_rate }}%</h3>
           <p class="text-muted small mb-0 mt-1">
-            <i class="bi bi-funnel"></i> {{ data.summary.converted_leads }}/{{ data.summary.total_leads }} leads
+            <i class="bi bi-funnel"></i> {{ data.summary.converted_leads }}/{{ data.summary.total_leads }} {{ labels.lead.plural|default:"leads" }}
           </p>
         </div>
       </div>
@@ -219,7 +219,7 @@
             <span class="fw-bold text-primary">{{ data.engagement.engagement_rate }}%</span>
           </div>
           <div class="d-flex justify-content-between align-items-center">
-            <span class="text-muted small">At-risk members</span>
+            <span class="text-muted small">At-risk {{ labels.member.plural|default:"members" }}</span>
             <span class="fw-bold {% if data.at_risk_members.count %}text-warning{% endif %}">
               {{ data.at_risk_members.count }}
             </span>

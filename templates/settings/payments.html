@@ -1,0 +1,54 @@
+{% extends "settings/base.html" %}
+{% block settings_title %}Payments{% endblock %}
+{% block settings_breadcrumb %}
+<i class="bi bi-chevron-right text-muted mx-1" style="font-size:0.7rem;"></i>
+<span style="font-size:0.82rem;">Payments</span>
+{% endblock %}
+
+{% block settings_content %}
+<div class="settings-page-header">
+    <h5>Payment Settings</h5>
+    <p>Configure payment providers and collection methods for your workspace.</p>
+</div>
+
+{# ── Provider cards ─────────────────────────────────────────────────────── #}
+<div class="settings-section">
+    <div class="settings-section-title">Payment Providers</div>
+    <p class="text-muted small mb-4">
+        Connect a payment provider to enable online payment collection and tracking.
+    </p>
+
+    {% for provider in providers|default:default_providers %}
+    <div class="d-flex align-items-center justify-content-between p-3 rounded border mb-2"
+         style="background:#f8fafc;">
+        <div class="d-flex align-items-center gap-3">
+            <div class="rounded-2 p-2 bg-white border d-flex align-items-center justify-content-center"
+                 style="width:40px;height:40px;">
+                <i class="bi {{ provider.icon }} fs-5 text-muted" aria-hidden="true"></i>
+            </div>
+            <div>
+                <div class="fw-semibold small">{{ provider.name }}</div>
+                <div class="text-muted" style="font-size:0.78rem;">{{ provider.description }}</div>
+            </div>
+        </div>
+        <span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size:0.72rem;">
+            Not configured
+        </span>
+    </div>
+    {% empty %}
+    <div class="text-muted small">No providers defined.</div>
+    {% endfor %}
+</div>
+
+{# TODO: Add payment provider configuration forms here (Phase 3 – Payments) #}
+{# TODO: Add webhook settings section here #}
+{# TODO: Add tax configuration section here #}
+
+<div class="alert alert-info d-flex align-items-start gap-2 py-2" role="note">
+    <i class="bi bi-info-circle-fill flex-shrink-0 mt-1" aria-hidden="true"></i>
+    <div class="small">
+        <strong>Coming in Phase 3.</strong> Payment provider configuration,
+        Razorpay/Stripe integration, and webhook setup will be available here.
+    </div>
+</div>
+{% endblock %}

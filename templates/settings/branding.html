@@ -1,0 +1,798 @@
+{% extends "settings/base.html" %}
+{% block settings_title %}Branding{% endblock %}
+{% block settings_breadcrumb %}
+<i class="bi bi-chevron-right text-muted mx-1" style="font-size:0.7rem;"></i>
+<span style="font-size:0.82rem;">Branding</span>
+{% endblock %}
+
+{% block settings_content %}
+
+{# ── Unsaved-changes banner (hidden until JS shows it) ───────────── #}
+<div id="unsavedBanner" class="alert alert-warning py-2 d-flex align-items-center gap-2 mb-3"
+     role="alert" style="display:none !important;">
+  <i class="bi bi-exclamation-triangle-fill flex-shrink-0" aria-hidden="true"></i>
+  <span class="small fw-semibold">You have unsaved changes — click <strong>Save Branding</strong> to persist them.</span>
+</div>
+
+<div class="settings-page-header">
+  <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+    <div>
+      <h5 class="mb-0">Branding</h5>
+      <p class="text-muted small mb-0 mt-1">Customise your tenant's visual identity. Changes apply only to your environment.</p>
+    </div>
+    {# ── Live Theme Preview toggle ─────────────────────────────── #}
+    <div class="d-flex align-items-center gap-2 flex-shrink-0">
+      <span class="small text-muted">Preview Mode</span>
+      <div class="form-check form-switch mb-0" title="Apply colours across the whole app without saving">
+        <input class="form-check-input" type="checkbox" role="switch"
+               id="previewModeToggle" style="cursor:pointer;">
+        <label class="form-check-label small" for="previewModeToggle" id="previewModeLabel">Off</label>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if feature_locked %}
+<div class="card border-0 shadow-sm mb-4" style="border-left:4px solid #f59e0b !important;">
+  <div class="card-body d-flex align-items-start gap-3 py-3">
+    <i class="bi bi-lock-fill text-warning fs-4 flex-shrink-0 mt-1" aria-hidden="true"></i>
+    <div>
+      <p class="fw-semibold mb-1">Upgrade your plan to enable branding</p>
+      <p class="text-muted small mb-0">
+        White-label branding is available on higher-tier plans.
+        Contact your platform administrator to enable this feature.
+      </p>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" id="brandingForm"
+      {% if feature_locked %}aria-disabled="true"{% endif %}>
+  {% csrf_token %}
+  <div class="row g-4">
+
+    {# ══════════════════════════════════════════════════════════════ #}
+    {# LEFT COLUMN — controls                                         #}
+    {# ══════════════════════════════════════════════════════════════ #}
+    <div class="col-12 col-lg-7">
+
+      {# ── Logo & Favicon ──────────────────────────────────────── #}
+      <div class="settings-section">
+        <div class="settings-section-title">Logo &amp; Favicon</div>
+
+        <div class="mb-3">
+          <label class="form-label small fw-semibold" for="id_logo">Logo</label>
+          {% if branding and branding.logo %}
+          <div class="mb-2">
+            <img src="{{ branding.logo.url }}" alt="Current logo" id="logoCurrentImg"
+                 style="height:48px;border-radius:8px;border:1px solid #e2e8f0;
+                        object-fit:contain;padding:4px;"
+                 onerror="this.style.display='none'">
+          </div>
+          {% endif %}
+          <div class="d-flex gap-2 align-items-center flex-wrap">
+            <input type="file" class="form-control form-control-sm flex-grow-1"
+                   id="id_logo" name="logo"
+                   accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                   {% if feature_locked %}disabled{% endif %}>
+            <button type="button" id="btnGeneratePalette"
+                    class="btn btn-sm btn-outline-primary text-nowrap"
+                    {% if feature_locked %}disabled{% endif %}>
+              <i class="bi bi-palette2 me-1"></i>Generate Colors
+            </button>
+          </div>
+          <div class="form-text">Recommended: 200×50 px, PNG or JPEG. Max 2 MB.</div>
+        </div>
+
+        <div class="mb-0">
+          <label class="form-label small fw-semibold" for="id_favicon">Favicon</label>
+          {% if branding and branding.favicon %}
+          <div class="mb-2">
+            <img src="{{ branding.favicon.url }}" alt="Current favicon"
+                 style="height:24px;border-radius:4px;border:1px solid #e2e8f0;"
+                 onerror="this.style.display='none'">
+          </div>
+          {% endif %}
+          <input type="file" class="form-control form-control-sm"
+                 id="id_favicon" name="favicon"
+                 accept="image/x-icon,image/png,image/svg+xml"
+                 {% if feature_locked %}disabled{% endif %}>
+          <div class="form-text">ICO or 32×32 PNG recommended.</div>
+        </div>
+      </div>
+
+      {# ── Suggested Palette (hidden until API responds) ────────── #}
+      <div class="settings-section" id="paletteSuggestion" style="display:none;">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <div class="settings-section-title mb-0">Suggested Palette</div>
+          <div class="d-flex gap-1">
+            <button type="button" id="btnRegenerate" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-arrow-clockwise me-1"></i>Regenerate
+            </button>
+            <button type="button" id="btnDiscard" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-x me-1"></i>Discard
+            </button>
+          </div>
+        </div>
+
+        <div id="lowConfidenceWarning"
+             class="alert alert-warning py-2 small mb-3" style="display:none;">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          <span id="lowConfidenceMsg">
+            We couldn't confidently detect colors. You can adjust manually below.
+          </span>
+        </div>
+
+        <div id="adjustedNotice"
+             class="alert alert-info py-2 small mb-3" style="display:none;">
+          <i class="bi bi-magic me-1"></i>
+          Primary color was adjusted slightly for WCAG accessibility.
+        </div>
+
+        <div class="d-flex gap-3 align-items-center mb-3 flex-wrap">
+          <div class="text-center">
+            <div id="suggestedPrimaryDot"
+                 style="width:44px;height:44px;border-radius:10px;
+                        border:1px solid rgba(0,0,0,.1);
+                        transition:background 0.3s;margin:0 auto;"></div>
+            <div class="text-muted mt-1" style="font-size:0.7rem;">Primary</div>
+            <code id="suggestedPrimaryHex" class="small d-block"></code>
+          </div>
+          <div class="text-center">
+            <div id="suggestedSecondaryDot"
+                 style="width:44px;height:44px;border-radius:10px;
+                        border:1px solid rgba(0,0,0,.1);
+                        transition:background 0.3s;margin:0 auto;"></div>
+            <div class="text-muted mt-1" style="font-size:0.7rem;">Secondary</div>
+            <code id="suggestedSecondaryHex" class="small d-block"></code>
+          </div>
+          <div class="ms-auto d-flex flex-column gap-1">
+            <button type="button" id="btnApplySuggested" class="btn btn-sm btn-primary">
+              <i class="bi bi-check-circle me-1"></i>Apply Colors
+            </button>
+            <div id="contrastBadges" class="d-flex gap-1 flex-wrap"></div>
+          </div>
+        </div>
+
+        {# Mini palette preview strip #}
+        <div style="border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;">
+          <div id="ppHeader"
+               style="padding:8px 12px;font-size:0.78rem;font-weight:600;
+                      color:#fff;transition:background 0.3s;">
+            Accent header
+          </div>
+          <div style="padding:10px 12px;background:#fff;display:flex;gap:8px;align-items:center;">
+            <button id="ppBtnPrimary" type="button"
+                    style="border:none;color:#fff;padding:5px 14px;border-radius:6px;
+                           font-size:12px;font-weight:600;transition:background 0.3s;">
+              Primary
+            </button>
+            <button id="ppBtnSecondary" type="button"
+                    style="background:transparent;padding:5px 14px;border-radius:6px;
+                           font-size:12px;font-weight:600;border-width:1.5px;border-style:solid;
+                           transition:color 0.3s,border-color 0.3s;">
+              Secondary
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {# ── Spinner ──────────────────────────────────────────────── #}
+      <div id="paletteSpinner" class="text-center py-3" style="display:none;">
+        <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+        <span class="small text-muted">Analysing logo…</span>
+      </div>
+
+      {# ── Colour pickers ───────────────────────────────────────── #}
+      <div class="settings-section">
+        <div class="settings-section-title">Colours</div>
+
+        <div class="row g-3">
+          <div class="col-6">
+            <label class="form-label small fw-semibold" for="id_primary_color">
+              Primary
+              <i class="bi bi-question-circle text-muted ms-1" style="font-size:0.75rem;cursor:help;"
+                 title="Used for buttons, active states, and brand accents."></i>
+            </label>
+            <div class="input-group input-group-sm">
+              <input type="color" class="form-control form-control-color p-1"
+                     id="id_primary_color_picker"
+                     value="{{ branding.primary_color|default:defaults.primary_color }}"
+                     style="width:40px;min-width:40px;"
+                     {% if feature_locked %}disabled{% endif %}>
+              <input type="text" class="form-control font-monospace"
+                     id="id_primary_color" name="primary_color"
+                     value="{{ branding.primary_color|default:defaults.primary_color }}"
+                     placeholder="#0d6efd" maxlength="7" pattern="#[0-9A-Fa-f]{6}"
+                     {% if feature_locked %}disabled{% endif %}>
+            </div>
+            <div id="primaryContrastInfo" class="form-text mt-1"></div>
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold" for="id_secondary_color">
+              Secondary
+              <i class="bi bi-question-circle text-muted ms-1" style="font-size:0.75rem;cursor:help;"
+                 title="Used for secondary actions, outlines, and accents."></i>
+            </label>
+            <div class="input-group input-group-sm">
+              <input type="color" class="form-control form-control-color p-1"
+                     id="id_secondary_color_picker"
+                     value="{{ branding.secondary_color|default:defaults.secondary_color }}"
+                     style="width:40px;min-width:40px;"
+                     {% if feature_locked %}disabled{% endif %}>
+              <input type="text" class="form-control font-monospace"
+                     id="id_secondary_color" name="secondary_color"
+                     value="{{ branding.secondary_color|default:defaults.secondary_color }}"
+                     placeholder="#6c757d" maxlength="7" pattern="#[0-9A-Fa-f]{6}"
+                     {% if feature_locked %}disabled{% endif %}>
+            </div>
+            <div id="secondaryContrastInfo" class="form-text mt-1"></div>
+          </div>
+        </div>
+
+        <div class="mt-2">
+          <button type="button" id="btnResetColors"
+                  class="btn btn-sm btn-link text-muted px-0 text-decoration-none"
+                  {% if feature_locked %}disabled{% endif %}>
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Reset colors to defaults
+          </button>
+        </div>
+      </div>
+
+      {# ── Login page ───────────────────────────────────────────── #}
+      <div class="settings-section">
+        <div class="settings-section-title">Login Page</div>
+        <label class="form-label small fw-semibold" for="id_login_title">Login title</label>
+        <input type="text" class="form-control form-control-sm"
+               id="id_login_title" name="login_title"
+               value="{{ branding.login_title|default:'' }}"
+               placeholder="{{ defaults.login_title }}" maxlength="100"
+               {% if feature_locked %}disabled{% endif %}>
+        <div class="form-text">Replaces "Welcome back" on the sign-in page.</div>
+      </div>
+
+      {# ── Custom CSS ───────────────────────────────────────────── #}
+      <div class="settings-section">
+        <div class="settings-section-title">
+          Custom CSS
+          <span class="badge bg-warning-subtle text-warning-emphasis ms-1"
+                style="font-size:0.65rem;">Advanced</span>
+        </div>
+        <textarea class="form-control form-control-sm font-monospace"
+                  id="id_custom_css" name="custom_css"
+                  rows="5" placeholder="/* Additional CSS rules… */"
+                  {% if feature_locked %}disabled{% endif %}>{{ branding.custom_css|default:'' }}</textarea>
+        <div class="form-text">Applied globally within your tenant. Use with care.</div>
+      </div>
+
+      <div class="d-flex gap-2 flex-wrap">
+        <button type="submit" class="btn btn-primary" {% if feature_locked %}disabled{% endif %}>
+          <i class="bi bi-check-circle me-1"></i>Save Branding
+        </button>
+        <button type="submit" name="reset" value="1"
+                class="btn btn-outline-secondary"
+                onclick="return confirm('Reset all branding to platform defaults?')"
+                {% if feature_locked %}disabled{% endif %}>
+          Reset All to Default
+        </button>
+      </div>
+
+    </div>{# /left column #}
+
+    {# ══════════════════════════════════════════════════════════════ #}
+    {# RIGHT COLUMN — expanded live preview                           #}
+    {# ══════════════════════════════════════════════════════════════ #}
+    <div class="col-12 col-lg-5">
+      <div class="settings-section" style="position:sticky;top:88px;">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <div class="settings-section-title mb-0">Live Preview</div>
+          <span id="previewModeIndicator"
+                class="badge bg-success-subtle text-success"
+                style="font-size:0.68rem;display:none;">
+            ● App-wide
+          </span>
+        </div>
+
+        {# ── Sidebar strip ─────────────────────────────────────── #}
+        <div style="border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;">
+          <div style="background:#0f172a;padding:10px 14px;
+                      display:flex;align-items:center;gap:10px;">
+            <div id="pv-brand"
+                 style="width:24px;height:24px;border-radius:6px;
+                        display:flex;align-items:center;justify-content:center;
+                        font-size:9px;font-weight:800;color:#fff;
+                        transition:background 0.25s;flex-shrink:0;">S</div>
+            <span style="color:#f1f5f9;font-size:12px;font-weight:700;flex:1;">Your Brand</span>
+          </div>
+          <div style="background:#0f172a;padding:2px 8px 8px;">
+            <div id="pv-active-link"
+                 style="border-radius:6px;padding:6px 10px;display:flex;align-items:center;
+                        gap:7px;font-size:11px;font-weight:600;color:#fff;
+                        transition:background 0.25s;">
+              <span style="width:12px;height:12px;border-radius:3px;background:rgba(255,255,255,0.15);
+                           display:inline-block;"></span>
+              Active item
+              <span id="pv-active-bar"
+                    style="width:3px;height:14px;border-radius:0 3px 3px 0;
+                           position:absolute;left:0;transition:background 0.25s;"></span>
+            </div>
+            <div style="padding:5px 10px;display:flex;align-items:center;gap:7px;
+                        font-size:11px;color:#94a3b8;">
+              <span style="width:12px;height:12px;border-radius:3px;background:rgba(255,255,255,0.08);
+                           display:inline-block;"></span>
+              Inactive item
+            </div>
+          </div>
+
+          {# ── Main content area ─────────────────────────────── #}
+          <div style="padding:14px;background:#f8fafc;">
+
+            <p class="mb-2" style="font-size:0.7rem;font-weight:700;color:#94a3b8;
+               text-transform:uppercase;letter-spacing:.06em;">Buttons</p>
+
+            <div class="d-flex gap-2 flex-wrap mb-3">
+              <button id="pv-btn-primary" type="button"
+                      style="border:none;color:#fff;padding:6px 14px;border-radius:7px;
+                             font-size:12px;font-weight:600;
+                             transition:background 0.25s,filter 0.2s;">
+                <i class="bi bi-check-circle me-1"></i>Save
+              </button>
+              <button id="pv-btn-secondary" type="button"
+                      style="background:transparent;padding:6px 14px;border-radius:7px;
+                             font-size:12px;font-weight:600;border-width:1.5px;border-style:solid;
+                             transition:color 0.25s,border-color 0.25s;">
+                <i class="bi bi-x-circle me-1"></i>Cancel
+              </button>
+              <button id="pv-btn-link" type="button"
+                      style="background:none;border:none;font-size:12px;font-weight:500;
+                             padding:6px 4px;transition:color 0.25s;text-decoration:underline;">
+                View details
+              </button>
+            </div>
+
+            <p class="mb-2" style="font-size:0.7rem;font-weight:700;color:#94a3b8;
+               text-transform:uppercase;letter-spacing:.06em;">Cards</p>
+
+            <div style="background:#fff;border-radius:8px;border:1px solid #e2e8f0;
+                        overflow:hidden;margin-bottom:10px;">
+              <div id="pv-card-header"
+                   style="padding:8px 12px;font-size:0.78rem;font-weight:600;color:#fff;
+                          transition:background 0.25s;">
+                Membership Plan
+              </div>
+              <div style="padding:10px 12px;">
+                <p style="margin:0;font-size:0.75rem;color:#374151;">
+                  Basic Plan — ₹999 / month
+                </p>
+              </div>
+            </div>
+
+            <p class="mb-2" style="font-size:0.7rem;font-weight:700;color:#94a3b8;
+               text-transform:uppercase;letter-spacing:.06em;">Alerts</p>
+
+            <div id="pv-alert-success"
+                 style="border-radius:7px;padding:7px 12px;font-size:12px;font-weight:500;
+                        margin-bottom:6px;border-width:1px;border-style:solid;
+                        transition:background 0.25s,border-color 0.25s,color 0.25s;">
+              <i class="bi bi-check-circle me-1"></i>Changes saved.
+            </div>
+
+            <div id="pv-badge"
+                 style="display:inline-block;border-radius:99px;padding:3px 10px;
+                        font-size:11px;font-weight:600;color:#fff;
+                        transition:background 0.25s;">
+              Active
+            </div>
+
+            <div style="margin-top:10px;background:#fff;border-radius:8px;
+                        padding:10px 12px;border:1px solid #e2e8f0;">
+              <p id="pv-login-title"
+                 style="font-size:0.88rem;font-weight:700;color:#0f172a;margin:0 0 2px;">
+                {% if branding and branding.login_title %}{{ branding.login_title }}{% else %}{{ defaults.login_title }}{% endif %}
+              </p>
+              <p style="font-size:0.7rem;color:#94a3b8;margin:0;">Login page title</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  /* ── constants ───────────────────────────────────────────────────── */
+  var API_URL     = '{% url "branding_api:generate_palette" %}';
+  var CSRF        = '{{ csrf_token }}';
+  var HEX_RE      = /^#[0-9A-Fa-f]{6}$/;
+  var DEF_PRIMARY = '{{ defaults.primary_color }}';
+  var DEF_SECOND  = '{{ defaults.secondary_color }}';
+  /* Server-rendered CSS vars (source of truth from DB) */
+  var SRV_PRIMARY = '{{ b_primary }}';
+  var SRV_SECOND  = '{{ b_secondary }}';
+
+  var SS_KEY_P    = 'brd_preview_primary';
+  var SS_KEY_S    = 'brd_preview_secondary';
+  var SS_KEY_ON   = 'brd_preview_on';
+
+  /* ── element refs ────────────────────────────────────────────────── */
+  function $$(id) { return document.getElementById(id); }
+  var elPrimText   = $$('id_primary_color');
+  var elPrimPicker = $$('id_primary_color_picker');
+  var elSecText    = $$('id_secondary_color');
+  var elSecPicker  = $$('id_secondary_color_picker');
+  var elLoginTitle = $$('id_login_title');
+  var elLogoInput  = $$('id_logo');
+
+  /* buttons */
+  var btnGenerate  = $$('btnGeneratePalette');
+  var btnRegen     = $$('btnRegenerate');
+  var btnDiscard   = $$('btnDiscard');
+  var btnApply     = $$('btnApplySuggested');
+  var btnReset     = $$('btnResetColors');
+  var previewToggle= $$('previewModeToggle');
+  var previewLabel = $$('previewModeLabel');
+  var previewIndic = $$('previewModeIndicator');
+
+  /* suggestion section */
+  var secPalette   = $$('paletteSuggestion');
+  var secSpinner   = $$('paletteSpinner');
+  var elLowConf    = $$('lowConfidenceWarning');
+  var elLowMsg     = $$('lowConfidenceMsg');
+  var elAdjusted   = $$('adjustedNotice');
+  var elBadges     = $$('contrastBadges');
+  var dotP         = $$('suggestedPrimaryDot');
+  var hexP         = $$('suggestedPrimaryHex');
+  var dotS         = $$('suggestedSecondaryDot');
+  var hexS         = $$('suggestedSecondaryHex');
+  var ppHeader     = $$('ppHeader');
+  var ppBtnP       = $$('ppBtnPrimary');
+  var ppBtnS       = $$('ppBtnSecondary');
+
+  /* live preview elements */
+  var pvBrand      = $$('pv-brand');
+  var pvActiveLink = $$('pv-active-link');
+  var pvActiveBar  = $$('pv-active-bar');
+  var pvBtnP       = $$('pv-btn-primary');
+  var pvBtnS       = $$('pv-btn-secondary');
+  var pvBtnLink    = $$('pv-btn-link');
+  var pvCardHdr    = $$('pv-card-header');
+  var pvAlertOk    = $$('pv-alert-success');
+  var pvBadge      = $$('pv-badge');
+  var pvLoginTitle = $$('pv-login-title');
+  var pvContrastP  = $$('primaryContrastInfo');
+  var pvContrastS  = $$('secondaryContrastInfo');
+
+  /* unsaved banner */
+  var unsavedBanner = $$('unsavedBanner');
+  var _dirty = false;
+  var _suggestion = null;
+
+  /* ── WCAG contrast (JS mirror of Python) ─────────────────────────── */
+  function toLinear(c) {
+    c /= 255;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  }
+  function relativeLum(hex) {
+    var r = toLinear(parseInt(hex.slice(1,3),16));
+    var g = toLinear(parseInt(hex.slice(3,5),16));
+    var b = toLinear(parseInt(hex.slice(5,7),16));
+    return 0.2126*r + 0.7152*g + 0.0722*b;
+  }
+  function contrastRatio(hex1, hex2) {
+    var L1 = relativeLum(hex1), L2 = relativeLum(hex2);
+    var hi = Math.max(L1,L2), lo = Math.min(L1,L2);
+    return (hi + 0.05) / (lo + 0.05);
+  }
+  function darken(hex, f) {
+    f = f || 0.12;
+    var r = parseInt(hex.slice(1,3),16);
+    var g = parseInt(hex.slice(3,5),16);
+    var b = parseInt(hex.slice(5,7),16);
+    var d = function(c){ return Math.max(0,Math.round(c*(1-f))); };
+    return '#' + [d(r),d(g),d(b)].map(function(c){
+      return c.toString(16).padStart(2,'0');
+    }).join('');
+  }
+  function hexToRgbStr(hex) {
+    return parseInt(hex.slice(1,3),16)+', '+
+           parseInt(hex.slice(3,5),16)+', '+
+           parseInt(hex.slice(5,7),16);
+  }
+  function contrastLabel(hex) {
+    var cw = contrastRatio(hex,'#ffffff').toFixed(1);
+    var cb = contrastRatio(hex,'#000000').toFixed(1);
+    var best = Math.max(parseFloat(cw), parseFloat(cb));
+    var pass = best >= 3.0 ? (best >= 4.5 ? '✓ AA' : '✓ AA Large') : '✗ Low';
+    var colour = best >= 3.0 ? 'green' : '#b45309';
+    return '<span style="color:'+colour+';font-size:0.72rem;">' + pass +
+           ' ('+Math.max(parseFloat(cw),parseFloat(cb)).toFixed(1)+':1)</span>';
+  }
+
+  /* ── mark dirty ──────────────────────────────────────────────────── */
+  function markDirty() {
+    if (_dirty) return;
+    _dirty = true;
+    unsavedBanner.style.removeProperty('display');
+  }
+
+  /* ── main preview updater ────────────────────────────────────────── */
+  function applyPreview(primary, secondary) {
+    if (!HEX_RE.test(primary))   primary   = DEF_PRIMARY;
+    if (!HEX_RE.test(secondary)) secondary = DEF_SECOND;
+
+    var hov = darken(primary, 0.12);
+
+    /* brand mark */
+    if (pvBrand)      pvBrand.style.background = primary;
+    /* active sidebar item */
+    if (pvActiveLink) pvActiveLink.style.background = primary + '22';
+    if (pvActiveBar)  pvActiveBar.style.background  = primary;
+    /* buttons */
+    if (pvBtnP)   { pvBtnP.style.background = primary; }
+    if (pvBtnS)   { pvBtnS.style.color = secondary; pvBtnS.style.borderColor = secondary; }
+    if (pvBtnLink){ pvBtnLink.style.color = primary; }
+    /* card */
+    if (pvCardHdr) pvCardHdr.style.background = primary;
+    /* alert: tinted success bg */
+    if (pvAlertOk) {
+      pvAlertOk.style.background   = primary + '18';
+      pvAlertOk.style.borderColor  = primary + '44';
+      pvAlertOk.style.color        = darken(primary, 0.3);
+    }
+    /* badge */
+    if (pvBadge) pvBadge.style.background = primary;
+
+    /* contrast info under pickers */
+    if (pvContrastP) pvContrastP.innerHTML = 'Contrast ' + contrastLabel(primary);
+    if (pvContrastS) pvContrastS.innerHTML = 'Contrast ' + contrastLabel(secondary);
+  }
+
+  /* ── suggested palette mini-preview ──────────────────────────────── */
+  function applySuggestionPreview(primary, secondary) {
+    if (dotP)    dotP.style.background   = primary;
+    if (hexP)    hexP.textContent        = primary;
+    if (dotS)    dotS.style.background   = secondary;
+    if (hexS)    hexS.textContent        = secondary;
+    if (ppHeader){ ppHeader.style.background = primary; }
+    if (ppBtnP)  { ppBtnP.style.background   = primary; }
+    if (ppBtnS)  { ppBtnS.style.color = secondary; ppBtnS.style.borderColor = secondary; }
+
+    /* contrast badges */
+    if (elBadges) {
+      var cw = contrastRatio(primary,'#ffffff').toFixed(1);
+      var cb = contrastRatio(primary,'#000000').toFixed(1);
+      var best = Math.max(parseFloat(cw),parseFloat(cb));
+      var grade = best >= 4.5 ? 'AA' : best >= 3.0 ? 'AA Lg' : 'Fail';
+      var cls   = best >= 3.0 ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger';
+      elBadges.innerHTML =
+        '<span class="badge '+cls+'" style="font-size:0.65rem;">'+grade+' '+best.toFixed(1)+':1</span>';
+    }
+  }
+
+  /* ── sync text+color picker pair ─────────────────────────────────── */
+  function syncPair(textEl, pickerEl) {
+    if (!textEl || !pickerEl) return;
+    pickerEl.addEventListener('input', function () {
+      textEl.value = pickerEl.value;
+      applyPreview(elPrimText.value, elSecText.value);
+      applyPreviewMode();
+      markDirty();
+    });
+    textEl.addEventListener('input', function () {
+      var v = textEl.value.trim();
+      if (HEX_RE.test(v)) {
+        pickerEl.value = v;
+        applyPreview(elPrimText.value, elSecText.value);
+        applyPreviewMode();
+        markDirty();
+      }
+    });
+  }
+  syncPair(elPrimText, elPrimPicker);
+  syncPair(elSecText,  elSecPicker);
+
+  /* ── login title preview ──────────────────────────────────────────── */
+  if (elLoginTitle && pvLoginTitle) {
+    elLoginTitle.addEventListener('input', function () {
+      pvLoginTitle.textContent = elLoginTitle.value.trim() || '{{ defaults.login_title }}';
+    });
+  }
+
+  /* ── reset colors to defaults ─────────────────────────────────────── */
+  if (btnReset) {
+    btnReset.addEventListener('click', function () {
+      elPrimText.value   = DEF_PRIMARY;
+      elPrimPicker.value = DEF_PRIMARY;
+      elSecText.value    = DEF_SECOND;
+      elSecPicker.value  = DEF_SECOND;
+      applyPreview(DEF_PRIMARY, DEF_SECOND);
+      applyPreviewMode();
+      markDirty();
+    });
+  }
+
+  /* ── API call ─────────────────────────────────────────────────────── */
+  function callGenerateAPI(file) {
+    if (!file) return;
+    secSpinner.style.display   = 'block';
+    secPalette.style.display   = 'none';
+    var fd = new FormData();
+    fd.append('logo', file);
+    fetch(API_URL, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF },
+      body: fd,
+    })
+    .then(function(r) { return r.json().then(function(d){ return {ok:r.ok,d:d}; }); })
+    .then(function(res) {
+      secSpinner.style.display = 'none';
+      if (!res.ok) { alert(res.d.error || 'Could not extract palette.'); return; }
+      var d = res.d;
+      _suggestion = d;
+
+      /* low confidence */
+      if (d.low_confidence) {
+        elLowConf.style.display = 'block';
+        if (elLowMsg && d.message) elLowMsg.textContent = d.message;
+      } else {
+        elLowConf.style.display = 'none';
+      }
+      /* adjusted notice */
+      if (elAdjusted) elAdjusted.style.display = d.adjusted ? 'block' : 'none';
+
+      applySuggestionPreview(d.primary_color, d.secondary_color);
+      secPalette.style.display = 'block';
+      secPalette.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    })
+    .catch(function() {
+      secSpinner.style.display = 'none';
+      alert('Network error — could not generate palette.');
+    });
+  }
+
+  if (btnGenerate) {
+    btnGenerate.addEventListener('click', function() {
+      var f = elLogoInput && elLogoInput.files[0];
+      if (!f) { alert('Please select a logo file first.'); return; }
+      callGenerateAPI(f);
+    });
+  }
+  if (btnRegen) {
+    btnRegen.addEventListener('click', function() {
+      var f = elLogoInput && elLogoInput.files[0];
+      if (!f) { alert('Please select a logo file first.'); return; }
+      callGenerateAPI(f);
+    });
+  }
+  if (btnDiscard) {
+    btnDiscard.addEventListener('click', function() {
+      _suggestion = null;
+      secPalette.style.display = 'none';
+    });
+  }
+  if (btnApply) {
+    btnApply.addEventListener('click', function() {
+      if (!_suggestion) return;
+      var p = _suggestion.primary_color, s = _suggestion.secondary_color;
+      elPrimText.value   = p; elPrimPicker.value = p;
+      elSecText.value    = s; elSecPicker.value  = s;
+      applyPreview(p, s);
+      applyPreviewMode();
+      markDirty();
+    });
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     LIVE THEME PREVIEW MODE
+     Applies CSS vars to document.documentElement so every page
+     element picks them up instantly — no DB write involved.
+  ════════════════════════════════════════════════════════════════ */
+  function setDocVars(primary, secondary) {
+    var root = document.documentElement;
+    root.style.setProperty('--primary-color',   primary);
+    root.style.setProperty('--primary-rgb',     hexToRgbStr(primary));
+    root.style.setProperty('--primary-hover',   darken(primary, 0.12));
+    root.style.setProperty('--secondary-color', secondary);
+    root.style.setProperty('--secondary-hover', darken(secondary, 0.12));
+  }
+
+  function clearDocVars() {
+    var root = document.documentElement;
+    ['--primary-color','--primary-rgb','--primary-hover',
+     '--secondary-color','--secondary-hover'].forEach(function(v) {
+      root.style.removeProperty(v);
+    });
+  }
+
+  function applyPreviewMode() {
+    if (!previewToggle || !previewToggle.checked) return;
+    var p = elPrimText.value, s = elSecText.value;
+    if (HEX_RE.test(p) && HEX_RE.test(s)) {
+      setDocVars(p, s);
+      sessionStorage.setItem(SS_KEY_P,  p);
+      sessionStorage.setItem(SS_KEY_S,  s);
+      sessionStorage.setItem(SS_KEY_ON, '1');
+    }
+  }
+
+  function disablePreviewMode() {
+    clearDocVars();
+    sessionStorage.removeItem(SS_KEY_P);
+    sessionStorage.removeItem(SS_KEY_S);
+    sessionStorage.removeItem(SS_KEY_ON);
+    if (previewLabel)  previewLabel.textContent = 'Off';
+    if (previewIndic)  previewIndic.style.display = 'none';
+  }
+
+  function enablePreviewMode() {
+    applyPreviewMode();
+    if (previewLabel) previewLabel.textContent = 'On';
+    if (previewIndic) previewIndic.style.removeProperty('display');
+  }
+
+  if (previewToggle) {
+    previewToggle.addEventListener('change', function() {
+      if (previewToggle.checked) {
+        enablePreviewMode();
+      } else {
+        disablePreviewMode();
+      }
+    });
+
+    /* restore from sessionStorage on load */
+    if (sessionStorage.getItem(SS_KEY_ON) === '1') {
+      var sp = sessionStorage.getItem(SS_KEY_P);
+      var ss = sessionStorage.getItem(SS_KEY_S);
+      if (sp && ss && HEX_RE.test(sp) && HEX_RE.test(ss)) {
+        previewToggle.checked = true;
+        setDocVars(sp, ss);
+        enablePreviewMode();
+      }
+    }
+  }
+
+  /* Clear preview state when Save is clicked (server will update vars) */
+  var form = document.getElementById('brandingForm');
+  if (form) {
+    form.addEventListener('submit', function() {
+      disablePreviewMode();
+    });
+  }
+
+  /* ── boot the local preview with current saved values ─────────────── */
+  applyPreview(elPrimText.value, elSecText.value);
+
+}());
+</script>
+
+<style>
+/* ── preview button hover simulation ──────────────────────────── */
+#pv-btn-primary:hover  { filter: brightness(0.88); transition: filter 0.15s; }
+#pv-btn-secondary:hover{ opacity: 0.7; transition: opacity 0.15s; }
+
+/* ── unsaved banner animation ─────────────────────────────────── */
+#unsavedBanner {
+  animation: slideDown 0.2s ease-out;
+}
+@keyframes slideDown {
+  from { opacity:0; transform:translateY(-6px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+/* ── transition all preview colour changes ────────────────────── */
+#pv-brand, #pv-active-link, #pv-active-bar,
+#pv-btn-primary, #pv-btn-secondary, #pv-btn-link,
+#pv-card-header, #pv-alert-success, #pv-badge {
+  transition: background 0.25s ease, color 0.25s ease,
+              border-color 0.25s ease, filter 0.2s ease;
+}
+</style>
+{% endblock %}

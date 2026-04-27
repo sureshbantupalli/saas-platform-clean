@@ -53,6 +53,9 @@ INSTALLED_APPS = [
     'apps.communications.apps.CommunicationsConfig',
     'apps.analytics.apps.AnalyticsConfig',
     'apps.actions.apps.ActionsConfig',
+    'apps.settings.roles.apps.RolesConfig',
+    'apps.settings.vocabulary.apps.VocabularyConfig',
+    'apps.settings.branding.apps.BrandingConfig',
 
     'members',
     'crm.apps.CrmConfig',
@@ -99,6 +102,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',  # IMPORTANT
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'apps.settings.context_processors.vocabulary_labels',
+                'apps.settings.context_processors.tenant_branding',
             ],
         },
     },
@@ -155,6 +160,9 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 
 # ==============================
 # AUTH
@@ -208,6 +216,17 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8000",
     "http://localhost:8000",
 ]
+
+# ==============================
+# SITE URL — used to build absolute URLs in emails (logo, CTAs)
+# Override in production: SITE_URL = 'https://app.yourdomain.com'
+# ==============================
+
+SITE_URL = os.environ.get('SITE_URL', 'http://localhost:8000')
+
+# Prefix email subject with brand name: "[Acme Gym] Payment Successful"
+# Set to True per-environment to enable.
+COMMS_BRAND_EMAIL_SUBJECT = False
 
 # ==============================
 # RAZORPAY (global dev fallback — override per-tenant via TenantPaymentConfig)

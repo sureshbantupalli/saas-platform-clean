@@ -1,0 +1,78 @@
+{% extends "settings/base.html" %}
+{% block settings_title %}General{% endblock %}
+{% block settings_breadcrumb %}
+<i class="bi bi-chevron-right text-muted mx-1" style="font-size:0.7rem;"></i>
+<span style="font-size:0.82rem;">General</span>
+{% endblock %}
+
+{% block settings_content %}
+<div class="settings-page-header">
+    <h5>General Settings</h5>
+    <p>Basic configuration for your workspace.</p>
+</div>
+
+<form method="post" style="max-width:600px;">
+    {% csrf_token %}
+
+    {# ── Business identity ─────────────────────────────────────────── #}
+    <div class="settings-section">
+        <div class="settings-section-title">Business Identity</div>
+
+        <div class="mb-3">
+            <label for="id_business_name" class="form-label">
+                Business Name
+            </label>
+            <input type="text" id="id_business_name" name="business_name"
+                   class="form-control" value="{{ current.business_name }}"
+                   placeholder="Your business name" maxlength="255">
+            <div class="form-text">
+                Displayed across the platform and in communications.
+            </div>
+        </div>
+    </div>
+
+    {# ── Localisation ──────────────────────────────────────────────── #}
+    <div class="settings-section">
+        <div class="settings-section-title">Localisation</div>
+
+        <div class="mb-3">
+            <label for="id_timezone" class="form-label">Timezone</label>
+            <select id="id_timezone" name="timezone" class="form-select">
+                {% for tz_value, tz_label in timezones %}
+                <option value="{{ tz_value }}"
+                        {% if tz_value == current.timezone %}selected{% endif %}>
+                    {{ tz_label }}
+                </option>
+                {% endfor %}
+            </select>
+            <div class="form-text">
+                All dates and times will be displayed in this timezone.
+            </div>
+        </div>
+
+        <div class="mb-0">
+            <label for="id_currency" class="form-label">Currency</label>
+            <select id="id_currency" name="currency" class="form-select">
+                {% for cur_code, cur_label in currencies %}
+                <option value="{{ cur_code }}"
+                        {% if cur_code == current.currency %}selected{% endif %}>
+                    {{ cur_label }}
+                </option>
+                {% endfor %}
+            </select>
+            <div class="form-text">
+                Used for displaying prices and payment amounts.
+            </div>
+        </div>
+    </div>
+
+    {# TODO: Add vocabulary settings here (Phase 3) #}
+    {# TODO: Add branding settings here (Phase 4) #}
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-circle me-1" aria-hidden="true"></i>Save Settings
+        </button>
+    </div>
+</form>
+{% endblock %}

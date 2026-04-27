@@ -1,0 +1,58 @@
+{% extends "settings/base.html" %}
+{% block settings_title %}{% if role %}Edit Role{% else %}New Role{% endif %}{% endblock %}
+{% block settings_breadcrumb %}
+<i class="bi bi-chevron-right text-muted mx-1" style="font-size:0.7rem;"></i>
+<a href="{% url 'settings:roles:list' %}" style="font-size:0.82rem;">Roles</a>
+<i class="bi bi-chevron-right text-muted mx-1" style="font-size:0.7rem;"></i>
+<span style="font-size:0.82rem;">{% if role %}Edit{% else %}New{% endif %}</span>
+{% endblock %}
+
+{% block settings_content %}
+<div class="settings-page-header">
+  <h5>{% if role %}Edit "{{ role.name }}"{% else %}New Role{% endif %}</h5>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show py-2">
+  {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+<div class="card border-0 shadow-sm" style="max-width:520px;">
+  <div class="card-body p-4">
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="mb-3">
+        <label for="id_name" class="form-label">Role Name <span class="text-danger">*</span></label>
+        <input type="text" id="id_name" name="name" class="form-control"
+               value="{{ role.name|default:name|default:'' }}"
+               placeholder="e.g. Trainer, Front Desk, Manager"
+               required autofocus maxlength="100">
+      </div>
+
+      <div class="mb-4">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="id_is_default" name="is_default"
+                 {% if role.is_default %}checked{% endif %}>
+          <label class="form-check-label" for="id_is_default">
+            Default role
+            <span class="text-muted small d-block" style="font-weight:400;">
+              Automatically assigned to new users. Only one role can be default.
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          {% if role %}Save Changes{% else %}<i class="bi bi-arrow-right me-1"></i>Create &amp; Add Permissions{% endif %}
+        </button>
+        <a href="{% url 'settings:roles:list' %}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

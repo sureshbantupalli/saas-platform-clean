@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml"
+      xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="x-apple-disable-message-reformatting">
+  <title>{{ brand_name }}</title>
+  <!--[if mso]>
+  <noscript>
+    <xml><o:OfficeDocumentSettings>
+      <o:PixelsPerInch>96</o:PixelsPerInch>
+    </o:OfficeDocumentSettings></xml>
+  </noscript>
+  <![endif]-->
+  <style>
+    /* Reset for Outlook + webmail */
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; border-collapse: collapse; }
+    img { -ms-interpolation-mode: bicubic; border: 0; display: block; }
+
+    /* Mobile responsive */
+    @media only screen and (max-width: 620px) {
+      .email-card { width: 100% !important; }
+      .email-padding { padding: 20px 16px !important; }
+      .email-header  { padding: 20px 16px !important; }
+      .email-footer  { padding: 16px !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#f0f2f5;
+             font-family:Arial,Helvetica,sans-serif;word-break:break-word;">
+
+  <!-- Preview text (hidden, shown in inbox snippet) -->
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">
+    {{ preview_text }}
+  </div>
+
+  <!-- Outer wrapper: 100% wide, centres the card -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="background-color:#f0f2f5;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+
+        <!--[if mso]>
+        <table role="presentation" align="center" border="0" cellpadding="0"
+               cellspacing="0" width="600"><tr><td>
+        <![endif]-->
+
+        <!-- Card: max 600 px, centred -->
+        <table role="presentation" class="email-card" cellpadding="0" cellspacing="0" border="0"
+               style="width:100%;max-width:600px;margin:0 auto;background-color:#ffffff;
+                      border-radius:6px;overflow:hidden;
+                      box-shadow:0 2px 12px rgba(0,0,0,0.09);">
+
+          <!-- ═══ HEADER ═══ -->
+          <tr>
+            <td class="email-header"
+                style="background-color:{{ primary_color }};padding:28px 32px;text-align:center;">
+              {% if logo_url %}
+              <img src="{{ logo_url }}" alt="{{ brand_name }}"
+                   width="auto" height="auto"
+                   style="display:block;margin:0 auto 12px;max-height:52px;max-width:200px;
+                          width:auto;height:auto;border:0;"
+                   onerror="this.style.display='none'">
+              {% endif %}
+              <span style="color:{{ text_color }};font-size:20px;font-weight:700;
+                           letter-spacing:0.4px;line-height:1.3;display:block;">
+                {{ brand_name }}
+              </span>
+            </td>
+          </tr>
+
+          <!-- ═══ BODY ═══ -->
+          <tr>
+            <td class="email-padding"
+                style="padding:36px 36px 24px;color:#333333;font-size:15px;line-height:1.75;">
+              {{ content|safe }}
+            </td>
+          </tr>
+
+          <!-- ═══ DIVIDER ═══ -->
+          <tr>
+            <td style="padding:0 36px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="border-top:1px solid #e8e8e8;font-size:0;line-height:0;">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- ═══ FOOTER ═══ -->
+          <tr>
+            <td class="email-footer"
+                style="padding:24px 36px 32px;text-align:center;
+                       color:#888888;font-size:12px;line-height:1.7;">
+              <strong style="color:{{ secondary_color }};font-size:13px;">{{ brand_name }}</strong>
+              {% if footer_phone %}
+              <br><span>{{ footer_phone }}</span>
+              {% endif %}
+              {% if footer_email %}
+              <br><a href="mailto:{{ footer_email }}"
+                     style="color:{{ secondary_color }};text-decoration:none;">{{ footer_email }}</a>
+              {% endif %}
+              <br><br>
+              <span style="color:#aaaaaa;font-size:11px;">
+                You are receiving this message as a member of {{ brand_name }}.<br>
+                &copy; {{ brand_name }}. All rights reserved.
+              </span>
+            </td>
+          </tr>
+
+        </table>
+        <!-- /Card -->
+
+        <!--[if mso]></td></tr></table><![endif]-->
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>

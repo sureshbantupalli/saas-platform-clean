@@ -1,0 +1,109 @@
+{% extends "settings/base.html" %}
+{% block settings_title %}Roles &amp; Permissions{% endblock %}
+{% block settings_breadcrumb %}
+<i class="bi bi-chevron-right text-muted mx-1" style="font-size:0.7rem;"></i>
+<span style="font-size:0.82rem;">Roles &amp; Permissions</span>
+{% endblock %}
+
+{% block settings_content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <div class="settings-page-header mb-0">
+      <h5 class="mb-0">Roles &amp; Permissions</h5>
+      <p>Define roles and control what each role can access.</p>
+    </div>
+  </div>
+  <a href="{% url 'settings:roles:create' %}" class="btn btn-primary">
+    <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>New Role
+  </a>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show py-2" role="alert">
+  {{ msg }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if roles %}
+<div class="card border-0 shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Role</th>
+          <th class="text-center">Permissions</th>
+          <th class="text-center">Users</th>
+          <th class="text-center">Default</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for role in roles %}
+        <tr>
+          <td class="fw-semibold align-middle">
+            {{ role.name }}
+            {% if role.is_default %}
+            <span class="badge bg-success-subtle text-success ms-1" style="font-size:0.7rem;">Default</span>
+            {% endif %}
+          </td>
+          <td class="text-center align-middle">
+            <span class="badge bg-primary bg-opacity-10 text-primary">
+              {{ role.role_permissions.count }}
+            </span>
+          </td>
+          <td class="text-center align-middle">
+            <span class="badge bg-secondary bg-opacity-10 text-secondary">
+              {{ role.user_roles.count }}
+            </span>
+          </td>
+          <td class="text-center align-middle">
+            {% if role.is_default %}
+            <i class="bi bi-check-circle-fill text-success" title="Default role"></i>
+            {% else %}
+            <i class="bi bi-dash text-muted"></i>
+            {% endif %}
+          </td>
+          <td class="text-end align-middle">
+            <div class="d-flex gap-1 justify-content-end">
+              <a href="{% url 'settings:roles:permissions' role.pk %}"
+                 class="btn btn-sm btn-outline-primary" title="Edit permissions">
+                <i class="bi bi-shield-check me-1"></i>Permissions
+              </a>
+              <a href="{% url 'settings:roles:users' role.pk %}"
+                 class="btn btn-sm btn-outline-secondary" title="Assign users">
+                <i class="bi bi-people me-1"></i>Users
+              </a>
+              <a href="{% url 'settings:roles:edit' role.pk %}"
+                 class="btn btn-sm btn-outline-secondary" title="Edit role">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form method="post" action="{% url 'settings:roles:delete' role.pk %}"
+                    onsubmit="return confirm('Delete role {{ role.name }}? This cannot be undone.')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete role">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card border-0 shadow-sm">
+  <div class="card-body text-center py-5">
+    <i class="bi bi-shield-lock fs-1 text-muted mb-3 d-block"></i>
+    <p class="text-muted mb-3">No roles yet. Create your first role to start managing access.</p>
+    <a href="{% url 'settings:roles:create' %}" class="btn btn-primary">
+      <i class="bi bi-plus-circle me-1"></i>Create First Role
+    </a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

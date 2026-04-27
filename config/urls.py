@@ -2,6 +2,8 @@
 URL configuration for config project.
 """
 
+from django.conf import settings as django_settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import RedirectView
@@ -236,9 +238,25 @@ urlpatterns = [
         "api/actions/",
         include(("apps.actions.urls", "actions"), namespace="actions")
     ),
+
+    # ==========================
+    # Settings
+    # ==========================
+    path(
+        "settings/",
+        include(("apps.settings.urls", "settings"), namespace="settings")
+    ),
+
+    # ==========================
+    # Branding palette API
+    # ==========================
+    path(
+        "api/settings/branding/",
+        include(("apps.settings.branding.api_urls", "branding_api"), namespace="branding_api")
+    ),
     path(
         "api/analytics/dashboard/",
         analytics_dashboard_api,
         name="api_analytics_dashboard",
     ),
-]
+] + static(django_settings.MEDIA_URL, document_root=django_settings.MEDIA_ROOT)

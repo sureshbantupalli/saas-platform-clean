@@ -1,0 +1,53 @@
+{% extends "settings/base.html" %}
+{% block settings_title %}Communications{% endblock %}
+{% block settings_breadcrumb %}
+<i class="bi bi-chevron-right text-muted mx-1" style="font-size:0.7rem;"></i>
+<span style="font-size:0.82rem;">Communications</span>
+{% endblock %}
+
+{% block settings_content %}
+<div class="settings-page-header">
+    <h5>Communication Settings</h5>
+    <p>Configure channels used to reach your members and leads.</p>
+</div>
+
+{% for channel in channels %}
+<div class="settings-section">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi {{ channel.icon }} text-muted" style="font-size:1.1rem;" aria-hidden="true"></i>
+            <span class="fw-semibold">{{ channel.label }}</span>
+        </div>
+        <span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size:0.72rem;">
+            Not configured
+        </span>
+    </div>
+
+    <p class="text-muted small mb-3">{{ channel.description }}</p>
+
+    <div class="p-3 rounded border d-flex align-items-center gap-3"
+         style="background:#f8fafc;border-style:dashed !important;">
+        <i class="bi bi-plug text-muted fs-4" aria-hidden="true"></i>
+        <div>
+            <div class="small fw-semibold text-muted">Not configured yet</div>
+            <div class="text-muted" style="font-size:0.78rem;">
+                {{ channel.label }} integration will be available in a future phase.
+            </div>
+        </div>
+    </div>
+
+    {# TODO: Add {{ channel.key }} configuration form here (Phase 4 – Communications) #}
+</div>
+{% endfor %}
+
+{# TODO: Add notification preferences section here #}
+{# TODO: Add message template defaults section here #}
+
+<div class="alert alert-info d-flex align-items-start gap-2 py-2" role="note">
+    <i class="bi bi-info-circle-fill flex-shrink-0 mt-1" aria-hidden="true"></i>
+    <div class="small">
+        <strong>Coming in Phase 4.</strong> SMS, WhatsApp, and Email provider
+        configuration will be available here.
+    </div>
+</div>
+{% endblock %}
