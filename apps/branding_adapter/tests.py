@@ -752,3 +752,212 @@ class WhatsAppCommunicationServiceTest(TestCase):
         )
         self.assertIn('Custom WA: Ivy', log.message)
         self.assertNotIn('Your membership', log.message)
+
+
+# ── WhatsApp adapter hardening tests ─────────────────────────────────────────
+
+class WhatsAppAdapterHardeningTest(TestCase):
+    """
+    Covers the 7 hardening improvements:
+      1. Missing-var structured warning
+      2. Tone registry extensibility contract
+      3. link_service delegation
+      4. CTA registry independence
+      5. Message length guard
+      6. Idempotent formatting (no duplicate signature/CTA on retry)
+      7. CTA + signature order, long content edge case
+    """
+
+    def setUp(self):
+        _, self.tenant = make_tenant_user('HardenTest')
+        cache.clear()
+
+    def _make_settings(self, **kwargs):
+        from apps.settings.whatsapp.models import TenantWhatsAppSettings
+        defaults = dict(tone='FRIENDLY', signature_enabled=True, cta_style='NONE', template_overrides={})
+        defaults.update(kwargs)
+        obj, _ = TenantWhatsAppSettings.objects.get_or_create(tenant=self.tenant)
+        for k, v in defaults.items():
+            setattr(obj, k, v)
+        obj.save()
+        cache.delete(f'wa_settings:{self.tenant.pk}')
+        return obj
+
+    def _fmt(self, content='Hello.', context=None, event='test.event'):
+        from apps.branding_adapter.whatsapp_adapter import WhatsAppBrandingAdapter
+        return WhatsAppBrandingAdapter.format_message(
+            event=event, content=content, context=context or {}, tenant=self.tenant,
+        )
+
+    # 1. Missing-var warning ───────────────────────────────────────────────────
+
+    def test_missing_var_emits_structured_warning(self):
+        self._make_settings(tone='MINIMAL', signature_enabled=False)
+        with self.assertLogs('apps.branding_adapter', level='WARNING') as cm:
+            self._fmt(content='Hi {{member_name}}, amount: {{amount}}', context={})
+        reasons = [getattr(r, 'reason', '') for r in cm.records]
+        self.assertIn('missing_template_vars', reasons)
+
+    def test_missing_var_still_renders_without_raising(self):
+        self._make_settings(tone='MINIMAL', signature_enabled=False)
+        result = self._fmt(content='Amount: {{amount}}', context={})
+        self.assertIsInstance(result, str)
+        self.assertNotIn('{{amount}}', result)
+
+    def test_no_warning_when_all_vars_present(self):
+        self._make_settings(tone='MINIMAL', signature_enabled=False)
+        import logging
+        with self.assertLogs('apps.branding_adapter', level='DEBUG') as cm:
+            # Emit a DEBUG so assertLogs doesn't fail when no WARNING is issued
+            logging.getLogger('apps.branding_adapter').debug('sentinel')
+            self._fmt(content='Hi {{name}}', context={'name': 'Alice'})
+        warnings = [line for line in cm.output if 'missing_template_vars' in line]
+        self.assertEqual(warnings, [])
+
+    # 2. Tone registry contract ────────────────────────────────────────────────
+
+    def test_greeting_registry_contains_all_required_tones(self):
+        from apps.branding_adapter.whatsapp_adapter import GREETING_REGISTRY
+        for tone in ('FORMAL', 'FRIENDLY', 'MINIMAL'):
+            self.assertIn(tone, GREETING_REGISTRY)
+
+    def test_greeting_registry_unknown_tone_falls_back_to_friendly(self):
+        self._make_settings(tone='FORMAL')  # we'll override at adapter level
+        from apps.branding_adapter.whatsapp_adapter import _build_greeting
+        result = _build_greeting('UNKNOWN_TONE', {'member_name': 'Bob'})
+        self.assertIn('Hi Bob!', result)
+
+    # 3. link_service delegation ───────────────────────────────────────────────
+
+    def test_link_service_brand_link_returns_url_unchanged_by_default(self):
+        from apps.branding_adapter.link_service import brand_link
+        url = 'https://pay.example.com/xyz'
+        self.assertEqual(brand_link(url, self.tenant), url)
+
+    def test_link_service_brand_links_in_text_rewrites_all_urls(self):
+        from apps.branding_adapter.link_service import brand_links_in_text
+        # With no custom domain configured, URLs pass through unchanged
+        text = 'Pay here: https://a.com/pay or visit https://b.com/info'
+        result = brand_links_in_text(text, self.tenant)
+        self.assertIn('https://a.com/pay', result)
+        self.assertIn('https://b.com/info', result)
+
+    def test_adapter_uses_link_service_not_inline_regex(self):
+        # Patch link_service to verify adapter delegates to it
+        from unittest.mock import patch
+        self._make_settings(tone='MINIMAL', signature_enabled=False)
+        with patch('apps.branding_adapter.whatsapp_adapter.brand_links_in_text',
+                   wraps=lambda t, _: t) as mock_ls:
+            self._fmt(content='Pay here: https://pay.example.com/abc',
+                      context={'payment_link': 'https://pay.example.com/abc'})
+        mock_ls.assert_called_once()
+
+    # 4. CTA registry independence ─────────────────────────────────────────────
+
+    def test_cta_registry_all_styles_callable(self):
+        from apps.branding_adapter.cta_registry import CTA_REGISTRY
+        for style in ('PAY_NOW', 'CONFIRM', 'CONTACT', 'NONE'):
+            self.assertIn(style, CTA_REGISTRY)
+            result = CTA_REGISTRY[style]({'payment_link': 'https://x.com', 'phone': '+91999'})
+            self.assertIsInstance(result, str)
+
+    def test_build_cta_unknown_style_returns_empty(self):
+        from apps.branding_adapter.cta_registry import build_cta
+        self.assertEqual(build_cta('TOTALLY_UNKNOWN', {}), '')
+
+    def test_adapter_uses_registry_not_inline_logic(self):
+        from unittest.mock import patch
+        self._make_settings(cta_style='CONFIRM')
+        with patch('apps.branding_adapter.whatsapp_adapter.build_cta',
+                   wraps=lambda style, ctx: '\n\nReply YES to confirm.') as mock_cta:
+            self._fmt()
+        mock_cta.assert_called_once()
+
+    # 5. Message length guard ─────────────────────────────────────────────────
+
+    def test_soft_limit_warning_emitted_for_long_message(self):
+        self._make_settings(tone='MINIMAL', signature_enabled=False)
+        long_body = 'A' * 1_700
+        with self.assertLogs('apps.branding_adapter', level='WARNING') as cm:
+            self._fmt(content=long_body)
+        reasons = [getattr(r, 'reason', '') for r in cm.records]
+        self.assertIn('message_long', reasons)
+
+    def test_hard_limit_truncates_message(self):
+        self._make_settings(tone='MINIMAL', signature_enabled=False)
+        long_body = 'B' * 5_000
+        result = self._fmt(content=long_body)
+        self.assertLessEqual(len(result), 4_096)
+
+    def test_hard_limit_warning_emitted_when_truncated(self):
+        self._make_settings(tone='MINIMAL', signature_enabled=False)
+        long_body = 'C' * 5_000
+        with self.assertLogs('apps.branding_adapter', level='WARNING') as cm:
+            self._fmt(content=long_body)
+        reasons = [getattr(r, 'reason', '') for r in cm.records]
+        self.assertIn('message_too_long', reasons)
+
+    def test_normal_length_message_no_length_warning(self):
+        self._make_settings(tone='MINIMAL', signature_enabled=False)
+        import logging
+        with self.assertLogs('apps.branding_adapter', level='DEBUG') as cm:
+            logging.getLogger('apps.branding_adapter').debug('sentinel')
+            self._fmt(content='Short message.')
+        length_warnings = [l for l in cm.output if 'message_too_long' in l or 'message_long' in l]
+        self.assertEqual(length_warnings, [])
+
+    # 6. Idempotent formatting ────────────────────────────────────────────────
+
+    def test_calling_format_twice_does_not_duplicate_signature(self):
+        self._make_settings(tone='MINIMAL', signature_enabled=True, cta_style='NONE')
+        first  = self._fmt(content='Membership active.')
+        # simulate retry: pass already-formatted message as content
+        second = self._fmt(content=first)
+        sig = f'— {self.tenant.name}'
+        self.assertEqual(second.count(sig), 1, "signature should appear exactly once")
+
+    def test_calling_format_twice_does_not_duplicate_cta(self):
+        self._make_settings(tone='MINIMAL', signature_enabled=False, cta_style='CONFIRM')
+        first  = self._fmt(content='Please confirm.')
+        second = self._fmt(content=first)
+        self.assertEqual(second.count('Reply YES to confirm.'), 1,
+                         "CTA should appear exactly once")
+
+    def test_calling_format_twice_does_not_duplicate_pay_now_cta(self):
+        self._make_settings(tone='MINIMAL', signature_enabled=False, cta_style='PAY_NOW')
+        first  = self._fmt(content='Your invoice.', context={'payment_link': 'https://pay.example.com/1'})
+        second = self._fmt(content=first, context={'payment_link': 'https://pay.example.com/1'})
+        self.assertEqual(second.count('Click here to pay:'), 1)
+
+    # 7a. CTA + signature correct order ───────────────────────────────────────
+
+    def test_signature_appears_before_cta(self):
+        self._make_settings(signature_enabled=True, cta_style='CONFIRM', tone='MINIMAL')
+        result = self._fmt(content='Your booking is confirmed.')
+        sig_pos = result.find(f'— {self.tenant.name}')
+        cta_pos = result.find('Reply YES to confirm.')
+        self.assertGreater(sig_pos, 0, "signature should be present")
+        self.assertGreater(cta_pos, 0, "CTA should be present")
+        self.assertLess(sig_pos, cta_pos, "signature must come before CTA")
+
+    def test_cta_and_signature_both_present_and_distinct(self):
+        self._make_settings(signature_enabled=True, cta_style='CONFIRM', tone='FRIENDLY')
+        result = self._fmt(content='Booking confirmed.', context={'member_name': 'Jay'})
+        self.assertIn(f'— {self.tenant.name}', result)
+        self.assertIn('Reply YES to confirm.', result)
+
+    # 7b. Long content edge case ──────────────────────────────────────────────
+
+    def test_long_content_preserves_structure(self):
+        # Signature and CTA must still be appended even when body is near the limit
+        self._make_settings(signature_enabled=True, cta_style='CONFIRM', tone='MINIMAL')
+        # 1500 chars — fits under soft limit, well under hard limit after sig+CTA
+        result = self._fmt(content='X' * 1_500)
+        self.assertIn(f'— {self.tenant.name}', result)
+        self.assertIn('Reply YES to confirm.', result)
+
+    def test_long_content_truncation_at_hard_limit_is_clean_string(self):
+        self._make_settings(tone='MINIMAL', signature_enabled=False)
+        result = self._fmt(content='Y' * 5_000)
+        self.assertIsInstance(result, str)
+        self.assertLessEqual(len(result), 4_096)
