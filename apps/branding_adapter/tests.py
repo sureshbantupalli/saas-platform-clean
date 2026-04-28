@@ -1125,3 +1125,182 @@ class WhatsAppMetadataLogTest(TestCase):
     def test_metadata_log_contains_tenant_id(self):
         r = self._meta()
         self.assertEqual(r.tenant_id, str(self.tenant.pk))
+
+
+# ── custom_domain validation ──────────────────────────────────────────────────
+
+class CustomDomainValidationTest(TestCase):
+    """TenantBranding.custom_domain rejects bad input; BrandingService normalises."""
+
+    def setUp(self):
+        _, self.tenant = make_tenant_user('DomainTest')
+        cache.clear()
+
+    def _save(self, domain):
+        from apps.settings.branding.services import BrandingService
+        return BrandingService.save_branding(self.tenant, {'custom_domain': domain})
+
+    # ── service normalisation ─────────────────────────────────────────────────
+
+    def test_valid_domain_saved_as_is(self):
+        self._save('app.mygym.com')
+        from apps.settings.branding.models import TenantBranding
+        b = TenantBranding.objects.get(tenant=self.tenant)
+        self.assertEqual(b.custom_domain, 'app.mygym.com')
+
+    def test_protocol_prefix_stripped(self):
+        self._save('https://app.mygym.com')
+        from apps.settings.branding.models import TenantBranding
+        b = TenantBranding.objects.get(tenant=self.tenant)
+        self.assertEqual(b.custom_domain, 'app.mygym.com')
+
+    def test_http_prefix_stripped(self):
+        self._save('http://app.mygym.com')
+        from apps.settings.branding.models import TenantBranding
+        b = TenantBranding.objects.get(tenant=self.tenant)
+        self.assertEqual(b.custom_domain, 'app.mygym.com')
+
+    def test_trailing_slash_stripped(self):
+        self._save('app.mygym.com/')
+        from apps.settings.branding.models import TenantBranding
+        b = TenantBranding.objects.get(tenant=self.tenant)
+        self.assertEqual(b.custom_domain, 'app.mygym.com')
+
+    def test_full_url_with_path_strips_to_host(self):
+        self._save('https://app.mygym.com/some/path')
+        from apps.settings.branding.models import TenantBranding
+        b = TenantBranding.objects.get(tenant=self.tenant)
+        self.assertEqual(b.custom_domain, 'app.mygym.com')
+
+    def test_domain_lowercased(self):
+        self._save('App.MyGym.Com')
+        from apps.settings.branding.models import TenantBranding
+        b = TenantBranding.objects.get(tenant=self.tenant)
+        self.assertEqual(b.custom_domain, 'app.mygym.com')
+
+    def test_blank_domain_accepted(self):
+        self._save('')
+        from apps.settings.branding.models import TenantBranding
+        b = TenantBranding.objects.get(tenant=self.tenant)
+        self.assertEqual(b.custom_domain, '')
+
+    # ── model validator ───────────────────────────────────────────────────────
+
+    def test_invalid_domain_raises_validation_error(self):
+        from django.core.exceptions import ValidationError
+        from apps.settings.branding.models import _validate_custom_domain
+        with self.assertRaises(ValidationError):
+            _validate_custom_domain('not a domain!')
+
+    def test_domain_with_spaces_raises_validation_error(self):
+        from django.core.exceptions import ValidationError
+        from apps.settings.branding.models import _validate_custom_domain
+        with self.assertRaises(ValidationError):
+            _validate_custom_domain('my gym.com')
+
+    def test_bare_hostname_no_tld_raises_validation_error(self):
+        from django.core.exceptions import ValidationError
+        from apps.settings.branding.models import _validate_custom_domain
+        with self.assertRaises(ValidationError):
+            _validate_custom_domain('localhost')
+
+    def test_valid_subdomain_passes_validator(self):
+        from apps.settings.branding.models import _validate_custom_domain
+        _validate_custom_domain('checkout.mygym.co.uk')  # should not raise
+
+    # ── link_service defensive normalisation ─────────────────────────────────
+
+    def test_link_service_handles_stored_domain_with_protocol(self):
+        """link_service defensively strips protocol on read (pre-validation records)."""
+        from apps.settings.branding.models import TenantBranding
+        from apps.branding_adapter.link_service import brand_link
+        # Write directly to DB bypassing the service normalisation
+        TenantBranding.objects.update_or_create(
+            tenant=self.tenant,
+            defaults={'whitelabel_enabled': True, 'custom_domain': 'https://checkout.mygym.com'},
+        )
+        cache.delete(f'branding:{self.tenant.pk}')
+        result = brand_link('https://platform.saas.com/pay', self.tenant)
+        self.assertIn('checkout.mygym.com', result)
+        self.assertNotIn('https://https://', result)
+
+
+# ── CTA sentinel enforcement ──────────────────────────────────────────────────
+
+class CTASentinelTest(TestCase):
+    """_CTA_APPLIED_MARKER is embedded on first CTA application and blocks re-append."""
+
+    def setUp(self):
+        _, self.tenant = make_tenant_user('SentinelTest')
+        cache.clear()
+
+    def _make_settings(self, **kwargs):
+        from apps.settings.whatsapp.models import TenantWhatsAppSettings
+        defaults = dict(tone='MINIMAL', signature_enabled=False, cta_style='NONE', template_overrides={})
+        defaults.update(kwargs)
+        obj, _ = TenantWhatsAppSettings.objects.get_or_create(tenant=self.tenant)
+        for k, v in defaults.items():
+            setattr(obj, k, v)
+        obj.save()
+        cache.delete(f'wa_settings:{self.tenant.pk}')
+        return obj
+
+    def _fmt(self, content='Body.', context=None, event='test.event'):
+        from apps.branding_adapter.whatsapp_adapter import WhatsAppBrandingAdapter
+        return WhatsAppBrandingAdapter.format_message(
+            event=event, content=content, context=context or {}, tenant=self.tenant,
+        )
+
+    def test_sentinel_marker_present_in_output_when_cta_applied(self):
+        from apps.branding_adapter.whatsapp_adapter import _CTA_APPLIED_MARKER
+        self._make_settings(cta_style='CONFIRM')
+        result = self._fmt()
+        self.assertIn(_CTA_APPLIED_MARKER, result)
+
+    def test_sentinel_marker_absent_when_no_cta(self):
+        from apps.branding_adapter.whatsapp_adapter import _CTA_APPLIED_MARKER
+        self._make_settings(cta_style='NONE')
+        result = self._fmt()
+        self.assertNotIn(_CTA_APPLIED_MARKER, result)
+
+    def test_sentinel_absent_when_pay_now_has_no_link(self):
+        from apps.branding_adapter.whatsapp_adapter import _CTA_APPLIED_MARKER
+        self._make_settings(cta_style='PAY_NOW')
+        result = self._fmt(context={})  # no payment_link
+        self.assertNotIn(_CTA_APPLIED_MARKER, result)
+
+    def test_sentinel_blocks_second_cta_on_retry_call(self):
+        """Passing already-formatted message as content must not duplicate CTA."""
+        self._make_settings(cta_style='CONFIRM')
+        first  = self._fmt(content='Booking confirmed.')
+        second = self._fmt(content=first)
+        self.assertEqual(second.count('Reply YES to confirm.'), 1)
+
+    def test_sentinel_blocks_dynamic_pay_now_cta_on_retry(self):
+        """PAY_NOW retry safety: fragile content-match would fail when link changes."""
+        self._make_settings(cta_style='PAY_NOW')
+        link = 'https://pay.example.com/abc'
+        first  = self._fmt(content='Invoice ready.', context={'payment_link': link})
+        second = self._fmt(content=first, context={'payment_link': link})
+        self.assertEqual(second.count('Click here to pay:'), 1)
+
+    def test_sentinel_position_before_cta_text(self):
+        from apps.branding_adapter.whatsapp_adapter import _CTA_APPLIED_MARKER
+        self._make_settings(cta_style='CONFIRM')
+        result = self._fmt()
+        marker_pos = result.find(_CTA_APPLIED_MARKER)
+        cta_pos    = result.find('Reply YES to confirm.')
+        self.assertGreater(marker_pos, 0)
+        self.assertLess(marker_pos, cta_pos)
+
+    def test_different_cta_styles_each_embed_sentinel(self):
+        from apps.branding_adapter.whatsapp_adapter import _CTA_APPLIED_MARKER
+        for style, ctx in [
+            ('CONFIRM', {}),
+            ('CONTACT', {'support_phone': '+9199'}),
+            ('PAY_NOW', {'payment_link': 'https://pay.example.com/x'}),
+        ]:
+            with self.subTest(style=style):
+                self._make_settings(cta_style=style)
+                result = self._fmt(context=ctx)
+                self.assertIn(_CTA_APPLIED_MARKER, result)

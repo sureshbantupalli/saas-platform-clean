@@ -28,12 +28,16 @@ _WA_SOFT_LIMIT = 1_600
 _WA_HARD_LIMIT = 4_096
 
 # Sentinel for reliable CTA idempotency detection.
-# Zero-width space + left-to-right mark: invisible in WhatsApp, unique enough
-# to never appear in normal message content.
-# TODO (not blocker): replace the current cta.strip()-in-message check with:
-#   1. prepend _CTA_APPLIED_MARKER to cta before appending
-#   2. check `_CTA_APPLIED_MARKER not in message` as the guard
-# This handles dynamic CTA values (payment links) and whitespace variance.
+# ZWSP (​) + LRM (‎): invisible in WhatsApp, not in any normal message
+# body. Prepended to the CTA block on first application; checked before every
+# subsequent append — so dynamic CTA values (payment links) and whitespace
+# variance can never cause false negatives the way cta.strip()-in-message could.
+#
+# NOTE (item 1 — metadata log timing): the metadata log in step 9 captures the
+# state at format_message() exit. If a downstream channel adapter rewrites the
+# message further (e.g. truncates for a different gateway limit), the logged
+# length will differ from what is ultimately delivered. Wire the log to the
+# send result when that level of precision is needed.
 _CTA_APPLIED_MARKER = '​‎'
 
 
@@ -113,15 +117,15 @@ class WhatsAppBrandingAdapter:
         elif sig_enabled and brand_name and sig_line in message:
             has_sig = True  # already present from prior format call
 
-        # 6. CTA — idempotent: build first, skip if content already present
-        # TODO: replace cta.strip()-in-message check with _CTA_APPLIED_MARKER guard
-        # once adopted — see module docstring for the sketch.
+        # 6. CTA — idempotent via sentinel marker.
+        # Sentinel check is robust against dynamic CTA values (payment links)
+        # and whitespace variance that made cta.strip()-in-message unreliable.
+        # Marker persists in the sent message (invisible to WA users) and is
+        # detected on any retry call that passes the formatted output as content.
         cta_style = (getattr(wa_settings, 'cta_style', None) or 'NONE') if wa_settings else 'NONE'
         cta       = build_cta(cta_style, context)
-        if cta:
-            cta_content = cta.strip()
-            if cta_content and cta_content not in message:
-                message += cta
+        if cta and _CTA_APPLIED_MARKER not in message:
+            message += _CTA_APPLIED_MARKER + cta
 
         # 7. Link branding (shared service — SMS/Email/PDF will reuse)
         message = brand_links_in_text(message, tenant)

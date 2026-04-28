@@ -17,6 +17,7 @@ import re
 
 _BARE_URL_RE = re.compile(r'https?://[^\s]+')
 _HOST_RE     = re.compile(r'^(https?://)([^/?#]+)')
+_PROTO_RE    = re.compile(r'^https?://')
 
 
 def brand_link(url: str, tenant) -> str:
@@ -31,8 +32,12 @@ def brand_link(url: str, tenant) -> str:
         from apps.settings.branding.services import BrandingService
         branding = BrandingService.get_branding(tenant)
         if branding and branding.whitelabel_enabled and branding.custom_domain:
-            custom_domain = branding.custom_domain.strip().rstrip('/')
-            return _HOST_RE.sub(lambda m: f'{m.group(1)}{custom_domain}', url)
+            # Defensive normalise — save_branding() already strips on write, but
+            # records created before that validation was added may still have a
+            # protocol prefix or trailing slash.
+            custom_domain = _PROTO_RE.sub('', branding.custom_domain).strip().split('/')[0].rstrip('.')
+            if custom_domain:
+                return _HOST_RE.sub(lambda m: f'{m.group(1)}{custom_domain}', url)
     except Exception:
         pass
     return url

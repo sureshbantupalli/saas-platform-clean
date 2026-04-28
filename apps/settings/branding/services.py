@@ -1,6 +1,10 @@
+import re
+
 from django.core.cache import cache
 
 from .models import TenantBranding
+
+_PROTO_RE = re.compile(r'^https?://')
 
 DEFAULTS = {
     'primary_color':   '#0d6efd',
@@ -87,6 +91,14 @@ class BrandingService:
     @staticmethod
     def save_branding(tenant, data: dict, logo=None, favicon=None) -> TenantBranding:
         branding, _ = TenantBranding.objects.get_or_create(tenant=tenant)
+
+        # Normalise custom_domain: strip protocol + trailing slash before validation
+        if 'custom_domain' in data:
+            val = (data['custom_domain'] or '').strip()
+            val = _PROTO_RE.sub('', val)   # drop https:// or http://
+            val = val.split('/')[0]        # drop any path component
+            val = val.rstrip('.').lower()
+            data['custom_domain'] = val
 
         for field in ('primary_color', 'secondary_color', 'login_title', 'custom_css', 'custom_domain'):
             if field in data:

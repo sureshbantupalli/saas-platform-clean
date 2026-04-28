@@ -9,6 +9,22 @@ def _validate_hex(value):
         raise ValidationError('Enter a valid hex colour, e.g. #1a2b3c.')
 
 
+# Bare hostname/subdomain: labels separated by dots, no protocol, no path.
+_DOMAIN_RE = re.compile(
+    r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'
+)
+
+
+def _validate_custom_domain(value):
+    """Reject values with protocols, paths, or invalid hostname characters."""
+    if not value:
+        return
+    if not _DOMAIN_RE.fullmatch(value):
+        raise ValidationError(
+            'Enter a bare domain name without protocol or path, e.g. app.mygym.com.'
+        )
+
+
 class TenantBranding(models.Model):
     tenant = models.OneToOneField(
         'core.Tenant',
@@ -28,6 +44,7 @@ class TenantBranding(models.Model):
     custom_domain = models.CharField(
         max_length=253,
         blank=True,
+        validators=[_validate_custom_domain],
         help_text='Tenant custom domain (e.g. app.mygym.com). Used to brand payment and checkout links.',
     )
     updated_at = models.DateTimeField(auto_now=True)
