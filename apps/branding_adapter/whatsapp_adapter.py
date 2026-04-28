@@ -10,6 +10,7 @@ Pipeline (in order):
   6. CTA                   — from cta_registry.CTA_REGISTRY; idempotent
   7. Link branding         — delegates to link_service.brand_links_in_text()
   8. Length guard          — structured warning when output exceeds WA soft limit
+  9. Metadata log          — structured INFO with event/cta_type/has_signature/length
 
 All steps degrade gracefully: missing context keys → empty string; missing
 settings record → FRIENDLY tone, signature on, no CTA.
@@ -22,9 +23,18 @@ from apps.branding_adapter.link_service import brand_links_in_text
 
 logger = logging.getLogger('apps.branding_adapter')
 
-# WhatsApp Business API hard limit; 1600 is the soft-warn threshold used here.
+# WhatsApp Business API hard limit; 1600 is the soft-warn threshold.
 _WA_SOFT_LIMIT = 1_600
 _WA_HARD_LIMIT = 4_096
+
+# Sentinel for reliable CTA idempotency detection.
+# Zero-width space + left-to-right mark: invisible in WhatsApp, unique enough
+# to never appear in normal message content.
+# TODO (not blocker): replace the current cta.strip()-in-message check with:
+#   1. prepend _CTA_APPLIED_MARKER to cta before appending
+#   2. check `_CTA_APPLIED_MARKER not in message` as the guard
+# This handles dynamic CTA values (payment links) and whitespace variance.
+_CTA_APPLIED_MARKER = '​‎'
 
 
 # ── tone greeting registry ────────────────────────────────────────────────────
@@ -96,10 +106,16 @@ class WhatsAppBrandingAdapter:
         sig_enabled = getattr(wa_settings, 'signature_enabled', True) if wa_settings else True
         brand_name  = getattr(tenant, 'name', '') or ''
         sig_line    = f'— {brand_name}'
+        has_sig     = False
         if sig_enabled and brand_name and sig_line not in message:
             message += f'\n\n{sig_line}'
+            has_sig = True
+        elif sig_enabled and brand_name and sig_line in message:
+            has_sig = True  # already present from prior format call
 
         # 6. CTA — idempotent: build first, skip if content already present
+        # TODO: replace cta.strip()-in-message check with _CTA_APPLIED_MARKER guard
+        # once adopted — see module docstring for the sketch.
         cta_style = (getattr(wa_settings, 'cta_style', None) or 'NONE') if wa_settings else 'NONE'
         cta       = build_cta(cta_style, context)
         if cta:
@@ -135,5 +151,20 @@ class WhatsAppBrandingAdapter:
                     "limit":     _WA_SOFT_LIMIT,
                 },
             )
+
+        # 9. CTA traceability + message metadata — structured audit/analytics backbone.
+        # cta_type tells the renewal engine exactly which CTA was sent, making
+        # "which payment link did we send?" answerable without reading message text.
+        logger.info(
+            "[WhatsApp] Message formatted",
+            extra={
+                "reason":        "message_formatted",
+                "event":         event,
+                "cta_type":      cta_style if cta else "NONE",
+                "has_signature": has_sig,
+                "length":        len(message),
+                "tenant_id":     tenant_id,
+            },
+        )
 
         return message

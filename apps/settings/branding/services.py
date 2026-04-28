@@ -88,7 +88,7 @@ class BrandingService:
     def save_branding(tenant, data: dict, logo=None, favicon=None) -> TenantBranding:
         branding, _ = TenantBranding.objects.get_or_create(tenant=tenant)
 
-        for field in ('primary_color', 'secondary_color', 'login_title', 'custom_css'):
+        for field in ('primary_color', 'secondary_color', 'login_title', 'custom_css', 'custom_domain'):
             if field in data:
                 setattr(branding, field, data[field])
 

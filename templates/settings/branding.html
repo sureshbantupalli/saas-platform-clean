@@ -252,6 +252,24 @@
         <div class="form-text">Replaces "Welcome back" on the sign-in page.</div>
       </div>
 
+      {# ── Custom domain (link branding) ───────────────────────── #}
+      <div class="settings-section">
+        <div class="settings-section-title">Custom Domain</div>
+        <label class="form-label small fw-semibold" for="id_custom_domain">Custom domain</label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text text-muted">https://</span>
+          <input type="text" class="form-control form-control-sm"
+                 id="id_custom_domain" name="custom_domain"
+                 value="{{ branding.custom_domain|default:'' }}"
+                 placeholder="app.mygym.com" maxlength="253"
+                 {% if feature_locked %}disabled{% endif %}>
+        </div>
+        <div class="form-text">
+          When set, payment and checkout links sent via WhatsApp and email will use
+          this domain instead of the platform default. Leave blank to use the platform domain.
+        </div>
+      </div>
+
       {# ── Custom CSS ───────────────────────────────────────────── #}
       <div class="settings-section">
         <div class="settings-section-title">

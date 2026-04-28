@@ -961,3 +961,167 @@ class WhatsAppAdapterHardeningTest(TestCase):
         result = self._fmt(content='Y' * 5_000)
         self.assertIsInstance(result, str)
         self.assertLessEqual(len(result), 4_096)
+
+
+# ── link_service custom_domain rewriting ──────────────────────────────────────
+
+class LinkServiceCustomDomainTest(TestCase):
+    """brand_link() replaces host with tenant's custom_domain when white-label is on."""
+
+    def setUp(self):
+        _, self.tenant = make_tenant_user('LinkTest')
+        cache.clear()
+
+    def _make_branding(self, custom_domain='', whitelabel=True):
+        from apps.settings.branding.services import BrandingService
+        TenantBranding.objects.filter(tenant=self.tenant).delete()
+        branding = TenantBranding.objects.create(
+            tenant=self.tenant,
+            whitelabel_enabled=whitelabel,
+            custom_domain=custom_domain,
+        )
+        cache.delete(f'branding:{self.tenant.pk}')
+        return branding
+
+    def test_custom_domain_replaces_host_when_whitelabel_enabled(self):
+        from apps.branding_adapter.link_service import brand_link
+        self._make_branding(custom_domain='app.mygym.com', whitelabel=True)
+        result = brand_link('https://platform.saas.com/payments/checkout/abc/', self.tenant)
+        self.assertIn('app.mygym.com', result)
+        self.assertNotIn('platform.saas.com', result)
+        self.assertIn('/payments/checkout/abc/', result)
+
+    def test_scheme_is_preserved_after_replacement(self):
+        from apps.branding_adapter.link_service import brand_link
+        self._make_branding(custom_domain='app.mygym.com', whitelabel=True)
+        result = brand_link('https://platform.saas.com/pay', self.tenant)
+        self.assertTrue(result.startswith('https://app.mygym.com'))
+
+    def test_path_and_query_are_preserved(self):
+        from apps.branding_adapter.link_service import brand_link
+        self._make_branding(custom_domain='app.mygym.com', whitelabel=True)
+        url    = 'https://platform.saas.com/checkout/abc/?ref=wa'
+        result = brand_link(url, self.tenant)
+        self.assertIn('/checkout/abc/', result)
+        self.assertIn('ref=wa', result)
+
+    def test_no_rewrite_when_whitelabel_disabled(self):
+        from apps.branding_adapter.link_service import brand_link
+        self._make_branding(custom_domain='app.mygym.com', whitelabel=False)
+        url    = 'https://platform.saas.com/pay'
+        result = brand_link(url, self.tenant)
+        self.assertEqual(result, url)
+
+    def test_no_rewrite_when_custom_domain_empty(self):
+        from apps.branding_adapter.link_service import brand_link
+        self._make_branding(custom_domain='', whitelabel=True)
+        url    = 'https://platform.saas.com/pay'
+        result = brand_link(url, self.tenant)
+        self.assertEqual(result, url)
+
+    def test_no_rewrite_when_no_branding_record(self):
+        from apps.branding_adapter.link_service import brand_link
+        url    = 'https://platform.saas.com/pay'
+        result = brand_link(url, self.tenant)
+        self.assertEqual(result, url)
+
+    def test_brand_links_in_text_rewrites_all_urls(self):
+        from apps.branding_adapter.link_service import brand_links_in_text
+        self._make_branding(custom_domain='gym.example.com', whitelabel=True)
+        text   = 'Pay at https://platform.com/pay and see https://platform.com/info'
+        result = brand_links_in_text(text, self.tenant)
+        self.assertNotIn('platform.com', result)
+        self.assertIn('gym.example.com', result)
+        self.assertIn('/pay', result)
+        self.assertIn('/info', result)
+
+    def test_adapter_applies_custom_domain_to_pay_now_link(self):
+        from apps.branding_adapter.whatsapp_adapter import WhatsAppBrandingAdapter
+        from apps.settings.whatsapp.models import TenantWhatsAppSettings
+        self._make_branding(custom_domain='checkout.mygym.com', whitelabel=True)
+        TenantWhatsAppSettings.objects.create(
+            tenant=self.tenant,
+            tone='MINIMAL',
+            signature_enabled=False,
+            cta_style='PAY_NOW',
+        )
+        cache.delete(f'wa_settings:{self.tenant.pk}')
+        result = WhatsAppBrandingAdapter.format_message(
+            event='payment.created',
+            content='Your invoice is ready.',
+            context={'payment_link': 'https://platform.saas.com/checkout/abc/'},
+            tenant=self.tenant,
+        )
+        self.assertIn('checkout.mygym.com', result)
+        self.assertNotIn('platform.saas.com', result)
+
+
+# ── CTA traceability / metadata log ──────────────────────────────────────────
+
+class WhatsAppMetadataLogTest(TestCase):
+    """format_message() emits a structured INFO log with cta_type + message metadata."""
+
+    def setUp(self):
+        _, self.tenant = make_tenant_user('MetaTest')
+        cache.clear()
+
+    def _make_settings(self, **kwargs):
+        from apps.settings.whatsapp.models import TenantWhatsAppSettings
+        defaults = dict(tone='MINIMAL', signature_enabled=False, cta_style='NONE', template_overrides={})
+        defaults.update(kwargs)
+        obj, _ = TenantWhatsAppSettings.objects.get_or_create(tenant=self.tenant)
+        for k, v in defaults.items():
+            setattr(obj, k, v)
+        obj.save()
+        cache.delete(f'wa_settings:{self.tenant.pk}')
+        return obj
+
+    def _records(self, content='Body.', context=None, event='test.event', settings_kwargs=None):
+        from apps.branding_adapter.whatsapp_adapter import WhatsAppBrandingAdapter
+        if settings_kwargs is not None:
+            self._make_settings(**settings_kwargs)
+        with self.assertLogs('apps.branding_adapter', level='INFO') as cm:
+            WhatsAppBrandingAdapter.format_message(
+                event=event, content=content,
+                context=context or {}, tenant=self.tenant,
+            )
+        return cm.records
+
+    def _meta(self, **kwargs):
+        records = self._records(**kwargs)
+        meta = [r for r in records if getattr(r, 'reason', '') == 'message_formatted']
+        self.assertEqual(len(meta), 1, "expected exactly one message_formatted record")
+        return meta[0]
+
+    def test_metadata_log_emitted(self):
+        self._meta()
+
+    def test_metadata_log_contains_event(self):
+        r = self._meta(event='membership.expiring')
+        self.assertEqual(r.event, 'membership.expiring')
+
+    def test_metadata_log_contains_cta_type_when_cta_active(self):
+        r = self._meta(settings_kwargs={'cta_style': 'CONFIRM'})
+        self.assertEqual(r.cta_type, 'CONFIRM')
+
+    def test_metadata_log_cta_type_is_none_when_no_cta(self):
+        r = self._meta(settings_kwargs={'cta_style': 'NONE'})
+        self.assertEqual(r.cta_type, 'NONE')
+
+    def test_metadata_log_cta_type_is_none_when_pay_now_link_missing(self):
+        # PAY_NOW with no link → CTA string is empty → cta_type logged as NONE
+        r = self._meta(context={}, settings_kwargs={'cta_style': 'PAY_NOW'})
+        self.assertEqual(r.cta_type, 'NONE')
+
+    def test_metadata_log_contains_has_signature(self):
+        r = self._meta(settings_kwargs={'signature_enabled': True})
+        self.assertIn('has_signature', r.__dict__)
+
+    def test_metadata_log_contains_length(self):
+        r = self._meta(content='Hello world.')
+        self.assertIsInstance(r.length, int)
+        self.assertGreater(r.length, 0)
+
+    def test_metadata_log_contains_tenant_id(self):
+        r = self._meta()
+        self.assertEqual(r.tenant_id, str(self.tenant.pk))

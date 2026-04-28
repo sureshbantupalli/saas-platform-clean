@@ -58,8 +58,9 @@ def branding_settings(request):
                         data={
                             'primary_color':   primary,
                             'secondary_color': secondary,
-                            'login_title':     request.POST.get('login_title', '').strip(),
-                            'custom_css':      request.POST.get('custom_css',  '').strip(),
+                            'login_title':     request.POST.get('login_title',    '').strip(),
+                            'custom_css':      request.POST.get('custom_css',     '').strip(),
+                            'custom_domain':   request.POST.get('custom_domain',  '').strip().lower(),
                         },
                         logo=logo,
                         favicon=favicon,

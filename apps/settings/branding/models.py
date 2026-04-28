@@ -25,6 +25,11 @@ class TenantBranding(models.Model):
         default=False,
         help_text='Enable white-label branding for this tenant.',
     )
+    custom_domain = models.CharField(
+        max_length=253,
+        blank=True,
+        help_text='Tenant custom domain (e.g. app.mygym.com). Used to brand payment and checkout links.',
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
