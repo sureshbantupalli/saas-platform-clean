@@ -1,13 +1,26 @@
 """
 Renewal Detection Layer (Phase 1).
 
-Scans all active/recently-expired memberships and returns a list of
-DetectionResult objects — one per (membership, trigger_stage) pair that
-has not yet been logged in RenewalTriggerLog.
+Scans active/recently-expired memberships and returns DetectionResult objects —
+one per (membership, trigger_stage) pair that has not yet been logged.
 
-This layer is READ-ONLY. It never calls handle_event() and never writes
-to the database. The Trigger Layer (Phase 2) is responsible for acting
-on the results and creating RenewalTriggerLog records.
+READ-ONLY: never calls handle_event(), never writes to the database.
+The Trigger Layer (Phase 2) acts on results and creates RenewalTriggerLog records.
+
+Stage table
+───────────────────────────────────────────────────────────────────────────────
+days_left   trigger_type    eligible statuses
+─────────   ────────────    ─────────────────
+  7         expiring_7d     active only
+  3         expiring_3d     active only
+  1         expiring_1d     active only
+ -1 to -7   expired         active (grace) or expired — recovery window
+ < -7       (ignored)       too old; do not contact churned users
+
+One membership emits at most one stage per detection run. Priority enforced as:
+  expiring_1d > expiring_3d > expiring_7d > expired
+(exact-day matching means only one expiring stage can fire per day; expired is
+a separate gate checked after expiring stages are exhausted.)
 """
 from __future__ import annotations
 
@@ -20,31 +33,60 @@ from apps.renewals.models import RenewalTriggerLog, TriggerType
 
 logger = logging.getLogger(__name__)
 
+# Priority order: highest priority first so that a future `break` stops the
+# search at the earliest (most urgent) matching stage.
 TRIGGER_STAGES: list[tuple[str, int]] = [
-    (TriggerType.EXPIRING_7D, 7),
-    (TriggerType.EXPIRING_3D, 3),
     (TriggerType.EXPIRING_1D, 1),
+    (TriggerType.EXPIRING_3D, 3),
+    (TriggerType.EXPIRING_7D, 7),
 ]
+
+# Memberships expired longer ago than this are silently ignored — avoids
+# contacting long-churned users and limits the DB scan window.
 RECOVERY_WINDOW_DAYS = 7
 
-# Generous back-buffer to catch memberships extended via MembershipAdjustment.
-# final_end_date >= end_date always, so end_date can be up to N days before
-# the actual expiry. 45 days covers extreme multi-adjustment edge cases.
-_ADJUSTMENT_BUFFER_DAYS = 45
+# ─── DB window explanation ────────────────────────────────────────────────────
+# final_end_date is a Python property computed as:
+#   end_date + sum(adjustment.days for all MembershipAdjustment rows)
+#
+# Because adjustments only ADD days (extensions, freezes, corrections are
+# all positive in normal usage), final_end_date >= end_date always.
+#
+# We therefore DB-filter on end_date as a proxy:
+#
+#   Expiring stages (target = today + N, N ∈ {1, 3, 7}):
+#     final_end_date = today + N  →  end_date ≤ today + N
+#     DB upper bound: end_date ≤ today + 7 + 1 (window_end)  ✓
+#     DB lower bound: end_date ≥ today + 1 - MAX_ADJ_DAYS    ✓
+#
+#   Expired stage (target = today - K, K ∈ {1..RECOVERY_WINDOW_DAYS}):
+#     final_end_date = today - K  →  end_date ≤ final_end_date < today
+#     DB lower bound: end_date ≥ today - RECOVERY_WINDOW_DAYS - MAX_ADJ_DAYS  ✓
+#
+# Any membership whose adjustments exceed MAX_ADJ_DAYS would escape the DB
+# window. At 45 days this is beyond any realistic gym membership extension.
+# Long-term fix: materialise final_end_date as a computed DB column.
+# ─────────────────────────────────────────────────────────────────────────────
+_MAX_ADJ_DAYS = 45  # adjustment buffer; see above
+
+_MAX_STAGE_DAYS = max(days for _, days in TRIGGER_STAGES)  # 7
 
 
 @dataclass(frozen=True)
 class DetectionResult:
+    """
+    All fields Phase 2 needs to call handle_event() and write the trigger log.
+    """
     membership_id: str
+    member_id: str
     tenant_id: str
-    trigger_type: str   # one of TriggerType values
-    days_left: int      # negative for expired
+    trigger_type: str   # TriggerType value
+    days_left: int      # positive → expiring; negative → expired
+    expiry_date: date   # snapshot of final_end_date at detection time
     member_name: str
     phone: str
     email: str
     plan_name: str
-    expiry_date: date
-    member_id: str
 
 
 class RenewalDetectionService:
@@ -52,24 +94,24 @@ class RenewalDetectionService:
     @staticmethod
     def detect_all(today: date | None = None) -> list[DetectionResult]:
         """
-        Return all DetectionResults that are eligible for triggering.
+        Return all DetectionResults eligible for triggering as of `today`.
+
+        `today` is injected for testability. In production it is always set
+        from Django's timezone-aware clock (never datetime.date.today()) to
+        avoid off-by-one errors when the server runs in a non-UTC timezone.
 
         Memberships already present in RenewalTriggerLog for the same
-        (trigger_type, expiry_date) triple are skipped — they have already
-        been actioned in this renewal cycle.
+        (membership, trigger_type, expiry_date) triple are skipped — they
+        have already been actioned in this renewal cycle.
         """
         if today is None:
             from django.utils import timezone
             today = timezone.now().date()
 
-        # --- 1. Query candidate memberships ----------------------------------
-        # We can't ORM-filter on final_end_date (it's a Python property), so
-        # we use end_date as a conservative lower bound: final_end_date is
-        # always >= end_date, so filtering end_date <= today + 7 covers all
-        # memberships that could possibly be expiring within the next 7 days.
-        # The back window covers expired-recovery candidates.
-        window_start = today - timedelta(days=RECOVERY_WINDOW_DAYS + _ADJUSTMENT_BUFFER_DAYS)
-        window_end = today + timedelta(days=max(d for _, d in TRIGGER_STAGES) + 1)
+        # --- 1. DB-level filtering — NOT a full-table scan -------------------
+        # See _MAX_ADJ_DAYS comment above for why end_date is a safe proxy.
+        window_start = today - timedelta(days=RECOVERY_WINDOW_DAYS + _MAX_ADJ_DAYS)
+        window_end   = today + timedelta(days=_MAX_STAGE_DAYS + 1)
 
         memberships = (
             Membership._base_manager
@@ -95,7 +137,7 @@ class RenewalDetectionService:
             .values_list('membership_id', 'trigger_type', 'expiry_date')
         )
 
-        # --- 3. Classify each membership -------------------------------------
+        # --- 3. Classify each membership — one stage per membership per run --
         results: list[DetectionResult] = []
 
         for membership in membership_list:
@@ -104,46 +146,51 @@ class RenewalDetectionService:
                 continue
 
             days_left = (expiry - today).days
-            member = membership.member
+            member    = membership.member
 
-            # Build common kwargs once per membership to avoid repetition
             common = dict(
                 membership_id=str(membership.id),
+                member_id=str(member.id),
                 tenant_id=str(membership.tenant_id),
+                expiry_date=expiry,
                 member_name=f'{member.first_name} {member.last_name}'.strip(),
                 phone=member.phone or '',
                 email=member.email or '',
                 plan_name=membership.plan_name,
-                expiry_date=expiry,
-                member_id=str(member.id),
             )
 
-            # Expiring stages — only for active memberships
-            if membership.status == 'active':
+            # ── Expiring stages (active memberships, future expiry only) ──
+            # TRIGGER_STAGES is ordered 1d → 3d → 7d (highest priority first).
+            # Exact-day matching means at most one branch is entered per day.
+            # The break enforces the invariant explicitly.
+            if membership.status == 'active' and days_left > 0:
                 for trigger_type, target_days in TRIGGER_STAGES:
                     if days_left != target_days:
                         continue
-                    log_key = (membership.id, trigger_type, expiry)
-                    if log_key in already_logged:
+                    if (membership.id, trigger_type, expiry) in already_logged:
                         logger.debug(
                             'Skipping already-logged trigger',
                             extra={
                                 'membership_id': str(membership.id),
                                 'trigger_type': trigger_type,
-                                'expiry_date': str(expiry),
                             },
                         )
-                        continue
+                        break  # logged → still consumed this stage slot
                     results.append(DetectionResult(
                         trigger_type=trigger_type,
                         days_left=days_left,
                         **common,
                     ))
+                    break  # one expiring stage per membership per run
 
-            # Expired-recovery stage — active (grace) or expired memberships
+            # ── Expired-recovery stage ──
+            # Separate if (not elif) so that grace-period memberships —
+            # status='active' but final_end_date already past — are included.
+            # Only fires within RECOVERY_WINDOW_DAYS of expiry; memberships
+            # expired longer ago are silently ignored to prevent contacting
+            # churned users.
             if days_left < 0 and days_left >= -RECOVERY_WINDOW_DAYS:
-                log_key = (membership.id, TriggerType.EXPIRED, expiry)
-                if log_key not in already_logged:
+                if (membership.id, TriggerType.EXPIRED, expiry) not in already_logged:
                     results.append(DetectionResult(
                         trigger_type=TriggerType.EXPIRED,
                         days_left=days_left,

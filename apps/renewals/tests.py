@@ -144,6 +144,15 @@ class RenewalDetectionTests(TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].trigger_type, TriggerType.EXPIRED)
 
+    def test_grace_period_membership_fires_expired_stage(self):
+        # status='active' but final_end_date already passed (still within grace).
+        # The expired stage must fire even though status is not 'expired'.
+        self._membership(self.TODAY - timedelta(days=2), status='active')
+        results = RenewalDetectionService.detect_all(today=self.TODAY)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].trigger_type, TriggerType.EXPIRED)
+        self.assertEqual(results[0].days_left, -2)
+
     # --- boundary / skip cases -----------------------------------------------
 
     def test_skips_expired_outside_recovery_window(self):
