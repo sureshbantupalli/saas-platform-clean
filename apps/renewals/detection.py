@@ -73,6 +73,16 @@ _MAX_ADJ_DAYS = 45  # adjustment buffer; see above
 
 _MAX_STAGE_DAYS = max(days for _, days in TRIGGER_STAGES)  # 7
 
+# Phase 3+ event registry — maps trigger types to communication event names.
+# Not consumed by Phase 1 or 2; defined here so the canonical location is
+# established before channel-specific routing or analytics grouping is added.
+TRIGGER_EVENT_MAP: dict[str, str] = {
+    TriggerType.EXPIRING_7D: 'membership_expiring_7d',
+    TriggerType.EXPIRING_3D: 'membership_expiring_3d',
+    TriggerType.EXPIRING_1D: 'membership_expiring_1d',
+    TriggerType.EXPIRED:     'membership_expired',
+}
+
 
 @dataclass(frozen=True)
 class DetectionResult:
@@ -185,6 +195,15 @@ class RenewalDetectionService:
                         days_left=days_left,
                         **common,
                     ))
+                    logger.debug(
+                        'renewal_detected',
+                        extra={
+                            'membership_id': str(membership.id),
+                            'trigger_type': trigger_type,
+                            'days_left': days_left,
+                            'expiry_date': str(expiry),
+                        },
+                    )
                     break  # one expiring stage per membership per run
 
             # ── Expired-recovery stage ──
@@ -199,6 +218,15 @@ class RenewalDetectionService:
                         days_left=days_left,
                         **common,
                     ))
+                    logger.debug(
+                        'renewal_detected',
+                        extra={
+                            'membership_id': str(membership.id),
+                            'trigger_type': TriggerType.EXPIRED,
+                            'days_left': days_left,
+                            'expiry_date': str(expiry),
+                        },
+                    )
 
         logger.info(
             'Renewal detection complete',

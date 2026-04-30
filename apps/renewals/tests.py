@@ -169,6 +169,14 @@ class RenewalDetectionTests(TestCase):
         results = RenewalDetectionService.detect_all(today=self.TODAY)
         self.assertEqual(results, [])
 
+    def test_no_trigger_for_positive_days_left_not_in_stage_window(self):
+        # days_left=4 is positive and inside the DB candidate window (< 8)
+        # but not a stage target. Guards against accidental window widening
+        # (e.g. changing exact-match to days_left <= 7).
+        self._membership(self.TODAY + timedelta(days=4))
+        results = RenewalDetectionService.detect_all(today=self.TODAY)
+        self.assertEqual(results, [])
+
     def test_skips_cancelled_memberships(self):
         self._membership(self.TODAY + timedelta(days=7), status='cancelled')
         results = RenewalDetectionService.detect_all(today=self.TODAY)
