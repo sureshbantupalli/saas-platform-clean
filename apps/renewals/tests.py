@@ -138,11 +138,13 @@ class RenewalDetectionTests(TestCase):
         self.assertEqual(results[0].trigger_type, TriggerType.EXPIRED)
         self.assertEqual(results[0].days_left, -3)
 
-    def test_expired_last_day_of_recovery_window(self):
+    def test_expired_exactly_at_recovery_window_boundary_is_included(self):
+        # days_left = -RECOVERY_WINDOW_DAYS → INCLUSIVE boundary → must fire
         self._membership(self.TODAY - timedelta(days=RECOVERY_WINDOW_DAYS), status='expired')
         results = RenewalDetectionService.detect_all(today=self.TODAY)
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].trigger_type, TriggerType.EXPIRED)
+        self.assertEqual(results[0].trigger_type, 'expired')  # explicit string
 
     def test_grace_period_membership_fires_expired_stage(self):
         # status='active' but final_end_date already passed (still within grace).
@@ -155,7 +157,8 @@ class RenewalDetectionTests(TestCase):
 
     # --- boundary / skip cases -----------------------------------------------
 
-    def test_skips_expired_outside_recovery_window(self):
+    def test_expired_one_day_past_recovery_boundary_is_excluded(self):
+        # days_left = -(RECOVERY_WINDOW_DAYS + 1) → just outside inclusive boundary → must NOT fire
         self._membership(self.TODAY - timedelta(days=RECOVERY_WINDOW_DAYS + 1), status='expired')
         results = RenewalDetectionService.detect_all(today=self.TODAY)
         self.assertEqual(results, [])
@@ -216,12 +219,21 @@ class RenewalDetectionTests(TestCase):
         self.assertEqual(r.membership_id, str(m.id))
         self.assertEqual(r.tenant_id, str(self.tenant.id))
         self.assertEqual(r.trigger_type, TriggerType.EXPIRING_7D)
+        self.assertEqual(r.trigger_type, 'expiring_7d')   # Phase 2 depends on this string
         self.assertEqual(r.days_left, 7)
         self.assertEqual(r.member_name, 'Alice Test')
         self.assertEqual(r.phone, '9999999999')
         self.assertEqual(r.email, 'alice@renewal.test')
         self.assertEqual(r.member_id, str(self.member.id))
         self.assertEqual(r.expiry_date, self.TODAY + timedelta(days=7))
+
+    def test_trigger_type_string_values(self):
+        # Explicitly pin the string values Phase 2 will dispatch on.
+        # If TriggerType enum values change, these assertions break loudly.
+        self.assertEqual(TriggerType.EXPIRING_1D, 'expiring_1d')
+        self.assertEqual(TriggerType.EXPIRING_3D, 'expiring_3d')
+        self.assertEqual(TriggerType.EXPIRING_7D, 'expiring_7d')
+        self.assertEqual(TriggerType.EXPIRED,     'expired')
 
     # --- adjustments affecting final_end_date --------------------------------
 

@@ -41,8 +41,10 @@ TRIGGER_STAGES: list[tuple[str, int]] = [
     (TriggerType.EXPIRING_7D, 7),
 ]
 
-# Memberships expired longer ago than this are silently ignored — avoids
-# contacting long-churned users and limits the DB scan window.
+# Recovery window boundary: INCLUSIVE.
+# days_left == -RECOVERY_WINDOW_DAYS  →  IN window  (fires expired stage)
+# days_left == -(RECOVERY_WINDOW_DAYS + 1)  →  OUT of window (silently ignored)
+# Memberships expired longer ago are ignored to prevent contacting churned users.
 RECOVERY_WINDOW_DAYS = 7
 
 # ─── DB window explanation ────────────────────────────────────────────────────
@@ -160,9 +162,11 @@ class RenewalDetectionService:
             )
 
             # ── Expiring stages (active memberships, future expiry only) ──
+            # DB pre-filter narrows the candidate set; Python exact-match is
+            # the strict filter. days_left == target_days means only one
+            # TRIGGER_STAGES entry can match per membership per day.
             # TRIGGER_STAGES is ordered 1d → 3d → 7d (highest priority first).
-            # Exact-day matching means at most one branch is entered per day.
-            # The break enforces the invariant explicitly.
+            # break after match enforces the one-stage-per-run invariant.
             if membership.status == 'active' and days_left > 0:
                 for trigger_type, target_days in TRIGGER_STAGES:
                     if days_left != target_days:
@@ -184,11 +188,10 @@ class RenewalDetectionService:
                     break  # one expiring stage per membership per run
 
             # ── Expired-recovery stage ──
-            # Separate if (not elif) so that grace-period memberships —
-            # status='active' but final_end_date already past — are included.
-            # Only fires within RECOVERY_WINDOW_DAYS of expiry; memberships
-            # expired longer ago are silently ignored to prevent contacting
-            # churned users.
+            # Separate if (not elif) so grace-period memberships (status='active'
+            # but final_end_date already past) are included alongside 'expired'.
+            # Boundary is INCLUSIVE: days_left == -RECOVERY_WINDOW_DAYS fires.
+            # days_left == -(RECOVERY_WINDOW_DAYS + 1) does not.
             if days_left < 0 and days_left >= -RECOVERY_WINDOW_DAYS:
                 if (membership.id, TriggerType.EXPIRED, expiry) not in already_logged:
                     results.append(DetectionResult(
