@@ -104,9 +104,13 @@ class DetectionResult:
 class RenewalDetectionService:
 
     @staticmethod
-    def detect_all(today: date | None = None) -> list[DetectionResult]:
+    def detect_all(today: date | None = None, tenant=None) -> list[DetectionResult]:
         """
         Return all DetectionResults eligible for triggering as of `today`.
+
+        `tenant` is optional. When provided the DB query is scoped to that
+        tenant (used by the Trigger Layer to avoid scanning all tenants).
+        Omit for cross-tenant batch runs or tests that span multiple tenants.
 
         `today` is injected for testability. In production it is always set
         from Django's timezone-aware clock (never datetime.date.today()) to
@@ -125,14 +129,18 @@ class RenewalDetectionService:
         window_start = today - timedelta(days=RECOVERY_WINDOW_DAYS + _MAX_ADJ_DAYS)
         window_end   = today + timedelta(days=_MAX_STAGE_DAYS + 1)
 
+        base_filter: dict = dict(
+            status__in=['active', 'expired'],
+            is_deleted=False,
+            end_date__gte=window_start,
+            end_date__lte=window_end,
+        )
+        if tenant is not None:
+            base_filter['tenant'] = tenant
+
         memberships = (
             Membership._base_manager
-            .filter(
-                status__in=['active', 'expired'],
-                is_deleted=False,
-                end_date__gte=window_start,
-                end_date__lte=window_end,
-            )
+            .filter(**base_filter)
             .select_related('member', 'tenant', 'plan')
             .prefetch_related('adjustments')
         )
