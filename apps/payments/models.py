@@ -2,6 +2,7 @@ import uuid
 from django.conf import settings
 from django.db import models
 from apps.core.models import TenantAwareModel, BaseModel
+from apps.core.reference_types import ReferenceType
 from apps.payments.utils.encryption import EncryptedCharField
 
 
@@ -19,6 +20,8 @@ class PaymentStatus(models.TextChoices):
 class PaymentPurpose(models.TextChoices):
     MEMBERSHIP = "membership", "Membership"
     BOOKING    = "booking",    "Booking"
+    SESSION    = "session",    "Session"
+    DOCUMENT   = "document",   "Document"
     OTHER      = "other",      "Other"
 
 
@@ -54,8 +57,27 @@ class Payment(TenantAwareModel):
     )
 
     purpose        = models.CharField(max_length=20, choices=PaymentPurpose.choices, default=PaymentPurpose.MEMBERSHIP)
-    reference_type = models.CharField(max_length=50, blank=True, help_text="e.g. 'membership', 'booking'")
+    reference_type = models.CharField(max_length=50, blank=True, choices=ReferenceType.choices)
     reference_id   = models.UUIDField(null=True, blank=True, db_index=True)
+
+    # Context: who paid and in which business line
+    person   = models.ForeignKey(
+        "members.Member",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="payments",
+    )
+    vertical = models.ForeignKey(
+        "verticals.BusinessVertical",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="payments",
+    )
+
+    # GST fields — manual; user fills these in
+    gst_applicable = models.BooleanField(default=False)
+    gst_rate       = models.DecimalField(max_digits=5,  decimal_places=2, null=True, blank=True)
+    gst_amount     = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     # Gateway fields (unused for offline payments)
     gateway            = models.CharField(max_length=20, choices=PaymentGateway.choices, default=PaymentGateway.OFFLINE)
@@ -104,6 +126,12 @@ class PaymentEvent(BaseModel):
 
 # ── TenantPaymentConfig ───────────────────────────────────────────────────────
 
+class WebhookStatus(models.TextChoices):
+    UNVERIFIED = 'unverified', 'Not verified'
+    VERIFIED   = 'verified',   'Verified'
+    FAILED     = 'failed',     'Failed'
+
+
 class TenantPaymentConfig(BaseModel):
     """
     Per-tenant payment gateway configuration.
@@ -115,14 +143,23 @@ class TenantPaymentConfig(BaseModel):
         on_delete=models.CASCADE,
         related_name="payment_configs",
     )
-    provider   = models.CharField(max_length=30, default="razorpay")
-    key_id     = models.CharField(max_length=200, blank=True)
+    provider       = models.CharField(max_length=30, default="razorpay")
+    key_id         = models.CharField(max_length=200, blank=True)
     key_secret     = EncryptedCharField(blank=True)
     webhook_secret = EncryptedCharField(blank=True)
-    is_active  = models.BooleanField(default=False)
+    is_active      = models.BooleanField(default=False)
+    # Webhook verification tracking
+    webhook_status      = models.CharField(
+        max_length=20, choices=WebhookStatus.choices, default=WebhookStatus.UNVERIFIED
+    )
+    webhook_verified_at       = models.DateTimeField(null=True, blank=True)
+    webhook_last_error          = models.TextField(blank=True)
+    webhook_last_error_source   = models.CharField(max_length=10, blank=True)  # 'test' | 'real'
+    webhook_last_tested_at      = models.DateTimeField(null=True, blank=True)
+    webhook_last_success_source = models.CharField(max_length=10, blank=True)  # 'test' | 'real'
 
     class Meta:
-        db_table       = "tenant_payment_configs"
+        db_table        = "tenant_payment_configs"
         unique_together = [["tenant", "provider"]]
 
     def __str__(self):

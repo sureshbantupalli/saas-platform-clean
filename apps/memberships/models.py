@@ -280,6 +280,13 @@ class Membership(TenantAwareModel):
 
         self.sync_status_with_lifecycle()
 
+        # Invariant: zero-fee memberships must always be paid.
+        # If this fires, sync_status_with_lifecycle or the fee calculation above
+        # has a bug that would silently create an "unpaid" free membership.
+        assert self.fee_amount != 0 or self.payment_status == "paid", (
+            f"Membership invariant violated: fee_amount=0 but payment_status={self.payment_status!r}"
+        )
+
         super().save(*args, **kwargs)
 
     # -----------------------------------------------------

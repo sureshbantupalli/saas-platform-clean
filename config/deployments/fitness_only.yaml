@@ -1,0 +1,163 @@
+# Fitness Studio Deployment Scenario
+# Target: Yoga studio with booking and payment, no CRM/analytics
+# Deployment Time: 60-90 minutes
+# Risk Level: MEDIUM-LOW
+
+scenario_name: fitness_only
+display_name: "Fitness Studio"
+description: |
+  Yoga studio with session scheduling, bookings, and payment processing.
+  Includes: User management, fitness operations, and financial management.
+  Excludes: CRM, Assessments, Analytics/Reporting.
+
+  Ideal for: Independent yoga studios, fitness centers, wellness studios.
+
+modules:
+  - core_infrastructure
+  - user_management
+  - fitness_studio
+  - financial
+
+feature_flags:
+  fitness_studio_enabled: true
+  bookings_enabled: true
+  sessions_enabled: true
+  payments_enabled: true
+  assessments_enabled: false
+  analytics_enabled: false
+  financial_enabled: true
+  reporting_enabled: false
+  communications_enabled: false
+  whatsapp_enabled: false
+  attendance_tracking: true
+  membership_renewal: true
+  certificate_generation: false
+
+estimated_resources:
+  database_tables: 40-50
+  api_endpoints: 30-35
+  deployment_time_minutes: 75
+  required_disk_space_gb: 10
+  estimated_monthly_cost: "$700-900"
+
+test_requirements:
+  critical_tests: 75
+  core_tests: 40
+  module_tests: 290
+  integration_tests: 60
+  scenario_tests: 50
+  total_test_count: 400
+  estimated_test_time_minutes: 20
+  minimum_coverage_percent: 85
+
+deployment_checklist:
+  phase_1_validate:
+    - validate_dependencies()
+    - confirm_communications_disabled()
+    - confirm_assessments_disabled()
+    - confirm_analytics_disabled()
+  phase_2_configure:
+    - set_payment_gateway()
+    - configure_payment_webhook()
+    - set_session_defaults()
+    - enable_booking_system()
+  phase_3_database:
+    - backup_database()
+    - run_migrations()
+    - verify_session_and_booking_tables()
+    - create_performance_indexes()
+  phase_4_testing:
+    - run_critical_tests()
+    - run_fitness_tests()
+    - run_payment_tests()
+    - run_scenario_tests("fitness_only")
+    - test_booking_capacity_limits()
+    - test_payment_processing()
+  phase_5_security:
+    - pci_compliance_check()
+    - payment_encryption_verify()
+    - https_tls_verify()
+  phase_6_deployment:
+    - deploy_code()
+    - run_migrations()
+    - collect_static_files()
+    - restart_services()
+  phase_7_verification:
+    - health_check_fitness_endpoints()
+    - test_session_creation()
+    - test_booking_workflow()
+    - test_payment_processing()
+    - verify_attendance_tracking()
+
+safety_gates:
+  - dependency_validation
+  - test_coverage_check (min: 85%)
+  - security_audit
+  - pci_compliance_check
+  - database_compatibility_check
+  - payment_gateway_test
+
+post_deployment_checks:
+  - user_registration_working
+  - session_creation_working
+  - booking_system_operational
+  - payment_processing_working
+  - attendance_tracking_functional
+  - capacity_limits_enforced
+  - logging_operational
+
+known_limitations:
+  - No CRM/lead management
+  - No course assessments
+  - No analytics/reporting dashboards
+  - Limited communication (email only, no WhatsApp)
+  - No multi-location support (single studio only)
+
+deployment_order:
+  step_1: "Validate dependencies & payment setup"
+  step_2: "Create database backup"
+  step_3: "Run migrations"
+  step_4: "Run fitness tests (400 tests)"
+  step_5: "PCI compliance check"
+  step_6: "Deploy code"
+  step_7: "Test payment gateway"
+  step_8: "Run health checks"
+
+rollback_procedure:
+  step_1: "Stop booking system"
+  step_2: "Restore from backup"
+  step_3: "Restart services"
+  step_4: "Verify bookings halted"
+
+performance_requirements:
+  booking_creation: "< 2 seconds"
+  attendance_marking: "< 1 second"
+  payment_processing: "< 5 seconds"
+  capacity_check: "< 500ms"
+  schedule_generation: "< 3 seconds"
+
+supported_tenants:
+  - "Yoga studios"
+  - "Fitness centers"
+  - "Wellness centers"
+  - "Dance studios"
+  - "Training centers"
+
+scaling_limits:
+  max_classes_per_day: "100"
+  max_members_per_studio: "10000"
+  max_concurrent_bookings: "1000/minute"
+  max_pending_payments: "5000"
+
+monitoring_config:
+  uptime_sla: "99.7%"
+  alert_thresholds:
+    error_rate: "> 1%"
+    latency_p99: "> 3 seconds"
+    booking_failure_rate: "> 0.5%"
+    payment_failure_rate: "> 1%"
+
+support_contact: "studio-support@setuschool.com"
+estimated_cost_per_month: "$800"
+max_tenants_supported: "500+"
+max_concurrent_users: "8000+"

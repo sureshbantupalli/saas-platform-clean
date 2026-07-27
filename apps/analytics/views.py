@@ -27,7 +27,9 @@ def _group_actions(actions: list) -> list:
 
 @login_required
 def dashboard_view(request):
-    data = get_dashboard_summary(request.tenant)
+    from apps.payments.services.payment_intelligence_service import get_payment_metrics
+
+    data         = get_dashboard_summary(request.tenant)
     next_actions = get_next_actions(request.tenant)
     ctx = {
         "data":                  data,
@@ -36,6 +38,7 @@ def dashboard_view(request):
         "revenue_trend_json":    json.dumps(data["charts"]["revenue_trend"]),
         "attendance_trend_json": json.dumps(data["charts"]["attendance_trend"]),
         "lead_funnel_json":      json.dumps(data["charts"]["lead_funnel"]),
+        "payment_metrics":       get_payment_metrics(request.tenant),
     }
     return render(request, "analytics/dashboard.html", ctx)
 

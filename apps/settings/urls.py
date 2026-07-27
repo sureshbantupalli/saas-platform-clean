@@ -8,7 +8,14 @@ urlpatterns = [
     # Active settings sections
     path('general/',          views.general_settings,        name='general'),
     path('payments/',         views.payments_settings,       name='payments'),
+    path('payments/test-webhook/', views.test_webhook,        name='test_webhook'),
     path('communications/',   views.communications_settings, name='communications'),
+
+    # Branch management (tenant self-service)
+    path('branches/',         include(('apps.settings.branches.urls', 'branches'), namespace='branches')),
+
+    # Staff user management (tenant self-service)
+    path('users/',            include(('apps.settings.users.urls', 'staff'), namespace='staff')),
 
     # RBAC (Phase 1 — already implemented)
     path('roles/',            include(('apps.settings.roles.urls', 'roles'), namespace='roles')),
@@ -18,7 +25,4 @@ urlpatterns = [
 
     # Branding (Phase 4)
     path('branding/',         include(('apps.settings.branding.urls', 'branding'), namespace='branding')),
-    # TODO: path('branding/',        include('apps.settings.branding.urls')),     # Phase 4
-    # TODO: path('feature-flags/',   include('apps.settings.features.urls')),     # Phase 5
-    # TODO: path('audit/',           include('apps.settings.audit.urls')),        # Phase 6
 ]

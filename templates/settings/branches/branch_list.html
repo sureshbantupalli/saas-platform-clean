@@ -1,0 +1,91 @@
+{% extends "settings/base.html" %}
+{% block settings_title %}Branches{% endblock %}
+{% block settings_breadcrumb %}
+<i class="bi bi-chevron-right text-muted mx-1" style="font-size:0.7rem;"></i>
+<span style="font-size:0.82rem;">Branches</span>
+{% endblock %}
+
+{% block settings_content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div class="settings-page-header mb-0">
+    <h5 class="mb-0">Branches</h5>
+    <p>Manage locations your business operates from.</p>
+  </div>
+  <a href="{% url 'settings:branches:create' %}" class="btn btn-primary">
+    <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>New Branch
+  </a>
+</div>
+
+{% if branches %}
+<div class="card border-0 shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Address</th>
+          <th>Phone</th>
+          <th>Email</th>
+          <th class="text-center">Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for branch in branches %}
+        <tr>
+          <td class="fw-semibold align-middle">{{ branch.name }}</td>
+          <td class="align-middle text-muted" style="font-size:0.85rem;">
+            {{ branch.address|default:"—" }}
+          </td>
+          <td class="align-middle" style="font-size:0.85rem;">
+            {{ branch.phone|default:"—" }}
+          </td>
+          <td class="align-middle" style="font-size:0.85rem;">
+            {{ branch.email|default:"—" }}
+          </td>
+          <td class="text-center align-middle">
+            {% if branch.is_active %}
+            <span class="badge bg-success-subtle text-success">Active</span>
+            {% else %}
+            <span class="badge bg-secondary-subtle text-secondary">Inactive</span>
+            {% endif %}
+          </td>
+          <td class="text-end align-middle">
+            <div class="d-flex gap-1 justify-content-end">
+              <a href="{% url 'settings:branches:edit' branch.pk %}"
+                 class="btn btn-sm btn-outline-secondary" title="Edit">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form method="post" action="{% url 'settings:branches:toggle' branch.pk %}"
+                    onsubmit="return confirm('{% if branch.is_active %}Deactivate{% else %}Activate{% endif %} branch {{ branch.name }}?')">
+                {% csrf_token %}
+                <button type="submit"
+                        class="btn btn-sm {% if branch.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
+                        title="{% if branch.is_active %}Deactivate{% else %}Activate{% endif %}">
+                  {% if branch.is_active %}
+                  <i class="bi bi-pause-circle"></i>
+                  {% else %}
+                  <i class="bi bi-play-circle"></i>
+                  {% endif %}
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card border-0 shadow-sm">
+  <div class="card-body text-center py-5">
+    <i class="bi bi-building fs-1 text-muted mb-3 d-block"></i>
+    <p class="text-muted mb-3">No branches yet. Add your first location to get started.</p>
+    <a href="{% url 'settings:branches:create' %}" class="btn btn-primary">
+      <i class="bi bi-plus-circle me-1"></i>Add First Branch
+    </a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

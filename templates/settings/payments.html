@@ -11,44 +11,274 @@
     <p>Configure payment providers and collection methods for your workspace.</p>
 </div>
 
-{# ── Provider cards ─────────────────────────────────────────────────────── #}
+{# ── Messages ────────────────────────────────────────────────────────────── #}
+{% if messages %}
+{% for msg in messages %}
+<div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show py-2 small" role="alert">
+    {{ msg }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endfor %}
+{% endif %}
+
+{# ── Provider cards ──────────────────────────────────────────────────────── #}
 <div class="settings-section">
     <div class="settings-section-title">Payment Providers</div>
     <p class="text-muted small mb-4">
         Connect a payment provider to enable online payment collection and tracking.
     </p>
 
-    {% for provider in providers|default:default_providers %}
+    {# ── Razorpay ── #}
+    <div class="rounded border mb-2" style="background:#f8fafc;">
+        <div class="d-flex align-items-center justify-content-between p-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="rounded-2 p-2 bg-white border d-flex align-items-center justify-content-center"
+                     style="width:40px;height:40px;">
+                    <i class="bi bi-lightning-charge fs-5 text-muted"></i>
+                </div>
+                <div>
+                    <div class="fw-semibold small">Razorpay</div>
+                    <div class="text-muted" style="font-size:0.78rem;">Indian payment gateway — cards, UPI, net banking.</div>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                {% if razorpay.is_configured %}
+                    {% if razorpay.is_active %}
+                    <span class="badge text-success" style="background:rgba(25,135,84,.1);font-size:0.72rem;">Active</span>
+                    {% else %}
+                    <span class="badge text-warning" style="background:rgba(255,193,7,.1);font-size:0.72rem;">Inactive</span>
+                    {% endif %}
+                    <button class="btn btn-sm btn-outline-secondary" style="font-size:0.75rem;"
+                            data-bs-toggle="collapse" data-bs-target="#razorpay-form">Edit</button>
+                {% else %}
+                <span class="badge text-secondary" style="background:rgba(108,117,125,.1);font-size:0.72rem;">Not configured</span>
+                <button class="btn btn-sm btn-primary" style="font-size:0.75rem;"
+                        data-bs-toggle="collapse" data-bs-target="#razorpay-form">Configure</button>
+                {% endif %}
+            </div>
+        </div>
+
+        {# ── Webhook status row (only when configured) ── #}
+        {% if razorpay.is_configured %}
+        <div class="px-3 pb-2" style="border-top:1px solid #e9ecef;padding-top:0.6rem;">
+            <div class="d-flex align-items-center gap-3">
+                <span class="small text-muted" style="font-size:0.78rem;">Webhook:</span>
+                {% if razorpay.is_verified %}
+                    <span class="small text-success" style="font-size:0.78rem;">
+                        <i class="bi bi-check-circle-fill me-1"></i>Verified
+                        <span class="text-muted ms-1">· {{ razorpay.webhook_verified_at|date:"d M Y, g:i A" }}</span>
+                    </span>
+                {% elif razorpay.webhook_status == 'failed' %}
+                    <span class="small text-danger" style="font-size:0.78rem;">
+                        <i class="bi bi-x-circle-fill me-1"></i>Failed
+                    </span>
+                {% else %}
+                    <span class="small text-warning" style="font-size:0.78rem;">
+                        <i class="bi bi-exclamation-circle-fill me-1"></i>Not verified
+                    </span>
+                {% endif %}
+                {% if razorpay.webhook_set %}
+                <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="test-webhook-btn"
+                        style="font-size:0.72rem;" onclick="testWebhook()">
+                    <i class="bi bi-send-check me-1"></i>Test Webhook
+                </button>
+                {% endif %}
+            </div>
+            {# Last tested timestamp #}
+            {% if razorpay.webhook_last_tested_at %}
+            <div class="mt-1 small text-muted" style="font-size:0.73rem;">
+                <i class="bi bi-clock me-1"></i>Last tested: {{ razorpay.webhook_last_tested_at|date:"d M Y, g:i A" }}
+            </div>
+            {% endif %}
+            {# Last error with source label #}
+            {% if razorpay.webhook_last_error %}
+            <div class="mt-1 small text-danger" style="font-size:0.75rem;">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                <strong>Last error
+                {% if razorpay.webhook_last_error_source == 'real' %}(live){% else %}(test){% endif %}:</strong>
+                {{ razorpay.webhook_last_error }}
+            </div>
+            {% endif %}
+        </div>
+        <div id="webhook-result" class="px-3 pb-2" style="display:none;">
+            <div id="webhook-result-text" class="small py-1 px-2 rounded" style="font-size:0.77rem;"></div>
+        </div>
+        {% endif %}
+
+        {# Razorpay form — open when not yet configured #}
+        <div class="collapse {% if not razorpay.is_configured %}show{% endif %}" id="razorpay-form">
+            <div class="px-3 pb-3">
+                <hr class="mt-0 mb-3">
+                <form method="post" class="row g-3">
+                    {% csrf_token %}
+                    <input type="hidden" name="provider" value="razorpay">
+
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold mb-1">Key ID <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-sm" name="key_id"
+                               value="{{ razorpay.key_id }}"
+                               placeholder="rzp_live_xxxxxxxxxxxx" required>
+                        <div class="form-text" style="font-size:0.72rem;">Your Razorpay public key (safe to display).</div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold mb-1">Key Secret</label>
+                        <input type="password" class="form-control form-control-sm" name="key_secret"
+                               autocomplete="new-password"
+                               placeholder="{% if razorpay.secret_set %}Already set — leave blank to keep{% else %}Enter key secret{% endif %}">
+                        <div class="form-text" style="font-size:0.72rem;">
+                            {% if razorpay.secret_set %}
+                            <i class="bi bi-check-circle-fill text-success me-1"></i>Secret is configured.
+                            {% else %}
+                            Required for payment order creation.
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold mb-1">Webhook Secret</label>
+                        <input type="password" class="form-control form-control-sm" name="webhook_secret"
+                               autocomplete="new-password"
+                               placeholder="{% if razorpay.webhook_set %}Already set — leave blank to keep{% else %}Enter webhook secret{% endif %}">
+                        <div class="form-text" style="font-size:0.72rem;">
+                            {% if razorpay.webhook_set %}
+                            <i class="bi bi-check-circle-fill text-success me-1"></i>Webhook secret is configured.
+                            {% else %}
+                            Set in your Razorpay dashboard under Webhooks.
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 d-flex align-items-center" style="padding-top:1.6rem;">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="is_active"
+                                   id="razorpay_active" {% if razorpay.is_active %}checked{% endif %}>
+                            <label class="form-check-label small" for="razorpay_active">
+                                Enable Razorpay for online payments
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-12 d-flex gap-2 align-items-center">
+                        <button type="submit" class="btn btn-primary btn-sm">Save Configuration</button>
+                        {% if razorpay.is_configured %}
+                        <button type="button" class="btn btn-link btn-sm text-muted p-0"
+                                data-bs-toggle="collapse" data-bs-target="#razorpay-form">Cancel</button>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# ── Stripe — coming soon ── #}
     <div class="d-flex align-items-center justify-content-between p-3 rounded border mb-2"
          style="background:#f8fafc;">
         <div class="d-flex align-items-center gap-3">
             <div class="rounded-2 p-2 bg-white border d-flex align-items-center justify-content-center"
                  style="width:40px;height:40px;">
-                <i class="bi {{ provider.icon }} fs-5 text-muted" aria-hidden="true"></i>
+                <i class="bi bi-stripe fs-5 text-muted"></i>
             </div>
             <div>
-                <div class="fw-semibold small">{{ provider.name }}</div>
-                <div class="text-muted" style="font-size:0.78rem;">{{ provider.description }}</div>
+                <div class="fw-semibold small">Stripe</div>
+                <div class="text-muted" style="font-size:0.78rem;">Global payment platform — cards, wallets, subscriptions.</div>
             </div>
         </div>
-        <span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size:0.72rem;">
-            Not configured
-        </span>
+        <span class="badge text-secondary" style="background:rgba(108,117,125,.1);font-size:0.72rem;">Coming soon</span>
     </div>
-    {% empty %}
-    <div class="text-muted small">No providers defined.</div>
-    {% endfor %}
+
+    {# ── Cash / Manual ── #}
+    <div class="rounded border mb-2" style="background:#f8fafc;">
+        <div class="d-flex align-items-center justify-content-between p-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="rounded-2 p-2 bg-white border d-flex align-items-center justify-content-center"
+                     style="width:40px;height:40px;">
+                    <i class="bi bi-cash-stack fs-5 text-muted"></i>
+                </div>
+                <div>
+                    <div class="fw-semibold small">Cash / Manual</div>
+                    <div class="text-muted" style="font-size:0.78rem;">Record offline payments collected in person — no configuration required.</div>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                {% if cash.is_active %}
+                <span class="badge text-success" style="background:rgba(25,135,84,.1);font-size:0.72rem;">Enabled</span>
+                {% else %}
+                <span class="badge text-secondary" style="background:rgba(108,117,125,.1);font-size:0.72rem;">Disabled</span>
+                {% endif %}
+                <button class="btn btn-sm btn-outline-secondary" style="font-size:0.75rem;"
+                        data-bs-toggle="collapse" data-bs-target="#cash-form">
+                    {{ cash.is_active|yesno:"Manage,Enable" }}
+                </button>
+            </div>
+        </div>
+        <div class="collapse" id="cash-form">
+            <div class="px-3 pb-3">
+                <hr class="mt-0 mb-3">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="provider" value="offline">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" role="switch"
+                                   name="is_active" id="cash_active"
+                                   {% if cash.is_active %}checked{% endif %}>
+                            <label class="form-check-label small" for="cash_active">
+                                Enable manual / cash payment recording
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm ms-auto">Save</button>
+                    </div>
+                    <div class="form-text mt-2" style="font-size:0.72rem;">
+                        When enabled, staff can record cash, UPI, or bank transfer payments manually without a payment gateway.
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
 
-{# TODO: Add payment provider configuration forms here (Phase 3 – Payments) #}
-{# TODO: Add webhook settings section here #}
-{# TODO: Add tax configuration section here #}
+{# ── Test Webhook JS ─────────────────────────────────────────────────────── #}
+<script>
+function testWebhook() {
+    const btn = document.getElementById('test-webhook-btn');
+    const resultBox = document.getElementById('webhook-result');
+    const resultText = document.getElementById('webhook-result-text');
 
-<div class="alert alert-info d-flex align-items-start gap-2 py-2" role="note">
-    <i class="bi bi-info-circle-fill flex-shrink-0 mt-1" aria-hidden="true"></i>
-    <div class="small">
-        <strong>Coming in Phase 3.</strong> Payment provider configuration,
-        Razorpay/Stripe integration, and webhook setup will be available here.
-    </div>
-</div>
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Testing…';
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    fetch('{% url "settings:test_webhook" %}', {
+        method: 'POST',
+        headers: {'X-CSRFToken': csrfToken, 'Content-Type': 'application/json'},
+    })
+    .then(r => r.json())
+    .then(data => {
+        resultBox.style.display = 'block';
+        if (data.ok) {
+            resultText.className = 'small py-1 px-2 rounded text-success';
+            resultText.style.background = 'rgba(25,135,84,.08)';
+            resultText.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>' + data.message;
+            // Reload to clear any stale webhook_last_error from the status row
+            setTimeout(() => location.reload(), 1800);
+        } else {
+            resultText.className = 'small py-1 px-2 rounded text-danger';
+            resultText.style.background = 'rgba(220,53,69,.08)';
+            resultText.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>' + data.error;
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-send-check me-1"></i>Test Webhook';
+        }
+    })
+    .catch(() => {
+        resultBox.style.display = 'block';
+        resultText.className = 'small py-1 px-2 rounded text-danger';
+        resultText.style.background = 'rgba(220,53,69,.08)';
+        resultText.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>Network error — could not reach server.';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-send-check me-1"></i>Test Webhook';
+    });
+}
+</script>
 {% endblock %}

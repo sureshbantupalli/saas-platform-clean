@@ -1,0 +1,119 @@
+{% extends "settings/base.html" %}
+{% block settings_title %}{% if user_obj %}Edit Staff User{% else %}Invite Staff{% endif %}{% endblock %}
+{% block settings_breadcrumb %}
+<i class="bi bi-chevron-right text-muted mx-1" style="font-size:0.7rem;"></i>
+<a href="{% url 'settings:staff:list' %}" style="font-size:0.82rem;">Staff Users</a>
+<i class="bi bi-chevron-right text-muted mx-1" style="font-size:0.7rem;"></i>
+<span style="font-size:0.82rem;">{% if user_obj %}Edit{% else %}Invite{% endif %}</span>
+{% endblock %}
+
+{% block settings_content %}
+<div class="settings-page-header">
+  <h5>{% if user_obj %}Edit {{ user_obj.email }}{% else %}Invite Staff Member{% endif %}</h5>
+  <p>{% if user_obj %}Update this staff member's details and access.{% else %}Create a login for a new team member.{% endif %}</p>
+</div>
+
+<div class="card border-0 shadow-sm" style="max-width:540px;">
+  <div class="card-body p-4">
+    <form method="post">
+      {% csrf_token %}
+
+      {% if not user_obj %}
+      {# Email — only on create #}
+      <div class="mb-3">
+        <label for="id_email" class="form-label fw-semibold">Email Address <span class="text-danger">*</span></label>
+        <input type="email" id="id_email" name="email" class="form-control"
+               value="{{ form_data.email|default:'' }}"
+               placeholder="staff@yourbusiness.com"
+               required autofocus maxlength="254">
+        <div class="form-text">This will be their login username.</div>
+      </div>
+      {% else %}
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Email Address</label>
+        <input type="text" class="form-control bg-light" value="{{ user_obj.email }}" disabled>
+        <div class="form-text">Email cannot be changed after account creation.</div>
+      </div>
+      {% endif %}
+
+      <div class="row g-3 mb-3">
+        <div class="col-sm-6">
+          <label for="id_first_name" class="form-label fw-semibold">First Name</label>
+          <input type="text" id="id_first_name" name="first_name" class="form-control"
+                 value="{{ user_obj.first_name|default:form_data.first_name|default:'' }}"
+                 placeholder="First name" maxlength="150">
+        </div>
+        <div class="col-sm-6">
+          <label for="id_last_name" class="form-label fw-semibold">Last Name</label>
+          <input type="text" id="id_last_name" name="last_name" class="form-control"
+                 value="{{ user_obj.last_name|default:form_data.last_name|default:'' }}"
+                 placeholder="Last name" maxlength="150">
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label for="id_role" class="form-label fw-semibold">Role <span class="text-danger">*</span></label>
+        <select id="id_role" name="role" class="form-select" required>
+          <option value="">— Select a role —</option>
+          {% for role in roles %}
+          <option value="{{ role.pk }}"
+            {% if user_obj and user_obj.role_id == role.pk %}selected
+            {% elif form_data.role == role.pk|stringformat:"s" %}selected
+            {% endif %}>
+            {{ role.name }}
+          </option>
+          {% endfor %}
+        </select>
+        {% if not roles %}
+        <div class="form-text text-warning">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          No roles found. <a href="{% url 'settings:roles:create' %}">Create a role first.</a>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if user_obj %}
+      <div class="mb-4">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="id_is_active" name="is_active"
+                 {% if user_obj.is_active %}checked{% endif %}>
+          <label class="form-check-label" for="id_is_active">
+            Account active
+            <span class="text-muted small d-block" style="font-weight:400;">
+              Inactive users cannot log in.
+            </span>
+          </label>
+        </div>
+      </div>
+      {% else %}
+      {# Password fields — only on create #}
+      <hr class="my-3">
+      <p class="text-muted small mb-3">Set a temporary password. Ask the staff member to change it after first login.</p>
+
+      <div class="mb-3">
+        <label for="id_password" class="form-label fw-semibold">Password <span class="text-danger">*</span></label>
+        <input type="password" id="id_password" name="password" class="form-control"
+               placeholder="Minimum 8 characters" required minlength="8">
+      </div>
+
+      <div class="mb-4">
+        <label for="id_password2" class="form-label fw-semibold">Confirm Password <span class="text-danger">*</span></label>
+        <input type="password" id="id_password2" name="password2" class="form-control"
+               placeholder="Repeat password" required minlength="8">
+      </div>
+      {% endif %}
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          {% if user_obj %}
+          Save Changes
+          {% else %}
+          <i class="bi bi-person-check me-1"></i>Create Account
+          {% endif %}
+        </button>
+        <a href="{% url 'settings:staff:list' %}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

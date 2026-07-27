@@ -37,4 +37,38 @@ class MembershipService:
         )
 
         membership.save()  # Triggers full_clean + tenant enforcement
+
+        # Audit — fires after commit so the log only reflects persisted state.
+        # fee_amount is intentionally excluded: financial values belong in the
+        # Membership model, not in the audit log.
+        _t    = membership.tenant
+        _mid  = str(membership.id)
+        _memid = str(member.id)
+        _plan = plan_name
+        _st   = status
+        _user = created_by
+        transaction.on_commit(lambda: _audit_membership_created(
+            tenant=_t, membership_id=_mid, member_id=_memid,
+            plan_name=_plan, status=_st, user=_user,
+        ))
+
         return membership
+
+
+def _audit_membership_created(*, tenant, membership_id, member_id, plan_name, status, user):
+    try:
+        from apps.audit.services import log_membership_change
+        log_membership_change(
+            tenant=tenant,
+            user=user,
+            action='create',
+            field_name='status',
+            new_value=status,
+            metadata={
+                'membership_id': membership_id,
+                'member_id':     member_id,
+                'plan_name':     plan_name,
+            },
+        )
+    except Exception:
+        pass  # log_membership_change is fault-tolerant; this catches import errors

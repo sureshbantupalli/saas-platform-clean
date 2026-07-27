@@ -58,7 +58,7 @@ def payment_list(request):
     selected_member = None
     if member_id:
         try:
-            selected_member = Member.base_objects.get(pk=member_id, tenant=request.user.tenant)
+            selected_member = Member.objects.get(pk=member_id, tenant=request.user.tenant)
             from apps.memberships.models import Membership
             mem_ids = list(
                 Membership.base_objects
@@ -74,7 +74,7 @@ def payment_list(request):
     page      = paginator.get_page(request.GET.get("page"))
 
     all_members = (
-        Member.base_objects
+        Member.objects
         .filter(tenant=request.user.tenant, is_deleted=False)
         .order_by("first_name", "last_name")
     )
@@ -109,7 +109,7 @@ def payment_detail(request, pk):
     if membership:
         try:
             from members.models import Member
-            member = Member.base_objects.get(pk=membership.member_id, is_deleted=False)
+            member = Member.objects.get(pk=membership.member_id, is_deleted=False)
         except Exception:
             pass
 
@@ -368,7 +368,7 @@ def payment_record(request):
                     messages.error(request, f"Could not record payment: {e}")
 
     all_members = (
-        Member.base_objects
+        Member.objects
         .filter(tenant=tenant, is_deleted=False)
         .order_by("first_name", "last_name")
     )
@@ -379,7 +379,7 @@ def payment_record(request):
 
     if pre_member_id:
         try:
-            pre_member  = Member.base_objects.get(pk=pre_member_id, tenant=tenant)
+            pre_member  = Member.objects.get(pk=pre_member_id, tenant=tenant)
             memberships = list(
                 Membership.base_objects
                 .filter(member=pre_member, is_deleted=False, status__in=["pending", "active", "expired"])
@@ -425,7 +425,7 @@ def member_memberships_json(request):
 
     try:
         from members.models import Member
-        member = Member.base_objects.get(pk=member_id, tenant=tenant)
+        member = Member.objects.get(pk=member_id, tenant=tenant)
     except Exception:
         return JsonResponse({"memberships": []})
 
@@ -506,4 +506,15 @@ def payment_checkout(request, pk):
         "rzp_error":  rzp_error,
         "membership": membership,
         "amount_paise": int(payment.amount * 100),
+    })
+
+
+@login_required
+def payment_intelligence(request):
+    from .services.payment_intelligence_service import get_payment_intelligence
+    data = get_payment_intelligence(request.tenant)
+    return render(request, 'payments/payment_intelligence.html', {
+        'rows':           data['rows'],
+        'metrics':        data['metrics'],
+        'last_evaluated': data['last_evaluated'],
     })

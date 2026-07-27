@@ -3,6 +3,7 @@ from django.core.cache import cache
 from .models import TenantVocabulary
 
 DEFAULT_VOCABULARY = {
+    # Core people / scheduling
     'member':      ('Member',      'Members'),
     'enquiry':     ('Enquiry',     'Enquiries'),
     'lead':        ('Lead',        'Leads'),
@@ -14,6 +15,12 @@ DEFAULT_VOCABULARY = {
     'membership':  ('Membership',  'Memberships'),
     'attendance':  ('Attendance',  'Attendance'),
     'branch':      ('Branch',      'Branches'),
+    # Financial + vertical system
+    'service':     ('Service',     'Services'),
+    'vertical':    ('Vertical',    'Verticals'),
+    'invoice':     ('Invoice',     'Invoices'),
+    'expense':     ('Expense',     'Expenses'),
+    'payout':      ('Payout',      'Payouts'),
 }
 
 _CACHE_TTL = 300  # 5 minutes

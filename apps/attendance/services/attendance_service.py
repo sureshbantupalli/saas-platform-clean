@@ -41,12 +41,20 @@ def bulk_mark_attendance(session, member_ids, tenant, marked_by=None):
                     failed.append({"member_id": str(member.id), "reason": "No remaining sessions"})
                     continue
 
-        Attendance.objects.create(
+        attendance = Attendance.objects.create(
             member=member,
             tenant=tenant,
             attendance_type="session",
             session_date=session_date,
             check_in_time=session.start_time,
+        )
+
+        _audit_attendance_marked(
+            tenant=tenant,
+            attendance_id=str(attendance.id),
+            member_id=str(member.id),
+            session_id=str(session.id),
+            marked_by=marked_by,
         )
 
         success.append({"member_id": str(member.id), "status": "marked"})
@@ -57,3 +65,22 @@ def bulk_mark_attendance(session, member_ids, tenant, marked_by=None):
     )
 
     return {"success": success, "failed": failed}
+
+
+def _audit_attendance_marked(*, tenant, attendance_id, member_id, session_id, marked_by):
+    try:
+        from apps.audit.services import log_attendance_change
+        log_attendance_change(
+            tenant=tenant,
+            user=marked_by,
+            action='create',
+            field_name='status',
+            new_value='present',
+            metadata={
+                'attendance_id': attendance_id,
+                'member_id':     member_id,
+                'session_id':    session_id,
+            },
+        )
+    except Exception:
+        pass

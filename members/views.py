@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 
 from django.shortcuts import render, redirect
-from django.http import HttpResponseForbidden, Http404
+from django.http import HttpResponseForbidden, Http404, JsonResponse
 from django.core.paginator import Paginator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.middleware.csrf import get_token
@@ -104,16 +104,12 @@ def member_detail(request, pk):
         is_deleted=False,
     ).order_by("-created_at")
 
-    from members.services.timeline_service import get_member_timeline
-    timeline = get_member_timeline(member, tenant)
-
     return render(
         request,
         "members/member_detail.html",
         {
-            "member":         member,
+            "member":          member,
             "member_payments": member_payments,
-            "timeline":       timeline,
         }
     )
 
@@ -220,58 +216,71 @@ def member_payments(request, pk):
     """
     GET /members/<pk>/payments/
     Shows all payments linked to any of this member's memberships.
-    Accessible to staff only (same permission gate as member_detail).
+
+    Status badges, late indicators, and sort order are ALL pre-computed by the
+    service layer.  This view only passes opaque dicts to the template — no
+    business logic here, no date comparisons, no per-row queries.
     """
-    from apps.payments.models import Payment, PaymentStatus
+    from django.db.models import Sum, Q
     from apps.memberships.models import Membership
+    from apps.payments.models import Payment, PaymentStatus
+    from apps.payments.services.payment_intelligence_service import get_payment_rows_for_member
 
     member = MemberService.get_by_id(request.user, pk)
     if not member:
         raise Http404("Member not found")
 
-    # All memberships for this member (any status)
+    # Service builds annotated, sorted, pre-computed rows — 2 DB queries total.
+    payment_rows = get_payment_rows_for_member(request.user.tenant, member)
+
+    # Financial totals (gateway status — independent of timing classification).
+    payment_ids = [row['payment'].pk for row in payment_rows]
+    totals = (
+        Payment.base_objects
+        .filter(pk__in=payment_ids)
+        .aggregate(
+            total_paid=Sum("amount", filter=Q(status=PaymentStatus.SUCCESS)),
+            total_pending=Sum("amount", filter=Q(status__in=[PaymentStatus.CREATED, PaymentStatus.PENDING])),
+        )
+    )
+
     memberships = list(
         Membership.base_objects
         .filter(member=member, is_deleted=False)
         .select_related("plan")
         .order_by("-created_at")
     )
-    mem_ids = [m.pk for m in memberships]
-
-    # Build membership lookup by pk for display in payment rows
-    membership_map = {m.pk: m for m in memberships}
-
-    # All payments referencing any of their memberships
-    payments = (
-        Payment.base_objects
-        .filter(
-            tenant=request.user.tenant,
-            reference_type="membership",
-            reference_id__in=mem_ids,
-            is_deleted=False,
-        )
-        .order_by("-created_at")
-    )
-
-    # Attach membership to each payment for template display
-    payment_rows = []
-    for p in payments:
-        payment_rows.append({
-            "payment":    p,
-            "membership": membership_map.get(p.reference_id),
-        })
-
-    # Totals
-    from django.db.models import Sum, Q
-    totals = payments.aggregate(
-        total_paid=Sum("amount", filter=Q(status=PaymentStatus.SUCCESS)),
-        total_pending=Sum("amount", filter=Q(status__in=[PaymentStatus.CREATED, PaymentStatus.PENDING])),
-    )
 
     return render(request, "members/member_payments.html", {
-        "member":       member,
-        "payment_rows": payment_rows,
-        "memberships":  memberships,
-        "total_paid":   totals["total_paid"] or 0,
+        "member":        member,
+        "payment_rows":  payment_rows,
+        "memberships":   memberships,
+        "total_paid":    totals["total_paid"] or 0,
         "total_pending": totals["total_pending"] or 0,
     })
+
+
+# ─── Member Timeline API ──────────────────────────────────────────────────────
+
+@require_permission("members", "view_member")
+def member_timeline_api(request, pk):
+    """
+    GET /members/<pk>/timeline/?type=<filter>&page=<n>
+
+    Returns JSON timeline for the member.  Used by the JS-powered timeline tab
+    on the member detail page.  Supports type filter (payment / booking /
+    attendance / enrollment / communication) and page-based pagination.
+    """
+    member = MemberService.get_by_id(request.user, pk)
+    if not member:
+        return JsonResponse({"error": "Not found"}, status=404)
+
+    type_filter = request.GET.get("type", "").strip() or None
+    try:
+        page = max(1, int(request.GET.get("page", 1)))
+    except (ValueError, TypeError):
+        page = 1
+
+    from members.services.timeline_service import get_member_timeline_api as _timeline_api
+    data = _timeline_api(member, request.user.tenant, type_filter=type_filter, page=page)
+    return JsonResponse(data)

@@ -33,6 +33,30 @@ from apps.communications.utils.renderer import render_template, extract_placehol
 
 logger = logging.getLogger("apps.communications")
 
+
+def _record_attempt(
+    tenant,
+    event_type: str,
+    channel: str,
+    status: str,
+    log=None,
+    error_code: str = '',
+    error_message: str = '',
+) -> None:
+    try:
+        from apps.engagement.models import MessageAttempt
+        MessageAttempt.objects.create(
+            tenant=tenant,
+            event_name=event_type,
+            channel=channel,
+            status=status,
+            communication_log=log,
+            error_code=error_code,
+            error_message=error_message,
+        )
+    except Exception:
+        pass  # never break message delivery for tracking failures
+
 # Ordered preference when resolving recipient address per channel
 _RECIPIENT_FIELDS = {
     Channel.SMS:      ["phone", "mobile", "phone_number"],
@@ -215,12 +239,18 @@ def send_message(
         return log
 
     # ── Send ───────────────────────────────────────────────────────────────────
+    _attempt_status   = 'sent'
+    _attempt_errcode  = ''
+    _attempt_errmsg   = ''
     try:
         adapter.send(to=recipient, message=message, subject=subject, text=text_message)
         log.status = MessageStatus.SENT
     except Exception as exc:
         log.status        = MessageStatus.FAILED
         log.error_message = str(exc)
+        _attempt_status  = 'failed'
+        _attempt_errcode = type(exc).__name__
+        _attempt_errmsg  = str(exc)
         logger.warning(
             "[Communications] Adapter send failed",
             extra={
@@ -234,6 +264,10 @@ def send_message(
         )
 
     log.save()
+    _record_attempt(
+        tenant, event_type, channel, _attempt_status, log,
+        error_code=_attempt_errcode, error_message=_attempt_errmsg,
+    )
     return log
 
 

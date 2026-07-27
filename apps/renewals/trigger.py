@@ -70,6 +70,18 @@ class RenewalTriggerService:
 
             handle_event(item.trigger_type, context, tenant)
 
+            # Refresh revenue risk signal and evaluate nudges after renewal contact — non-critical.
+            try:
+                from members.models import Member
+                from apps.revenue.services.revenue_signal_service import compute as _revenue_compute
+                from apps.revenue.services.nudge_trigger_service import evaluate_member
+                _member = Member.objects.filter(pk=item.member_id).first()
+                if _member:
+                    _revenue_compute(_member)
+                    evaluate_member(_member)
+            except Exception:
+                pass
+
             try:
                 RenewalTriggerLog.base_objects.create(
                     tenant=tenant,

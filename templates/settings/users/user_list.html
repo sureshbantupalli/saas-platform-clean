@@ -1,0 +1,107 @@
+{% extends "settings/base.html" %}
+{% block settings_title %}Staff Users{% endblock %}
+{% block settings_breadcrumb %}
+<i class="bi bi-chevron-right text-muted mx-1" style="font-size:0.7rem;"></i>
+<span style="font-size:0.82rem;">Staff Users</span>
+{% endblock %}
+
+{% block settings_content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div class="settings-page-header mb-0">
+    <h5 class="mb-0">Staff Users</h5>
+    <p>Manage who has access to your workspace.</p>
+  </div>
+  <a href="{% url 'settings:staff:invite' %}" class="btn btn-primary">
+    <i class="bi bi-person-plus me-1" aria-hidden="true"></i>Invite Staff
+  </a>
+</div>
+
+{% if staff %}
+<div class="card border-0 shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Name / Email</th>
+          <th>Role</th>
+          <th class="text-center">Status</th>
+          <th class="text-center">Last Login</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in staff %}
+        <tr>
+          <td class="align-middle">
+            <div class="fw-semibold" style="font-size:0.9rem;">
+              {{ u.get_full_name|default:u.email }}
+              {% if u.pk == request.user.pk %}
+              <span class="badge bg-primary-subtle text-primary ms-1" style="font-size:0.65rem;">You</span>
+              {% endif %}
+            </div>
+            {% if u.get_full_name %}
+            <div class="text-muted" style="font-size:0.8rem;">{{ u.email }}</div>
+            {% endif %}
+          </td>
+          <td class="align-middle">
+            {% if u.role %}
+            <span class="badge bg-secondary-subtle text-secondary">{{ u.role.name }}</span>
+            {% else %}
+            <span class="text-muted small">—</span>
+            {% endif %}
+          </td>
+          <td class="text-center align-middle">
+            {% if u.is_active %}
+            <span class="badge bg-success-subtle text-success">Active</span>
+            {% else %}
+            <span class="badge bg-secondary-subtle text-secondary">Inactive</span>
+            {% endif %}
+          </td>
+          <td class="text-center align-middle text-muted" style="font-size:0.82rem;">
+            {% if u.last_login %}
+            {{ u.last_login|date:"d M Y" }}
+            {% else %}
+            Never
+            {% endif %}
+          </td>
+          <td class="text-end align-middle">
+            <div class="d-flex gap-1 justify-content-end">
+              <a href="{% url 'settings:staff:edit' u.pk %}"
+                 class="btn btn-sm btn-outline-secondary" title="Edit">
+                <i class="bi bi-pencil"></i>
+              </a>
+              {% if u.pk != request.user.pk %}
+              <form method="post" action="{% url 'settings:staff:toggle' u.pk %}"
+                    onsubmit="return confirm('{% if u.is_active %}Deactivate{% else %}Activate{% endif %} {{ u.email }}?')">
+                {% csrf_token %}
+                <button type="submit"
+                        class="btn btn-sm {% if u.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
+                        title="{% if u.is_active %}Deactivate{% else %}Activate{% endif %}">
+                  {% if u.is_active %}
+                  <i class="bi bi-person-dash"></i>
+                  {% else %}
+                  <i class="bi bi-person-check"></i>
+                  {% endif %}
+                </button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card border-0 shadow-sm">
+  <div class="card-body text-center py-5">
+    <i class="bi bi-people fs-1 text-muted mb-3 d-block"></i>
+    <p class="text-muted mb-3">No staff accounts yet. Invite your first team member.</p>
+    <a href="{% url 'settings:staff:invite' %}" class="btn btn-primary">
+      <i class="bi bi-person-plus me-1"></i>Invite First Staff Member
+    </a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -38,8 +38,16 @@ class MembershipSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         try:
-            return Membership.objects.create(**validated_data)
+            membership = Membership.objects.create(**validated_data)
         except IntegrityError:
             raise serializers.ValidationError(
                 "Active membership already exists for this member in this branch."
             )
+        # Audit — fire outside the except block so exceptions don't swallow it
+        try:
+            from apps.memberships.services import log_membership_enrolled
+            user = self.context.get("request") and self.context["request"].user or None
+            log_membership_enrolled(membership, created_by=user)
+        except Exception:
+            pass
+        return membership

@@ -162,6 +162,20 @@
             Communications
         </a>
 
+        <div class="settings-sidebar-heading">Team</div>
+
+        <a href="{% url 'settings:branches:list' %}"
+           class="settings-nav-link{% if active_tab == 'branches' %} active{% endif %}">
+            <i class="bi bi-building" aria-hidden="true"></i>
+            Branches
+        </a>
+
+        <a href="{% url 'settings:staff:list' %}"
+           class="settings-nav-link{% if active_tab == 'staff' %} active{% endif %}">
+            <i class="bi bi-people" aria-hidden="true"></i>
+            Staff Users
+        </a>
+
         <div class="settings-sidebar-heading">Access</div>
 
         <a href="{% url 'settings:roles:list' %}"

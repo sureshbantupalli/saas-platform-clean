@@ -8,6 +8,8 @@ from django.shortcuts import redirect, render
 from .models import TenantBranding
 from .services import DEFAULTS, BrandingService
 
+from apps.audit.services import safe_log_change, normalize
+
 _HEX_RE = re.compile(r'^#[0-9A-Fa-f]{6}$')
 
 
@@ -50,21 +52,47 @@ def branding_settings(request):
 
             if request.POST.get('reset'):
                 BrandingService.reset_branding(tenant)
+                safe_log_change(
+                    tenant=tenant, user=request.user,
+                    module='branding', action='update', source='user',
+                    field_name='reset', new_value='defaults',
+                )
                 messages.success(request, 'Branding reset to defaults.')
             else:
+                # Snapshot current values for diff before any mutation
+                old = {
+                    'primary_color':   getattr(branding, 'primary_color',   '') if branding else '',
+                    'secondary_color': getattr(branding, 'secondary_color', '') if branding else '',
+                    'login_title':     getattr(branding, 'login_title',     '') if branding else '',
+                    'custom_css':      getattr(branding, 'custom_css',      '') if branding else '',
+                    'custom_domain':   getattr(branding, 'custom_domain',   '') if branding else '',
+                }
+                new_data = {
+                    'primary_color':   primary,
+                    'secondary_color': secondary,
+                    'login_title':     request.POST.get('login_title',   '').strip(),
+                    'custom_css':      request.POST.get('custom_css',    '').strip(),
+                    'custom_domain':   request.POST.get('custom_domain', '').strip().lower(),
+                }
+
                 try:
                     BrandingService.save_branding(
                         tenant,
-                        data={
-                            'primary_color':   primary,
-                            'secondary_color': secondary,
-                            'login_title':     request.POST.get('login_title',    '').strip(),
-                            'custom_css':      request.POST.get('custom_css',     '').strip(),
-                            'custom_domain':   request.POST.get('custom_domain',  '').strip().lower(),
-                        },
+                        data=new_data,
                         logo=logo,
                         favicon=favicon,
                     )
+                    # Log only fields that actually changed — after successful save
+                    for field, new_val in new_data.items():
+                        old_val = old.get(field, '')
+                        if normalize(old_val) != normalize(new_val):
+                            safe_log_change(
+                                tenant=tenant, user=request.user,
+                                module='branding', action='update', source='user',
+                                field_name=field,
+                                old_value=old_val or None,
+                                new_value=new_val or None,
+                            )
                     messages.success(request, 'Branding saved.')
                 except ValidationError as exc:
                     for msg in exc.messages:

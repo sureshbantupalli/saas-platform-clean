@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Payment Intelligence{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <!-- Header -->
+  <div class="d-flex align-items-center justify-content-between mb-4">
+    <h4 class="mb-0">Payment Intelligence</h4>
+    {% if last_evaluated %}
+    <small class="text-muted">
+      Last evaluated: <strong>{{ last_evaluated|timesince }} ago</strong>
+    </small>
+    {% endif %}
+  </div>
+
+  <!-- Metric cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-sm-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small">Overdue</div>
+          <div class="fs-3 fw-bold text-danger">{{ metrics.overdue_count }}</div>
+          <div class="text-muted small">unpaid &amp; past due</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small">Pending</div>
+          <div class="fs-3 fw-bold text-warning">{{ metrics.total_pending }}</div>
+          <div class="text-muted small">unpaid &amp; due today or later</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small">Total payments</div>
+          <div class="fs-3 fw-bold text-secondary">{{ metrics.total_rows }}</div>
+          <div class="text-muted small">in view</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payment table -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Member</th>
+            <th>Amount</th>
+            <th>Due date</th>
+            <th>Status</th>
+            <th>Risk</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td>
+              <div class="fw-semibold">{{ row.member_name }}</div>
+              {% if row.member %}
+              <small class="text-muted">{{ row.member.email }}</small>
+              {% endif %}
+            </td>
+            <td>₹{{ row.payment.amount|intcomma }}</td>
+            <td>
+              {{ row.due_date }}
+              {% if row.show_late_badge %}
+              <span class="badge bg-secondary ms-1">late</span>
+              {% endif %}
+            </td>
+            <td>
+              {# Status badge is pre-computed by the service via PaymentService.get_payment_status().
+                 Template never derives status from dates — all logic lives in the service. #}
+              <span class="badge bg-{{ row.status_badge }}">{{ row.status_label }}</span>
+              {% if row.status_reason %}
+              <div class="text-muted small mt-1">{{ row.status_reason }}</div>
+              {% endif %}
+            </td>
+            <td>
+              {% if row.risk_level == 'high' %}
+              <span class="badge bg-danger">High risk</span>
+              {% if row.risk_reason %}
+              <div class="text-muted small mt-1">{{ row.risk_reason|title|cut:"_" }}</div>
+              {% endif %}
+              {% elif row.risk_level == 'medium' %}
+              <span class="badge bg-warning text-dark">Medium</span>
+              {% else %}
+              <span class="text-muted small">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="text-center text-muted py-5">No payments found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

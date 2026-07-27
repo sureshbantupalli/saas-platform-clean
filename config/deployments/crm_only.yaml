@@ -1,0 +1,129 @@
+# CRM-Only Deployment Scenario
+# Target: Customer relationship management without studio operations
+# Deployment Time: 30-45 minutes
+# Risk Level: LOW
+
+scenario_name: crm_only
+display_name: "CRM-Only Deployment"
+description: |
+  Minimal deployment for customer relationship management.
+  Includes multi-tenant user management and communication system.
+  Excludes: Fitness studio, Financial, Assessments.
+
+  Ideal for: Sales teams, marketing automation, lead management.
+
+modules:
+  - core_infrastructure
+  - user_management
+  - communication
+
+feature_flags:
+  fitness_studio_enabled: false
+  bookings_enabled: false
+  sessions_enabled: false
+  payments_enabled: false
+  assessments_enabled: false
+  analytics_enabled: false
+  financial_enabled: false
+  reporting_enabled: false
+  communications_enabled: true
+  whatsapp_enabled: true
+  attendance_tracking: false
+  membership_renewal: false
+  certificate_generation: false
+
+estimated_resources:
+  database_tables: 20-30
+  api_endpoints: 15-20
+  deployment_time_minutes: 35
+  required_disk_space_gb: 5
+  estimated_monthly_cost: "$300-500"
+
+test_requirements:
+  critical_tests: 75
+  core_tests: 40
+  module_tests: 80
+  integration_tests: 20
+  scenario_tests: 30
+  total_test_count: 150
+  estimated_test_time_minutes: 10
+  minimum_coverage_percent: 85
+
+deployment_checklist:
+  phase_1_validate:
+    - validate_dependencies() # Verify core + communication modules
+    - confirm_fitness_disabled()
+    - confirm_payments_disabled()
+    - confirm_assessments_disabled()
+  phase_2_configure:
+    - set_whatsapp_credentials()
+    - set_smtp_config()
+    - set_feature_flags(crm_only=true)
+  phase_3_database:
+    - backup_database()
+    - run_migrations()
+    - verify_only_crm_tables_created()
+  phase_4_testing:
+    - run_critical_tests()
+    - run_crm_specific_tests()
+    - run_scenario_tests("crm_only")
+    - verify_fitness_endpoints_404()
+    - verify_payment_endpoints_404()
+  phase_5_deployment:
+    - deploy_code()
+    - run_migrations()
+    - restart_services()
+  phase_6_verification:
+    - health_check_crm_endpoints()
+    - verify_communications_working()
+    - verify_whatsapp_integration()
+
+safety_gates:
+  - dependency_validation
+  - test_coverage_check (min: 85%)
+  - security_audit
+  - database_compatibility_check
+
+post_deployment_checks:
+  - user_login_working
+  - member_creation_working
+  - communications_sending
+  - whatsapp_integration_verified
+  - logging_operational
+
+known_limitations:
+  - No fitness scheduling available
+  - No payment processing
+  - No course assessments
+  - No reporting module
+  - No analytics dashboards
+
+deployment_order:
+  step_1: "Validate dependencies"
+  step_2: "Create database backup"
+  step_3: "Run migrations"
+  step_4: "Run CRM tests (150 tests)"
+  step_5: "Deploy code"
+  step_6: "Run post-deployment checks"
+  step_7: "Enable monitoring"
+
+rollback_procedure:
+  step_1: "Restore from backup"
+  step_2: "Restart services"
+  step_3: "Run health checks"
+
+supported_tenants:
+  - "Sales teams"
+  - "Marketing departments"
+  - "Lead management services"
+
+monitoring_config:
+  uptime_sla: "99.5%"
+  alert_thresholds:
+    error_rate: "> 2%"
+    latency_p99: "> 3 seconds"
+
+support_contact: "crm-support@setuschool.com"
+estimated_cost_per_month: "$300"
+max_tenants_supported: "1000+"
+max_concurrent_users: "5000+"

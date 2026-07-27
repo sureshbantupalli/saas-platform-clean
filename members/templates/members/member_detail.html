@@ -1,41 +1,76 @@
 {% extends "base.html" %}
 {% block content %}
 
+<style>
+/* ── Timeline styles ───────────────────────────────────────────── */
+.tl-date-sep {
+    position: relative;
+    text-align: center;
+    margin: 1.25rem 0 .75rem;
+    color: #6c757d;
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+.tl-date-sep::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0; right: 0;
+    height: 1px;
+    background: #dee2e6;
+}
+.tl-date-sep span {
+    position: relative;
+    background: #fff;
+    padding: 0 .75rem;
+}
+.tl-filter { transition: all .15s; }
+.tl-filter.active {
+    background-color: var(--bs-primary) !important;
+    border-color: var(--bs-primary) !important;
+    color: #fff !important;
+}
+.tl-item-link { color: inherit; }
+.tl-item-link:hover .tl-item-title { text-decoration: underline; }
+</style>
+
 <div class="container-fluid">
 
-    <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fw-bold mb-0">
-            {{ member.first_name }} {{ member.last_name }}
-        </h2>
-
+    <!-- ── Header ────────────────────────────────────────────────────────── -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
         <div>
+            <h2 class="fw-bold mb-0">{{ member.first_name }} {{ member.last_name }}</h2>
+            <small class="text-muted">Member since {{ member.created_at|date:"M Y" }}</small>
+        </div>
+        <div class="d-flex gap-2">
             <a href="{% url 'members:member_update' member.id %}"
                class="btn btn-outline-secondary btn-sm">
-                Edit
+                <i class="bi bi-pencil me-1" aria-hidden="true"></i>Edit
             </a>
-
             <a href="{% url 'members:member_delete' member.id %}"
                class="btn btn-outline-danger btn-sm">
-                Delete
+                <i class="bi bi-trash me-1" aria-hidden="true"></i>Delete
             </a>
         </div>
     </div>
 
-    <div class="row">
+    <div class="row g-4">
 
-        <!-- Profile Card -->
-        <div class="col-md-4">
-            <div class="card shadow-sm border-0 p-4 mb-4">
-                <h5 class="fw-semibold mb-3">Profile Information</h5>
+        <!-- ── Profile Sidebar ───────────────────────────────────────────── -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 p-4">
 
-                <p><strong>Email:</strong><br>{{ member.email }}</p>
-                <p><strong>Phone:</strong><br>{{ member.phone|default:"-" }}</p>
-                <p><strong>Joined:</strong><br>{{ member.created_at|date:"Y-m-d" }}</p>
-
-                <hr>
-
-                <p><strong>Status:</strong><br>
+                <!-- Avatar initials -->
+                <div class="text-center mb-4">
+                    <div class="rounded-circle bg-primary d-inline-flex align-items-center
+                                justify-content-center mb-3" style="width:72px;height:72px">
+                        <span class="fw-bold text-white fs-4" aria-hidden="true">
+                            {{ member.first_name|first|upper }}{{ member.last_name|first|upper }}
+                        </span>
+                    </div>
+                    <h5 class="fw-semibold mb-1">{{ member.first_name }} {{ member.last_name }}</h5>
                     {% if member.display_status == "ACTIVE" %}
                         <span class="badge bg-success">Active</span>
                     {% elif member.display_status == "PAUSED" %}
@@ -47,228 +82,510 @@
                     {% elif member.display_status == "NO_PLAN" %}
                         <span class="badge bg-secondary">No Plan</span>
                     {% else %}
-                        <span class="badge bg-light text-dark">
-                            {{ member.display_status }}
-                        </span>
+                        <span class="badge bg-light text-dark">{{ member.display_status }}</span>
                     {% endif %}
-                </p>
+                </div>
 
                 <hr>
 
-                <p><strong>Branches:</strong><br>
-                    {% for branch in member.branches.all %}
-                        <span class="badge bg-light text-dark border">
-                            {{ branch.name }}
-                        </span>
-                    {% empty %}
-                        -
-                    {% endfor %}
-                </p>
-            </div>
-        </div>
-
-        <!-- Membership Summary -->
-        <div class="col-md-8">
-            <div class="card shadow-sm border-0 p-4 mb-4">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="fw-semibold mb-0">Memberships</h5>
-
-                    <a href="{% url 'membership_add' %}?member={{ member.id }}"
-                       class="btn btn-primary btn-sm">
-                        <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Add Membership
-                    </a>
-                </div>
-
-                <div class="table-responsive">
-                    <table class="table table-sm align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Plan</th>
-                                <th>Branch</th>
-                                <th>Status</th>
-                                <th>Start</th>
-                                <th>End</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            {% for membership in member.memberships.all %}
-                            <tr>
-                                <td>
-                                    <a href="{% url 'membership_detail' membership.pk %}"
-                                       class="text-decoration-none fw-semibold">
-                                        {{ membership.plan_name }}
-                                    </a>
-                                </td>
-                                <td>{{ membership.branch.name }}</td>
-
-                                <td>
-                                    {% if membership.status == "active" %}
-                                        <span class="badge bg-success">Active</span>
-                                    {% elif membership.status == "pending" %}
-                                        <span class="badge bg-warning text-dark">Pending</span>
-                                    {% elif membership.status == "paused" %}
-                                        <span class="badge bg-secondary">Paused</span>
-                                    {% elif membership.status == "expired" %}
-                                        <span class="badge bg-danger">Expired</span>
-                                    {% elif membership.status == "cancelled" %}
-                                        <span class="badge bg-dark">Cancelled</span>
-                                    {% endif %}
-                                    {% if membership.payment_status == "partial" %}
-                                        <span class="badge bg-warning text-dark ms-1">Partial</span>
-                                    {% elif membership.payment_status == "unpaid" and membership.status != "cancelled" %}
-                                        <span class="badge bg-danger ms-1">Unpaid</span>
-                                    {% endif %}
-                                </td>
-
-                                <td>{{ membership.start_date }}</td>
-                                <td>{{ membership.final_end_date }}</td>
-                                <td>
-                                    {% if membership.balance_amount > 0 %}
-                                    <a href="{% url 'payments:payment_record' %}?member_id={{ member.id }}&reference_id={{ membership.pk }}"
-                                       class="btn btn-outline-success btn-sm">
-                                        Pay ₹{{ membership.balance_amount }}
-                                    </a>
-                                    {% else %}
-                                    <span class="text-success small"><i class="bi bi-check-circle"></i> Paid</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="5" class="text-center text-muted py-3">
-                                    No memberships found.
-                                </td>
-                            </tr>
-                            {% endfor %}
-
-                        </tbody>
-                    </table>
-                </div>
-
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Payments Section -->
-    <div class="row mt-2">
-        <div class="col-12">
-            <div class="card shadow-sm border-0 p-4 mb-4">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="fw-semibold mb-0">
-                        <i class="bi bi-credit-card me-1" aria-hidden="true"></i>Payments
-                    </h5>
-                    <div class="d-flex gap-2">
-                        <a href="{% url 'members:member_payments' member.pk %}"
-                           class="btn btn-outline-secondary btn-sm">
-                            <i class="bi bi-clock-history me-1" aria-hidden="true"></i>Full History
-                        </a>
-                        <a href="{% url 'payments:payment_record' %}?member_id={{ member.id }}"
-                           class="btn btn-outline-primary btn-sm">
-                            <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Record Payment
-                        </a>
+                <div class="vstack gap-3">
+                    <div>
+                        <div class="text-muted small mb-1">Email</div>
+                        <div class="small fw-medium text-break">{{ member.email }}</div>
                     </div>
-                </div>
-
-                <div class="table-responsive">
-                    <table class="table table-sm align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Amount</th>
-                                <th>Status</th>
-                                <th>Purpose</th>
-                                <th>Method</th>
-                                <th>Date</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for payment in member_payments %}
-                            <tr>
-                                <td class="fw-semibold">₹{{ payment.amount }}</td>
-                                <td>
-                                    {% if payment.status == "SUCCESS" %}
-                                        <span class="badge bg-success">Paid</span>
-                                    {% elif payment.status == "PENDING" %}
-                                        <span class="badge bg-warning text-dark">Pending</span>
-                                    {% elif payment.status == "CREATED" %}
-                                        <span class="badge bg-secondary">Created</span>
-                                    {% elif payment.status == "FAILED" %}
-                                        <span class="badge bg-danger">Failed</span>
-                                    {% else %}
-                                        <span class="badge bg-light text-dark border">{{ payment.status }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ payment.get_purpose_display }}</td>
-                                <td>{{ payment.get_payment_method_display|default:"—" }}</td>
-                                <td class="small">{{ payment.created_at|date:"d M Y" }}</td>
-                                <td>
-                                    <a href="{% url 'payments:payment_detail' payment.pk %}"
-                                       class="btn btn-outline-secondary btn-sm">View</a>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="6" class="text-center text-muted py-3">No payments yet.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ── Activity Timeline ─────────────────────────────────────────────── -->
-    <div class="row mt-2">
-        <div class="col-12">
-            <div class="card shadow-sm border-0 p-4 mb-4">
-                <h5 class="fw-semibold mb-4">
-                    <i class="bi bi-activity me-1" aria-hidden="true"></i>Activity Timeline
-                </h5>
-
-                {% if timeline %}
-                <div class="timeline-feed" style="--bs-border-color: #dee2e6;">
-                {% for item in timeline %}
-                <div class="d-flex gap-3 mb-4">
-                    <!-- Icon bubble -->
-                    <div class="flex-shrink-0">
-                        <span class="d-inline-flex align-items-center justify-content-center
-                                     rounded-circle bg-{{ item.color }}-subtle border border-{{ item.color }}-subtle"
-                              style="width:36px;height:36px;">
-                            <i class="bi {{ item.icon }} text-{{ item.color }}" style="font-size:.9rem;" aria-hidden="true"></i>
-                        </span>
+                    <div>
+                        <div class="text-muted small mb-1">Phone</div>
+                        <div class="small fw-medium">{{ member.phone|default:"—" }}</div>
                     </div>
-                    <!-- Content -->
-                    <div class="flex-grow-1 border-bottom pb-3">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div>
-                                <div class="fw-semibold small">{{ item.title }}</div>
-                                <div class="text-muted small">
-                                    {{ item.subtitle }}
-                                    {% if item.detail %} &mdash; {{ item.detail }}{% endif %}
-                                </div>
-                            </div>
-                            <div class="text-muted small text-nowrap ms-3">
-                                {{ item.timestamp|date:"d M Y, H:i" }}
-                            </div>
+                    <div>
+                        <div class="text-muted small mb-1">Joined</div>
+                        <div class="small fw-medium">{{ member.created_at|date:"d M Y" }}</div>
+                    </div>
+                    <div>
+                        <div class="text-muted small mb-1">Branches</div>
+                        <div class="d-flex flex-wrap gap-1">
+                            {% for branch in member.branches.all %}
+                                <span class="badge bg-light text-dark border">{{ branch.name }}</span>
+                            {% empty %}
+                                <span class="text-muted small">—</span>
+                            {% endfor %}
                         </div>
                     </div>
                 </div>
-                {% endfor %}
-                </div>
-                {% else %}
-                <div class="text-center py-4 text-muted">
-                    <i class="bi bi-hourglass fs-2 d-block mb-2" aria-hidden="true"></i>
-                    No activity yet for this member.
-                </div>
-                {% endif %}
+
             </div>
         </div>
-    </div>
 
-</div>
+        <!-- ── Main Content (Tabs) ────────────────────────────────────────── -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0">
+
+                <!-- Tab nav -->
+                <div class="card-header bg-white pt-3 px-3 pb-0 border-bottom">
+                    <ul class="nav nav-tabs card-header-tabs" id="memberTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="overview-tab-btn"
+                                    data-bs-toggle="tab" data-bs-target="#overview"
+                                    type="button" role="tab" aria-selected="true">
+                                <i class="bi bi-grid me-1" aria-hidden="true"></i>Overview
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="timeline-tab-btn"
+                                    data-bs-toggle="tab" data-bs-target="#timeline-pane"
+                                    type="button" role="tab" aria-selected="false">
+                                <i class="bi bi-activity me-1" aria-hidden="true"></i>Timeline
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Tab content -->
+                <div class="card-body p-0">
+                    <div class="tab-content">
+
+                        <!-- ── Overview Tab ────────────────────────────────── -->
+                        <div class="tab-pane fade show active p-4" id="overview" role="tabpanel">
+
+                            <!-- Memberships -->
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="fw-semibold mb-0">Memberships</h6>
+                                <a href="{% url 'membership_add' %}?member={{ member.id }}"
+                                   class="btn btn-primary btn-sm">
+                                    <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Add
+                                </a>
+                            </div>
+
+                            <div class="table-responsive mb-5">
+                                <table class="table table-sm align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Plan</th>
+                                            <th>Branch</th>
+                                            <th>Status</th>
+                                            <th>Start</th>
+                                            <th>End</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for membership in member.memberships.all %}
+                                        <tr>
+                                            <td>
+                                                <a href="{% url 'membership_detail' membership.pk %}"
+                                                   class="text-decoration-none fw-semibold">
+                                                    {{ membership.plan_name }}
+                                                </a>
+                                            </td>
+                                            <td>{{ membership.branch.name }}</td>
+                                            <td>
+                                                {% if membership.status == "active" %}
+                                                    <span class="badge bg-success">Active</span>
+                                                {% elif membership.status == "pending" %}
+                                                    <span class="badge bg-warning text-dark">Pending</span>
+                                                {% elif membership.status == "paused" %}
+                                                    <span class="badge bg-secondary">Paused</span>
+                                                {% elif membership.status == "expired" %}
+                                                    <span class="badge bg-danger">Expired</span>
+                                                {% elif membership.status == "cancelled" %}
+                                                    <span class="badge bg-dark">Cancelled</span>
+                                                {% endif %}
+                                                {% if membership.payment_status == "partial" %}
+                                                    <span class="badge bg-warning text-dark ms-1">Partial</span>
+                                                {% elif membership.payment_status == "unpaid" and membership.status != "cancelled" %}
+                                                    <span class="badge bg-danger ms-1">Unpaid</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ membership.start_date }}</td>
+                                            <td>{{ membership.final_end_date }}</td>
+                                            <td>
+                                                {% if membership.balance_amount > 0 %}
+                                                <a href="{% url 'payments:payment_record' %}?member_id={{ member.id }}&reference_id={{ membership.pk }}"
+                                                   class="btn btn-outline-success btn-sm">
+                                                    Pay ₹{{ membership.balance_amount }}
+                                                </a>
+                                                {% else %}
+                                                <span class="text-success small">
+                                                    <i class="bi bi-check-circle" aria-hidden="true"></i> Paid
+                                                </span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr>
+                                            <td colspan="6" class="text-center text-muted py-3">
+                                                No memberships found.
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Payments -->
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="fw-semibold mb-0">
+                                    <i class="bi bi-credit-card me-1" aria-hidden="true"></i>Recent Payments
+                                </h6>
+                                <div class="d-flex gap-2">
+                                    <a href="{% url 'members:member_payments' member.pk %}"
+                                       class="btn btn-outline-secondary btn-sm">
+                                        <i class="bi bi-clock-history me-1" aria-hidden="true"></i>Full History
+                                    </a>
+                                    <a href="{% url 'payments:payment_record' %}?member_id={{ member.id }}"
+                                       class="btn btn-outline-primary btn-sm">
+                                        <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Record
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Amount</th>
+                                            <th>Status</th>
+                                            <th>Purpose</th>
+                                            <th>Method</th>
+                                            <th>Date</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for payment in member_payments %}
+                                        <tr>
+                                            <td class="fw-semibold">₹{{ payment.amount }}</td>
+                                            <td>
+                                                {% if payment.status == "SUCCESS" %}
+                                                    <span class="badge bg-success">Paid</span>
+                                                {% elif payment.status == "PENDING" %}
+                                                    <span class="badge bg-warning text-dark">Pending</span>
+                                                {% elif payment.status == "CREATED" %}
+                                                    <span class="badge bg-secondary">Created</span>
+                                                {% elif payment.status == "FAILED" %}
+                                                    <span class="badge bg-danger">Failed</span>
+                                                {% else %}
+                                                    <span class="badge bg-light text-dark border">{{ payment.status }}</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ payment.get_purpose_display }}</td>
+                                            <td>{{ payment.get_payment_method_display|default:"—" }}</td>
+                                            <td class="small">{{ payment.created_at|date:"d M Y" }}</td>
+                                            <td>
+                                                <a href="{% url 'payments:payment_detail' payment.pk %}"
+                                                   class="btn btn-outline-secondary btn-sm">View</a>
+                                            </td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr>
+                                            <td colspan="6" class="text-center text-muted py-3">
+                                                No payments yet.
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                        </div>{# /overview tab #}
+
+                        <!-- ── Timeline Tab ────────────────────────────────── -->
+                        <div class="tab-pane fade p-4" id="timeline-pane" role="tabpanel"
+                             data-api-url="{% url 'members:member_timeline_api' member.pk %}">
+
+                            <!-- Filter chips -->
+                            <div class="d-flex flex-wrap gap-2 mb-4">
+                                <button class="btn btn-sm btn-outline-secondary tl-filter active"
+                                        data-filter="">All</button>
+                                <button class="btn btn-sm btn-outline-secondary tl-filter"
+                                        data-filter="payment">
+                                    <i class="bi bi-credit-card me-1" aria-hidden="true"></i>Payments
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary tl-filter"
+                                        data-filter="booking">
+                                    <i class="bi bi-bookmark-check me-1" aria-hidden="true"></i>Bookings
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary tl-filter"
+                                        data-filter="attendance">
+                                    <i class="bi bi-clipboard2-check me-1" aria-hidden="true"></i>Attendance
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary tl-filter"
+                                        data-filter="enrollment">
+                                    <i class="bi bi-person-check me-1" aria-hidden="true"></i>Enrollments
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary tl-filter"
+                                        data-filter="communication">
+                                    <i class="bi bi-chat-dots me-1" aria-hidden="true"></i>Messages
+                                </button>
+                            </div>
+
+                            <!-- Loading -->
+                            <div id="tl-loading" class="d-none text-center py-5">
+                                <div class="spinner-border spinner-border-sm text-primary me-2"
+                                     role="status" aria-label="Loading"></div>
+                                <span class="text-muted small">Loading timeline…</span>
+                            </div>
+
+                            <!-- Error -->
+                            <div id="tl-error" class="d-none text-center py-4">
+                                <i class="bi bi-wifi-off fs-3 text-muted d-block mb-2" aria-hidden="true"></i>
+                                <p class="text-muted small mb-2">Could not load timeline.</p>
+                                <button class="btn btn-sm btn-outline-secondary" id="tl-retry">
+                                    <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Retry
+                                </button>
+                            </div>
+
+                            <!-- Empty -->
+                            <div id="tl-empty" class="d-none text-center py-5 text-muted">
+                                <i class="bi bi-hourglass fs-2 d-block mb-2" aria-hidden="true"></i>
+                                No activity yet — payments, enrollments, bookings,<br>
+                                and sessions will appear here once they happen.
+                            </div>
+
+                            <!-- Feed -->
+                            <div id="tl-feed"></div>
+
+                            <!-- Load more / end of feed -->
+                            <div class="text-center mt-3">
+                                <button id="tl-load-more"
+                                        class="btn btn-outline-secondary btn-sm d-none">
+                                    <i class="bi bi-arrow-down-circle me-1" aria-hidden="true"></i>
+                                    Load more
+                                </button>
+                                <p id="tl-end"
+                                   class="d-none text-muted small mb-0">
+                                    <i class="bi bi-check2-circle me-1" aria-hidden="true"></i>
+                                    You're all caught up
+                                </p>
+                            </div>
+
+                        </div>{# /timeline tab #}
+
+                    </div>{# /tab-content #}
+                </div>{# /card-body #}
+            </div>{# /card #}
+        </div>{# /col #}
+
+    </div>{# /row #}
+</div>{# /container #}
+
+<script>
+(function () {
+    'use strict';
+
+    const pane = document.getElementById('timeline-pane');
+    if (!pane) return;
+
+    const API        = pane.dataset.apiUrl;
+    const feed        = document.getElementById('tl-feed');
+    const loadingEl   = document.getElementById('tl-loading');
+    const errorEl     = document.getElementById('tl-error');
+    const emptyEl     = document.getElementById('tl-empty');
+    const loadMoreBtn = document.getElementById('tl-load-more');
+    const endEl       = document.getElementById('tl-end');
+    const retryBtn    = document.getElementById('tl-retry');
+
+    let page         = 1;
+    let activeFilter = '';
+    let loading      = false;
+    let exhausted    = false;
+    let initialised  = false;
+
+    /* ── Helpers ─────────────────────────────────────────────────────────── */
+
+    function esc(str) {
+        const d = document.createElement('div');
+        d.textContent = String(str || '');
+        return d.innerHTML;
+    }
+
+    function dateLabel(iso) {
+        const d   = new Date(iso);
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const yest  = new Date(today);
+        yest.setDate(today.getDate() - 1);
+        const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        if (day.getTime() === today.getTime()) return 'Today';
+        if (day.getTime() === yest.getTime())  return 'Yesterday';
+        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+
+    function timeStr(iso) {
+        return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    /* ── Render items ────────────────────────────────────────────────────── */
+
+    function renderItems(items) {
+        let lastLabel = feed.dataset.lastLabel || '';
+        const frag = document.createDocumentFragment();
+
+        items.forEach(item => {
+            const label = dateLabel(item.timestamp_iso);
+            if (label !== lastLabel) {
+                lastLabel = label;
+                const sep = document.createElement('div');
+                sep.className = 'tl-date-sep';
+                sep.innerHTML = '<span>' + esc(label) + '</span>';
+                frag.appendChild(sep);
+            }
+
+            const row = document.createElement('div');
+            row.className = 'd-flex gap-3 mb-3';
+
+            const isLink = Boolean(item.link);
+            const wrapOpen  = isLink
+                ? '<a href="' + esc(item.link) + '" class="tl-item-link flex-grow-1 border-bottom pb-3 text-decoration-none">'
+                : '<div class="flex-grow-1 border-bottom pb-3" style="cursor:default" title="Detail view not available">';
+            const wrapClose = isLink ? '</a>' : '</div>';
+
+            // Visible affordance: clickable items get a link icon so the distinction
+            // between linked and non-linked items is always clear (matters on touch).
+            const linkIcon = isLink
+                ? ' <i class="bi bi-box-arrow-up-right opacity-50" style="font-size:.6rem" aria-hidden="true"></i>'
+                : '';
+
+            const detail = item.detail
+                ? ' &mdash; ' + esc(item.detail)
+                : '';
+
+            row.innerHTML =
+                '<div class="flex-shrink-0">' +
+                  '<span class="d-inline-flex align-items-center justify-content-center rounded-circle' +
+                        ' bg-' + esc(item.color) + '-subtle border border-' + esc(item.color) + '-subtle"' +
+                        ' style="width:36px;height:36px">' +
+                    '<i class="bi ' + esc(item.icon) + ' text-' + esc(item.color) + '"' +
+                       ' style="font-size:.9rem" aria-hidden="true"></i>' +
+                  '</span>' +
+                '</div>' +
+                wrapOpen +
+                  '<div class="d-flex justify-content-between align-items-start gap-2">' +
+                    '<div>' +
+                      '<div class="fw-semibold small tl-item-title ' + (isLink ? 'text-body' : 'text-body-secondary') + '">' + esc(item.title) + linkIcon + '</div>' +
+                      '<div class="text-muted small">' + esc(item.subtitle) + detail + '</div>' +
+                    '</div>' +
+                    '<div class="text-muted small text-nowrap">' + timeStr(item.timestamp_iso) + '</div>' +
+                  '</div>' +
+                wrapClose;
+
+            frag.appendChild(row);
+        });
+
+        feed.dataset.lastLabel = lastLabel;
+        feed.appendChild(frag);
+    }
+
+    /* ── Load ────────────────────────────────────────────────────────────── */
+
+    async function load(reset) {
+        if (loading) return;
+        if (exhausted && !reset) return;
+        loading = true;
+
+        if (reset) {
+            page = 1;
+            exhausted = false;
+            feed.innerHTML = '';
+            delete feed.dataset.lastLabel;
+        }
+
+        // Disable load-more immediately so rapid double-clicks can't queue extra fetches.
+        loadMoreBtn.disabled = true;
+        loadMoreBtn.classList.add('d-none');
+        endEl.classList.add('d-none');
+        loadingEl.classList.remove('d-none');
+        emptyEl.classList.add('d-none');
+        errorEl.classList.add('d-none');
+
+        try {
+            const qs = new URLSearchParams({ page });
+            if (activeFilter) qs.set('type', activeFilter);
+            const resp = await fetch(API + '?' + qs.toString());
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+
+            if (data.items && data.items.length) {
+                renderItems(data.items);
+                page++;
+                if (data.has_more) {
+                    loadMoreBtn.disabled = false;
+                    loadMoreBtn.classList.remove('d-none');
+                } else {
+                    exhausted = true;
+                    // Show "all caught up" only when there was something to show.
+                    endEl.classList.remove('d-none');
+                }
+            } else if (page === 1) {
+                emptyEl.classList.remove('d-none');
+                exhausted = true;
+            } else {
+                exhausted = true;
+                endEl.classList.remove('d-none');
+            }
+        } catch (_) {
+            errorEl.classList.remove('d-none');
+        } finally {
+            loading = false;
+            loadingEl.classList.add('d-none');
+        }
+    }
+
+    /* ── Events ──────────────────────────────────────────────────────────── */
+
+    document.querySelectorAll('.tl-filter').forEach(btn => {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('.tl-filter').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            activeFilter = this.dataset.filter;
+            load(true);
+        });
+    });
+
+    loadMoreBtn.addEventListener('click', () => load(false));
+    retryBtn.addEventListener('click',   () => load(false));
+
+    /* Lazy load — fetch only when timeline tab first becomes visible.
+       `initialised` is intentionally NOT reset on subsequent tab switches:
+       the feed stays cached across Overview ↔ Timeline toggles.
+       Filter chip clicks do a full reload (load(true)) independently. */
+    document.getElementById('timeline-tab-btn').addEventListener('shown.bs.tab', () => {
+        if (!initialised) { initialised = true; load(true); }
+    });
+
+    /* Support deep-linking via URL hash */
+    if (window.location.hash === '#timeline-pane') {
+        const tabBtn = document.getElementById('timeline-tab-btn');
+        if (tabBtn && typeof bootstrap !== 'undefined') {
+            bootstrap.Tab.getOrCreateInstance(tabBtn).show();
+        }
+    }
+
+    /* Cache invalidation hook — call this after any mutation on this member
+       (payment recorded, enrollment added, booking made) to ensure the
+       timeline doesn't show stale data on next view.
+
+       Recommended call-site pattern — use optional chaining so the call is
+       safe on every page, not just member detail:
+
+           function onWriteComplete() {
+               window.invalidateMemberTimeline?.();
+           }
+
+       Then call onWriteComplete() in your AJAX success handler or form
+       submission callback.  The hook is a no-op on pages that don't load
+       this template.
+    */
+    window.invalidateMemberTimeline = function () {
+        if (!initialised) return;            // nothing cached yet, no-op
+        const tabVisible = pane.classList.contains('active');
+        if (tabVisible) {
+            load(true);                      // reload immediately while tab is open
+        } else {
+            initialised = false;             // force fresh fetch on next tab switch
+        }
+    };
+}());
+</script>
 
 {% endblock %}

@@ -11,5 +11,6 @@ urlpatterns = [
     path("<uuid:pk>/",              views.member_detail,    name="member_detail"),
     path("<uuid:pk>/edit/",         views.member_update,    name="member_update"),
     path("<uuid:pk>/delete/",       views.member_delete,    name="member_delete"),
-    path("<uuid:pk>/payments/",     views.member_payments,  name="member_payments"),
+    path("<uuid:pk>/payments/",     views.member_payments,      name="member_payments"),
+    path("<uuid:pk>/timeline/",    views.member_timeline_api,  name="member_timeline_api"),
 ]

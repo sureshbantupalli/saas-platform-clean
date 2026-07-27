@@ -66,6 +66,8 @@ def on_payment_success(sender, payment, **kwargs):
         new_payment_status = "unpaid"
         new_status = "expired" if membership.status == "expired" else "pending"
 
+    _old_status = membership.status
+
     update_fields = {
         "amount_paid":    total_paid,
         "payment_status": new_payment_status,
@@ -98,12 +100,37 @@ def on_payment_success(sender, payment, **kwargs):
 
     Membership.base_objects.filter(pk=membership.pk).update(**update_fields)
 
+    if new_status != _old_status:
+        _t, _mid, _mem = membership.tenant, str(membership.pk), str(membership.member_id)
+        _old, _new = _old_status, new_status
+        transaction.on_commit(lambda: _audit_status_change(
+            tenant=_t, membership_id=_mid, member_id=_mem,
+            old_status=_old, new_status=_new,
+        ))
+
     if new_status == "active":
         fresh = Membership.base_objects.get(pk=membership.pk)
         from apps.memberships.signals import membership_activated
         transaction.on_commit(
             lambda: membership_activated.send(sender=Membership, membership=fresh)
         )
+
+    # Refresh revenue risk signal then evaluate nudges — non-critical, never breaks payment flow.
+    _member = membership.member
+
+    def _post_payment_revenue(_m):
+        try:
+            from apps.revenue.services.revenue_signal_service import compute as _revenue_compute
+            _revenue_compute(_m)
+        except Exception:
+            pass
+        try:
+            from apps.revenue.services.nudge_trigger_service import evaluate_member
+            evaluate_member(_m)
+        except Exception:
+            pass
+
+    transaction.on_commit(lambda: _post_payment_revenue(_member))
 
 
 @receiver(payment_failed, sender=Payment)
@@ -119,7 +146,25 @@ def on_payment_failed(sender, payment, **kwargs):
         return
 
     if membership.status == "pending" and membership.payment_status == "unpaid":
+        _old_status = membership.status
         Membership.base_objects.filter(pk=membership.pk).update(
             status="cancelled",
             updated_at=timezone.now(),
         )
+        _t, _mid, _mem = membership.tenant, str(membership.pk), str(membership.member_id)
+        _old = _old_status
+        transaction.on_commit(lambda: _audit_status_change(
+            tenant=_t, membership_id=_mid, member_id=_mem,
+            old_status=_old, new_status="cancelled",
+        ))
+
+
+def _audit_status_change(*, tenant, membership_id, member_id, old_status, new_status):
+    try:
+        from apps.memberships.services import _audit_membership_updated
+        _audit_membership_updated(
+            tenant=tenant, membership_id=membership_id, member_id=member_id,
+            old_status=old_status, new_status=new_status,
+        )
+    except Exception:
+        pass

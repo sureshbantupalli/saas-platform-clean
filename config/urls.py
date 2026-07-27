@@ -21,6 +21,13 @@ from apps.core.views_test import test_ui
 from rest_framework.routers import DefaultRouter
 from members.api import MemberViewSet
 from apps.memberships.views import MembershipViewSet
+from apps.assessments.views import (
+    AssessmentViewSet,
+    QuestionViewSet,
+    StudentAssessmentViewSet,
+    AssessmentAttemptViewSet,
+    AssessmentScoreViewSet,
+)
 
 
 # ==========================
@@ -30,6 +37,11 @@ from apps.memberships.views import MembershipViewSet
 router = DefaultRouter()
 router.register(r"members", MemberViewSet, basename="api-members")
 router.register(r"memberships", MembershipViewSet, basename="api-memberships")
+router.register(r"assessments", AssessmentViewSet, basename="api-assessments")
+router.register(r"questions", QuestionViewSet, basename="api-questions")
+router.register(r"student-assessments", StudentAssessmentViewSet, basename="api-student-assessments")
+router.register(r"attempts", AssessmentAttemptViewSet, basename="api-attempts")
+router.register(r"scores", AssessmentScoreViewSet, basename="api-scores")
 
 
 # ==========================
@@ -258,5 +270,21 @@ urlpatterns = [
         "api/analytics/dashboard/",
         analytics_dashboard_api,
         name="api_analytics_dashboard",
+    ),
+
+    # ==========================
+    # Audit timeline
+    # ==========================
+    path(
+        "audit/",
+        include(("apps.audit.urls", "audit"), namespace="audit")
+    ),
+
+    # ==========================
+    # Reporting (GST + P&L)
+    # ==========================
+    path(
+        "reports/",
+        include(("apps.reporting.urls", "reporting"), namespace="reporting")
     ),
 ] + static(django_settings.MEDIA_URL, document_root=django_settings.MEDIA_ROOT)

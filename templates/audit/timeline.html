@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Activity Timeline{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <h4 class="mb-4">Activity Timeline</h4>
+
+  {% if timeline %}
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Time</th>
+          <th>Module</th>
+          <th>Action</th>
+          <th>Field</th>
+          <th>Change</th>
+          <th>Actor</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in timeline %}
+        <tr>
+          <td class="text-nowrap text-muted small">{{ item.timestamp }}</td>
+          <td><span class="badge bg-secondary">{{ item.module }}</span></td>
+          <td>{{ item.action }}</td>
+          <td class="text-muted">{{ item.field }}</td>
+          <td>
+            {% if item.old %}
+              <span class="text-danger">{{ item.old }}</span>
+              <span class="text-muted mx-1">→</span>
+            {% endif %}
+            <span class="text-success">{{ item.new }}</span>
+          </td>
+          <td class="small">{{ item.user|default:"system" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted">No activity recorded.</p>
+  {% endif %}
+</div>
+{% endblock %}

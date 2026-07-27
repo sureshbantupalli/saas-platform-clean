@@ -138,6 +138,47 @@
 
   </div>
 
+  {# ── Payment Status ─────────────────────────────────────────────────── #}
+  {# All values pre-computed by get_payment_metrics() — template renders only. #}
+  <h6 class="text-uppercase text-muted fw-semibold small mb-3 ls-1">Payment Status</h6>
+  <div class="row g-3 mb-4">
+
+    <div class="col-6 col-md-4">
+      <div class="card border-0 shadow-sm h-100 border-start border-danger border-3">
+        <div class="card-body">
+          <p class="text-muted small mb-1">Overdue</p>
+          <h3 class="fw-bold mb-0 text-danger">{{ payment_metrics.overdue_count }}</h3>
+          <p class="text-muted small mb-0 mt-1">unpaid &amp; past due</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-4">
+      <div class="card border-0 shadow-sm h-100 border-start border-warning border-3">
+        <div class="card-body">
+          <p class="text-muted small mb-1">Pending</p>
+          <h3 class="fw-bold mb-0 text-warning">{{ payment_metrics.total_pending }}</h3>
+          <p class="text-muted small mb-0 mt-1">unpaid &amp; due today or later</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-md-4">
+      <div class="card border-0 shadow-sm h-100 border-start border-success border-3">
+        <div class="card-body">
+          <p class="text-muted small mb-1">Collected (30 days)</p>
+          <h3 class="fw-bold mb-0 text-success">₹{{ payment_metrics.total_collected_last_30_days }}</h3>
+          <p class="text-muted small mb-0 mt-1">
+            <a href="{% url 'payments:payment_intelligence' %}" class="text-muted text-decoration-none">
+              View details →
+            </a>
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
   {# ── Charts row ─────────────────────────────────────────────────────── #}
   <div class="row g-3 mb-4">
 

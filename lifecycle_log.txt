@@ -27,3 +27,49 @@ Total Updated: 0
 Total Checked: 3
 Total Updated: 0
 Total Errors: 0
+
+--- Lifecycle Run: 2026-05-06 18:15:45.139825 ---
+Error processing membership d5112260-a254-4bc3-9a61-1c5a7db59147
+ERROR OCCURRED DURING LIFECYCLE SYNC:
+
+--- Lifecycle Run: 2026-05-06 18:16:29.237517 ---
+Updated ad18def9-566d-415d-8d1e-46a567c5d122: active → expired
+Total Checked: 1
+Total Updated: 1
+Total Errors: 0
+
+--- Lifecycle Run: 2026-05-06 18:17:03.198639 ---
+Updated ba1a39b7-45f0-4513-8752-463fa8c668af: active → expired
+Total Checked: 1
+Total Updated: 1
+Total Errors: 0
+
+--- Lifecycle Run: 2026-05-06 21:56:10.170662 ---
+Updated 59229ab1-8b87-41d3-b596-708f99a0c005: active → expired
+Total Checked: 1
+Total Updated: 1
+Total Errors: 0
+
+--- Lifecycle Run: 2026-07-27 18:06:02.719020 ---
+Updated 778ddd95-ed73-401b-a227-8f2160f4426f: active → expired
+Total Checked: 1
+Total Updated: 1
+Total Errors: 0
+
+--- Lifecycle Run: 2026-07-27 18:11:00.843891 ---
+Updated 74ba1a03-a5b7-49b3-9ad3-fe00e3a655e1: active → expired
+Total Checked: 1
+Total Updated: 1
+Total Errors: 0
+
+--- Lifecycle Run: 2026-07-27 18:47:03.941942 ---
+Updated c47f49e4-bc59-4eda-be47-a893d9261707: active → expired
+Total Checked: 1
+Total Updated: 1
+Total Errors: 0
+
+--- Lifecycle Run: 2026-07-27 19:16:07.439972 ---
+Updated 34564577-a784-463d-8742-a98b8e8124e9: active → expired
+Total Checked: 1
+Total Updated: 1
+Total Errors: 0

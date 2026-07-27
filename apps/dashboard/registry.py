@@ -32,3 +32,4 @@ def get_widget(widget_key):
 from apps.dashboard.widgets.upcoming_sessions import UpcomingSessionsWidget  # noqa
 from apps.dashboard.widgets.session_utilization import SessionUtilizationWidget  # noqa
 from apps.dashboard.widgets.revenue_today import RevenueTodayWidget  # noqa
+from apps.dashboard.widgets.payment_status_widget import PaymentStatusWidget  # noqa

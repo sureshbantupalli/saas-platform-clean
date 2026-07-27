@@ -10,6 +10,7 @@ Rules enforced here:
 import hashlib
 import hmac
 from decimal import Decimal
+from enum import Enum
 
 from django.db import transaction
 from django.utils import timezone
@@ -18,8 +19,47 @@ from apps.payments.models import Payment, PaymentEvent, PaymentStatus, PaymentGa
 from apps.payments.signals import payment_success, payment_failed, payment_refunded
 
 
+def _audit_payment_status(*, tenant, payment_id, old_status, new_status, extra=None):
+    """Deferred audit helper — always call inside transaction.on_commit()."""
+    try:
+        from apps.audit.services import safe_log_change
+        safe_log_change(
+            tenant=tenant,
+            user=None,
+            module='payments',
+            action='update',
+            source='system',
+            field_name='status',
+            old_value=str(old_status),
+            new_value=str(new_status),
+            # Store the reference only — never the financial value.
+            # Read the amount from Payment.base_objects.get(pk=payment_id).amount.
+            metadata={
+                'payment_id': str(payment_id),
+                **(extra or {}),
+            },
+        )
+    except Exception:
+        pass  # safe_log_change is already fault-tolerant; this catches import errors
+
+
 class PaymentError(Exception):
     pass
+
+
+class PaymentTimingStatus(str, Enum):
+    """
+    Computed timing classification for a payment relative to its due date.
+
+    str mixin: members compare equal to their string values so existing dict
+    lookups, template output, and == comparisons are unchanged.  The upgrade
+    from plain-class constants to Enum enables exhaustiveness checking and
+    prevents callers from passing raw strings.
+    """
+    ON_TIME = 'on_time'
+    LATE    = 'late'
+    PENDING = 'pending'
+    OVERDUE = 'overdue'
 
 
 class PaymentService:
@@ -105,6 +145,7 @@ class PaymentService:
             )
             return payment
 
+        _old_status = payment.status  # capture before mutation
         payment.status             = PaymentStatus.SUCCESS
         payment.paid_at            = timezone.now()
         payment.gateway_payment_id = gateway_payment_id
@@ -127,6 +168,12 @@ class PaymentService:
         )
         # Fire signal — receivers handle downstream work (membership activation etc.)
         transaction.on_commit(lambda: payment_success.send(sender=Payment, payment=payment))
+        # Audit — fires after commit so the log only reflects persisted state
+        _t, _pid, _old = payment.tenant, payment.id, _old_status
+        transaction.on_commit(lambda: _audit_payment_status(
+            tenant=_t, payment_id=_pid,
+            old_status=_old, new_status=PaymentStatus.SUCCESS,
+        ))
         return payment
 
     # ── Mark Failed ───────────────────────────────────────────────────────────
@@ -137,6 +184,7 @@ class PaymentService:
         if payment.status == PaymentStatus.SUCCESS:
             raise PaymentError("Cannot fail an already-successful payment.")
 
+        _old_status = payment.status
         payment.status = PaymentStatus.FAILED
         payment.save(update_fields=["status", "updated_at"])
         PaymentEvent.objects.create(
@@ -145,6 +193,12 @@ class PaymentService:
             payload={"reason": reason},
         )
         transaction.on_commit(lambda: payment_failed.send(sender=Payment, payment=payment))
+        _t, _pid, _old = payment.tenant, payment.id, _old_status
+        transaction.on_commit(lambda: _audit_payment_status(
+            tenant=_t, payment_id=_pid,
+            old_status=_old, new_status=PaymentStatus.FAILED,
+            extra={'reason': reason},
+        ))
         return payment
 
     # ── Mark Refunded ─────────────────────────────────────────────────────────
@@ -190,6 +244,13 @@ class PaymentService:
                 refund_id=_rid,
             )
         )
+        _t, _pid = payment.tenant, payment.id
+        transaction.on_commit(lambda: _audit_payment_status(
+            tenant=_t, payment_id=_pid,
+            old_status=PaymentStatus.SUCCESS, new_status=PaymentStatus.REFUNDED,
+            # refund_amount is on PaymentEvent; retrieve via payment_id if needed
+            extra={'refund_id': _rid},
+        ))
         return payment
 
     # ── Handle Webhook (Razorpay / Stripe) ────────────────────────────────────
@@ -575,6 +636,79 @@ class PaymentService:
             .order_by("-created_at")
             .first()
         )
+
+    # ── Payment Intelligence (Phase 5.1) ─────────────────────────────────────
+
+    @staticmethod
+    def _to_local_date(dt, tz=None):
+        """
+        Normalize a datetime to a date in the given timezone.
+
+        Why this matters: a payment at 11:30 PM UTC is the *next* calendar day
+        in IST (UTC+5:30).  Using .date() directly on a UTC datetime can
+        produce a wrong on_time/late classification for users in non-UTC zones.
+
+        - timezone-aware datetime → convert to tz (default: Django's TIME_ZONE)
+          then return .date().
+        - naive datetime          → .date() only (no tz info available; caller
+          should pass tz-aware values for correctness).
+        - date object             → returned as-is.
+        """
+        from datetime import date as _date, datetime as _datetime
+        from django.utils.timezone import localdate, is_aware
+        if isinstance(dt, _datetime):
+            return localdate(dt, timezone=tz) if is_aware(dt) else dt.date()
+        return dt  # already a date
+
+    @staticmethod
+    def get_payment_status(payment, *, due_date, tz=None) -> str:
+        """
+        Classify a payment's timing relative to due_date (datetime.date).
+        Pass tz (a tzinfo / ZoneInfo) to evaluate in the user's local timezone;
+        defaults to Django's TIME_ZONE setting.
+
+        Returns a PaymentTimingStatus constant:
+          ON_TIME  — paid on or before due_date
+          LATE     — paid after due_date
+          PENDING  — not paid yet; due_date is today or future
+          OVERDUE  — not paid yet; due_date has passed
+        """
+        if due_date is None:
+            raise ValueError("due_date is required and cannot be None.")
+        paid_at = payment.paid_at
+        if paid_at is not None:
+            paid_date = PaymentService._to_local_date(paid_at, tz)
+            return (PaymentTimingStatus.ON_TIME if paid_date <= due_date
+                    else PaymentTimingStatus.LATE)
+        today = PaymentService._to_local_date(timezone.now(), tz)
+        return (PaymentTimingStatus.PENDING if due_date >= today
+                else PaymentTimingStatus.OVERDUE)
+
+    @staticmethod
+    def get_days_to_pay(payment, *, due_date, tz=None):
+        """
+        Days from due_date to the actual payment date (in tz).
+        Negative → paid early.  Positive → paid late.  0 → exactly on due_date.
+        Returns None if the payment has not been made.
+        """
+        if due_date is None:
+            raise ValueError("due_date is required and cannot be None.")
+        paid_at = payment.paid_at
+        if paid_at is None:
+            return None
+        paid_date = PaymentService._to_local_date(paid_at, tz)
+        return (paid_date - due_date).days
+
+    @staticmethod
+    def is_late(payment, *, due_date, tz=None) -> bool:
+        """True only if the payment was made AND made after due_date (in tz)."""
+        if due_date is None:
+            raise ValueError("due_date is required and cannot be None.")
+        paid_at = payment.paid_at
+        if paid_at is None:
+            return False
+        paid_date = PaymentService._to_local_date(paid_at, tz)
+        return paid_date > due_date
 
     # ── Record Offline Payment ────────────────────────────────────────────────
 

@@ -1,0 +1,59 @@
+{% extends "settings/base.html" %}
+{% block settings_title %}{% if branch %}Edit Branch{% else %}New Branch{% endif %}{% endblock %}
+{% block settings_breadcrumb %}
+<i class="bi bi-chevron-right text-muted mx-1" style="font-size:0.7rem;"></i>
+<a href="{% url 'settings:branches:list' %}" style="font-size:0.82rem;">Branches</a>
+<i class="bi bi-chevron-right text-muted mx-1" style="font-size:0.7rem;"></i>
+<span style="font-size:0.82rem;">{% if branch %}Edit{% else %}New{% endif %}</span>
+{% endblock %}
+
+{% block settings_content %}
+<div class="settings-page-header">
+  <h5>{% if branch %}Edit "{{ branch.name }}"{% else %}New Branch{% endif %}</h5>
+  <p>{% if branch %}Update branch details.{% else %}Add a new location for your business.{% endif %}</p>
+</div>
+
+<div class="card border-0 shadow-sm" style="max-width:560px;">
+  <div class="card-body p-4">
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="mb-3">
+        <label for="id_name" class="form-label fw-semibold">Branch Name <span class="text-danger">*</span></label>
+        <input type="text" id="id_name" name="name" class="form-control"
+               value="{{ f_name }}"
+               placeholder="e.g. Banjara Hills, Miyapur, Main Centre"
+               required autofocus maxlength="150">
+      </div>
+
+      <div class="mb-3">
+        <label for="id_address" class="form-label fw-semibold">Address</label>
+        <textarea id="id_address" name="address" class="form-control" rows="2"
+                  placeholder="Street, area, city">{{ f_address }}</textarea>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <div class="col-sm-6">
+          <label for="id_phone" class="form-label fw-semibold">Phone</label>
+          <input type="text" id="id_phone" name="phone" class="form-control"
+                 value="{{ f_phone }}"
+                 placeholder="9999999999" maxlength="20">
+        </div>
+        <div class="col-sm-6">
+          <label for="id_email" class="form-label fw-semibold">Email</label>
+          <input type="email" id="id_email" name="email" class="form-control"
+                 value="{{ f_email }}"
+                 placeholder="branch@example.com">
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">
+          {% if branch %}Save Changes{% else %}<i class="bi bi-check-circle me-1"></i>Create Branch{% endif %}
+        </button>
+        <a href="{% url 'settings:branches:list' %}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -4,6 +4,7 @@ import traceback
 from datetime import datetime, timedelta
 
 from django.core.management.base import BaseCommand
+from django.db import transaction
 from django.utils import timezone
 from django.conf import settings
 
@@ -32,7 +33,7 @@ class Command(BaseCommand):
         total_errors = 0
 
         try:
-            with open(log_path, "a") as log_file:
+            with open(log_path, "a", encoding="utf-8") as log_file:
                 log_file.write(
                     f"\n--- Lifecycle Run: {datetime.now()} ---\n"
                 )
@@ -51,7 +52,17 @@ class Command(BaseCommand):
                         membership.sync_status_with_lifecycle()
 
                         if membership.status != previous_status:
-                            membership.save(update_fields=["status"])
+                            _old = previous_status
+                            _new = membership.status
+                            _t   = membership.tenant
+                            _mid = str(membership.id)
+                            _mem = str(membership.member_id)
+                            with transaction.atomic():
+                                membership.save(update_fields=["status"])
+                                transaction.on_commit(lambda: _audit_lifecycle_change(
+                                    tenant=_t, membership_id=_mid, member_id=_mem,
+                                    old_status=_old, new_status=_new,
+                                ))
                             total_updated += 1
 
                             log_file.write(
@@ -92,7 +103,7 @@ class Command(BaseCommand):
             lifecycle_run.notes = str(e)
             total_errors += 1
 
-            with open(log_path, "a") as log_file:
+            with open(log_path, "a", encoding="utf-8") as log_file:
                 log_file.write("ERROR OCCURRED DURING LIFECYCLE SYNC:\n")
                 log_file.write(traceback.format_exc())
                 log_file.write("\n")
@@ -111,6 +122,17 @@ class Command(BaseCommand):
             lifecycle_run.total_errors = total_errors
 
             lifecycle_run.save()
+
+
+def _audit_lifecycle_change(*, tenant, membership_id, member_id, old_status, new_status):
+    try:
+        from apps.memberships.services import _audit_membership_updated
+        _audit_membership_updated(
+            tenant=tenant, membership_id=membership_id, member_id=member_id,
+            old_status=old_status, new_status=new_status,
+        )
+    except Exception:
+        pass
 
 
 def _maybe_emit_expiry_warning(membership, today):

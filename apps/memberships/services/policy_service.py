@@ -14,9 +14,10 @@ def validate_member_for_attendance(member, session):
     # 1. Get active membership (STRICT FILTER)
     # =========================================================
     membership = (
-        Membership.objects
+        Membership.base_objects
         .filter(
             member=member,
+            tenant=member.tenant,
             status="active",
             is_deleted=False
         )

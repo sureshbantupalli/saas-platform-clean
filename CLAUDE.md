@@ -48,6 +48,20 @@ Every tenant-scoped model inherits from `TenantAwareModel` (`apps/core/models.py
 
 `TenantMiddleware` resolves tenant from the authenticated user and attaches it to the request. Platform admins (`user.platform_admin = True`) have no tenant and bypass tenant filtering.
 
+**Manager usage rule — service layer must never use `.objects`:**
+
+`Model.objects` (the `TenantManager`) relies on a thread-local tenant context injected by `TenantMiddleware`. It returns `queryset.none()` when that context is absent — which means it silently returns nothing in management commands, background tasks, signals, and direct test calls. Always use `base_objects` with an explicit tenant filter instead:
+
+```python
+# ❌ breaks outside request/response cycle
+Membership.objects.filter(member=member, status="active")
+
+# ✅ explicit tenant filter — safe everywhere
+Membership.base_objects.filter(member=member, tenant=tenant, is_deleted=False, status="active")
+```
+
+`Model.objects` is only appropriate in views and serializers that run within a request handled by `TenantMiddleware`.
+
 ### RBAC
 
 `User` → `Role` → `RolePermission` → `PermissionAction`

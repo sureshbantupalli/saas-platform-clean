@@ -11,7 +11,13 @@
       "Bash(python manage.py runserver)",
       "Bash(python *)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8000/)",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Bash(venv/Scripts/python *)",
+      "WebFetch(domain:www.bijib.com)",
+      "Bash(curl -s https://www.bijib.com/)",
+      "Bash(curl -s https://www.bijib.com/styles.f95c002dd06290c8.css)",
+      "Bash(curl -s \"https://www.bijib.com/main.a79944fc87ff5d1c.js\")",
+      "Bash(curl -s https://www.bijib.com/assets/images/)"
     ]
   }
 }

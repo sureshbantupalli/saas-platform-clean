@@ -13,4 +13,5 @@ urlpatterns = [
     path("<uuid:pk>/mark-success/",             views.payment_mark_success,      name="payment_mark_success"),
     path("<uuid:pk>/mark-failed/",              views.payment_mark_failed,       name="payment_mark_failed"),
     path("<uuid:pk>/checkout/",                 views.payment_checkout,          name="payment_checkout"),
+    path("intelligence/",                       views.payment_intelligence,       name="payment_intelligence"),
 ]

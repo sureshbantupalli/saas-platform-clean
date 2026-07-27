@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load humanize %}
 {% block title %}Payments — {{ member.first_name }} {{ member.last_name }}{% endblock %}
 
 {% block content %}
@@ -17,22 +18,22 @@
     </div>
 </div>
 
-<!-- Totals -->
+<!-- Financial totals (gateway status — how much collected vs outstanding) -->
 <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body py-3">
-                <div class="text-muted small mb-1">Total Paid</div>
-                <div class="fw-bold fs-5 text-success">₹{{ total_paid }}</div>
+                <div class="text-muted small mb-1">Total Collected</div>
+                <div class="fw-bold fs-5 text-success">₹{{ total_paid|intcomma }}</div>
             </div>
         </div>
     </div>
     <div class="col-6 col-md-3">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body py-3">
-                <div class="text-muted small mb-1">Pending</div>
+                <div class="text-muted small mb-1">Outstanding</div>
                 <div class="fw-bold fs-5 {% if total_pending %}text-warning{% else %}text-muted{% endif %}">
-                    ₹{{ total_pending }}
+                    ₹{{ total_pending|intcomma }}
                 </div>
             </div>
         </div>
@@ -64,6 +65,7 @@
                     <tr>
                         <th>Date</th>
                         <th>Amount</th>
+                        <th>Due Date</th>
                         <th>Status</th>
                         <th>Membership</th>
                         <th>Method</th>
@@ -73,36 +75,36 @@
                 </thead>
                 <tbody>
                     {% for row in payment_rows %}
-                    {% with p=row.payment m=row.membership %}
                     <tr>
-                        <td class="small text-muted">{{ p.created_at|date:"d M Y" }}</td>
-                        <td class="fw-semibold">₹{{ p.amount }}</td>
+                        <td class="small text-muted">{{ row.payment.created_at|date:"d M Y" }}</td>
+                        <td class="fw-semibold">₹{{ row.payment.amount|intcomma }}</td>
+                        <td class="small">
+                            {% if row.due_date %}
+                                {{ row.due_date }}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
                         <td>
-                            {% if p.status == "SUCCESS" %}
-                                <span class="badge bg-success">Paid</span>
-                            {% elif p.status == "PENDING" %}
-                                <span class="badge bg-warning text-dark">Pending</span>
-                            {% elif p.status == "CREATED" %}
-                                <span class="badge bg-secondary">Created</span>
-                            {% elif p.status == "FAILED" %}
-                                <span class="badge bg-danger">Failed</span>
-                            {% elif p.status == "CANCELLED" %}
-                                <span class="badge bg-dark">Cancelled</span>
-                            {% elif p.status == "REFUNDED" %}
-                                <span class="badge bg-info text-dark">Refunded</span>
+                            {# Status badge — pre-computed by service, template renders only. #}
+                            <span class="badge bg-{{ row.status_badge }}">{{ row.status_label }}</span>
+                            {% if row.show_late_badge %}
+                                <span class="badge bg-danger ms-1">Late</span>
+                            {% endif %}
+                            {% if row.status_reason %}
+                                <div class="text-muted small mt-1">{{ row.status_reason }}</div>
                             {% endif %}
                         </td>
                         <td class="small">
-                            {% if m %}{{ m.plan_name }}{% else %}—{% endif %}
+                            {% if row.membership %}{{ row.membership.plan_name }}{% else %}—{% endif %}
                         </td>
-                        <td class="small">{{ p.get_payment_method_display|default:"—" }}</td>
-                        <td class="small text-muted">{{ p.payment_reference|default:"—" }}</td>
+                        <td class="small">{{ row.payment.get_payment_method_display|default:"—" }}</td>
+                        <td class="small text-muted">{{ row.payment.payment_reference|default:"—" }}</td>
                         <td>
-                            <a href="{% url 'payments:payment_detail' p.pk %}"
+                            <a href="{% url 'payments:payment_detail' row.payment.pk %}"
                                class="btn btn-outline-secondary btn-sm">View</a>
                         </td>
                     </tr>
-                    {% endwith %}
                     {% endfor %}
                 </tbody>
             </table>
