@@ -52,12 +52,21 @@ Postgres runs on **port 5433** (not 5432). Credentials come from `.env` (gitigno
 **The adapter layer is complete — no mocks remain on any channel.**
 
 ### Verification at time of writing
-- Full suite: **1124 passed, 0 failed** (12m02s)
+- Full suite: **1125 passed, 0 failed** (~13–16 min) — run after both commits
 - `apps/communications`: **199 passed**
 - `manage.py check`: clean
 
-### Not yet committed
-All of the above is **uncommitted on `develop`**. The working tree also contains a large amount of pre-existing uncommitted work that predates this effort — don't assume everything modified is mine.
+### Commits
+| SHA | Contents |
+|---|---|
+| `370b7cb` | All the infra work above — adapters, platform tenant, settings, pytest collection fix, this document |
+| `a7d0dbf` | Snapshot of pre-existing uncommitted work found in the tree (17 previously untracked apps, templates, planning docs). **Not authored or reviewed as part of the infra effort** — do not assume it is verified. |
+
+Both on `develop`. Working tree is clean.
+
+Deliberately **not** committed, via `.gitignore`:
+- `memory/` — assistant working notes from an earlier session; contains local dev credentials. Note its `MEMORY.md` index references 5 files but only 2 exist.
+- `audit_report.txt`, `dependency_analysis.txt`, `model_dependencies.txt`, `test_errors.txt` — regenerable analysis output.
 
 ---
 
