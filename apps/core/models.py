@@ -51,11 +51,31 @@ class Tenant(BaseModel):
         help_text="Number of grace days after membership final end date"
     )
 
+    is_platform = models.BooleanField(
+        default=False,
+        help_text=(
+            "Marks the internal ANJASI tenant used for platform-level "
+            "communication (onboarding, invoices, service notices). It has no "
+            "members and must be excluded from tenant-facing batch jobs."
+        ),
+    )
+
     class Meta:
         db_table = "tenants"
 
         indexes = [
             models.Index(fields=["subdomain"]),
+        ]
+
+        constraints = [
+            # There can be only one platform tenant. Two would make
+            # get_platform_tenant() ambiguous and silently split platform
+            # templates across them.
+            models.UniqueConstraint(
+                fields=["is_platform"],
+                condition=models.Q(is_platform=True),
+                name="only_one_platform_tenant",
+            ),
         ]
 
     def save(self, *args, **kwargs):
@@ -179,6 +199,33 @@ class TenantScopedManager(models.Manager):
 from apps.core.managers.tenant_manager import TenantManager
 
 class TenantAwareModel(BaseModel):
+    """Base for every tenant-owned model. Read the manager notes before querying.
+
+    Three managers are exposed and picking the wrong one is the single most
+    common source of confusing bugs in this codebase:
+
+    ``objects``       TenantManager — filters to ``get_current_tenant()``.
+                      **Returns .none() when no tenant context is set.** The
+                      context is populated by middleware during a request, so
+                      it is absent in management commands, cron jobs, the
+                      shell, migrations and most tests. In those places
+                      ``Model.objects.all()`` silently yields nothing — no
+                      error, no warning, just an empty queryset that reads as
+                      "no data" rather than "wrong manager".
+
+    ``base_objects``  Plain Manager — no filtering at all. Use this whenever
+                      you are outside a request and pass ``tenant=`` yourself,
+                      e.g. ``TriggerRule.base_objects.filter(tenant=tenant)``
+                      in communication_service.handle_event(). Also the right
+                      choice for cross-tenant admin and batch work.
+
+    ``scoped``        TenantScopedManager — like ``objects`` but also excludes
+                      soft-deleted rows, and offers ``.for_user(user)`` which
+                      lets a platform admin see everything.
+
+    Rule of thumb: inside a request use ``objects``; anywhere else use
+    ``base_objects`` with an explicit ``tenant=`` filter.
+    """
 
     tenant = models.ForeignKey(
         Tenant,
@@ -186,13 +233,13 @@ class TenantAwareModel(BaseModel):
         related_name="%(class)ss"
     )
 
-    # ✅ Safe default manager (no filtering)
+    # Unfiltered. Safe outside a request — but YOU must pass tenant=.
     base_objects = models.Manager()
 
-    # 🔥 NEW: Tenant-safe default manager
+    # Default. Auto-filters to the current tenant; .none() without context.
     objects = TenantManager()
 
-    # Optional advanced scoped manager (keep yours)
+    # Tenant-filtered + soft-delete aware, plus .for_user().
     scoped = TenantScopedManager()
 
     class Meta:

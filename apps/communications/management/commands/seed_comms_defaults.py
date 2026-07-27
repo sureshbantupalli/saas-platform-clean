@@ -127,14 +127,23 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         from apps.core.models import Tenant
 
+        from apps.core.platform import exclude_platform
+
         target_subdomain = options.get("tenant")
 
         qs = Tenant.objects.filter(is_active=True)
         if target_subdomain:
+            # An explicitly named tenant is always honoured, including the
+            # platform tenant — the exclusion below is only about bulk runs.
             qs = qs.filter(subdomain=target_subdomain)
             if not qs.exists():
                 self.stderr.write(self.style.ERROR(f"Tenant '{target_subdomain}' not found."))
                 return
+        else:
+            # These defaults are studio-shaped (bookings, renewals,
+            # attendance). Seeding them into the internal ANJASI tenant would
+            # bury its platform templates in noise.
+            qs = exclude_platform(qs)
 
         created_templates  = 0
         created_rules      = 0

@@ -39,7 +39,17 @@ ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com
 CSRF_TRUSTED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
 """
 
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
+def _csv_env(name):
+    """Split a comma-separated env var, dropping blanks and stray whitespace.
+
+    A plain "".split(",") returns [''] — a list holding one empty string —
+    which silently adds a bogus entry and makes `check --deploy` fail on
+    CSRF_TRUSTED_ORIGINS (error 4_0.E001, "must start with a scheme").
+    """
+    return [item.strip() for item in os.getenv(name, "").split(",") if item.strip()]
+
+
+ALLOWED_HOSTS = _csv_env("ALLOWED_HOSTS")
 
 # ==========================================
 # HTTPS & SECURITY ENFORCEMENT
@@ -76,7 +86,7 @@ CSRF_COOKIE_SAMESITE = "Lax"
 # CSRF TRUSTED ORIGINS
 # ==========================================
 
-CSRF_TRUSTED_ORIGINS = os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")
+CSRF_TRUSTED_ORIGINS = _csv_env("CSRF_TRUSTED_ORIGINS")
 
 # ==========================================
 # PRODUCTION LOGGING

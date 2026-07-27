@@ -71,3 +71,15 @@ htmlcov/
 # Node (future frontend)
 # ------------------------------
 node_modules/
+# ------------------------------
+# Generated analysis output (regenerate with the analyze_*.py scripts)
+# ------------------------------
+audit_report.txt
+dependency_analysis.txt
+model_dependencies.txt
+test_errors.txt
+
+# ------------------------------
+# Assistant working notes — contains local dev credentials, not for the repo
+# ------------------------------
+memory/

@@ -42,7 +42,11 @@ def run_daily_renewals(today=None) -> dict:
         today = timezone.now().date()
 
     from apps.core.models import Tenant
-    tenants = Tenant.objects.filter(is_active=True)
+    from apps.core.platform import exclude_platform
+
+    # The internal ANJASI tenant has no members or memberships, so scanning it
+    # for renewals is pure waste.
+    tenants = exclude_platform(Tenant.objects.filter(is_active=True))
 
     tenants_processed = 0
     total_triggered   = 0

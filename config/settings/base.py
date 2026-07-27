@@ -6,10 +6,13 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
-
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# Load environment variables from the project-root .env.
+# The path is given explicitly: a bare load_dotenv() discovers the file by
+# walking up from the *calling frame*, which does not resolve reliably under
+# pytest's import machinery — settings then fell back to empty DB credentials.
+load_dotenv(BASE_DIR / ".env")
 
 
 # ==============================
@@ -39,6 +42,7 @@ INSTALLED_APPS = [
     'apps.core.apps.CoreConfig',
     'apps.accounts.apps.AccountsConfig',
     'apps.memberships.apps.MembershipsConfig',
+    'apps.assessments.apps.AssessmentsConfig',
     'apps.platform_sessions.apps.PlatformSessionsConfig',
     'apps.lifecycles.apps.LifecyclesConfig',
     'apps.monitoring.apps.MonitoringConfig',
@@ -58,6 +62,20 @@ INSTALLED_APPS = [
     'apps.settings.branding.apps.BrandingConfig',
     'apps.settings.whatsapp.apps.WhatsAppSettingsConfig',
     'apps.renewals.apps.RenewalsConfig',
+    'apps.engagement.apps.EngagementConfig',
+    'apps.revenue.apps.RevenueConfig',
+
+    'apps.audit.apps.AuditConfig',
+
+    # Financial + vertical system
+    'apps.verticals.apps.VerticalsConfig',
+    'apps.catalog.apps.CatalogConfig',
+    'apps.enrollments.apps.EnrollmentsConfig',
+    'apps.activity.apps.ActivityConfig',
+    'apps.expenses.apps.ExpensesConfig',
+    'apps.payouts.apps.PayoutsConfig',
+    'apps.documents.apps.DocumentsConfig',
+    'apps.reporting.apps.ReportingConfig',
 
     'members',
     'crm.apps.CrmConfig',
@@ -119,14 +137,24 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # DATABASE
 # ==============================
 
+# Credentials come from the environment (.env locally, real env vars in
+# production). They were previously hard-coded here, which meant a deployed
+# server tried to reach 127.0.0.1:5433 with a throwaway password.
+# The defaults below are LOCAL DEVELOPMENT ONLY — production must set every
+# DB_* variable explicitly (see .env.example).
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'saas_db',
-        'USER': 'postgres',
-        'PASSWORD': 'postgres123',
-        'HOST': '127.0.0.1',
-        'PORT': '5433',
+        'NAME': os.getenv('DB_NAME', 'saas_db'),
+        'USER': os.getenv('DB_USER', 'postgres'),
+        'PASSWORD': os.getenv('DB_PASSWORD', ''),
+        'HOST': os.getenv('DB_HOST', '127.0.0.1'),
+        'PORT': os.getenv('DB_PORT', '5433'),
+        'CONN_MAX_AGE': int(os.getenv('DB_CONN_MAX_AGE', '60')),
+        'OPTIONS': (
+            {'sslmode': os.getenv('DB_SSLMODE')}
+            if os.getenv('DB_SSLMODE') else {}
+        ),
     }
 }
 
@@ -229,6 +257,45 @@ SITE_URL = os.environ.get('SITE_URL', 'http://localhost:8000')
 # Prefix email subject with brand name: "[Acme Gym] Payment Successful"
 # Set to True per-environment to enable.
 COMMS_BRAND_EMAIL_SUBJECT = False
+
+# ==============================
+# PLATFORM TENANT
+# ==============================
+# ANJASI's own messaging — studio onboarding, subscription invoices, service
+# notices — runs through the ordinary communications engine under an internal
+# tenant flagged is_platform=True, so templates, trigger rules, logging and
+# retry are all reused. See apps/core/platform.py for the rationale.
+#
+# Provision with:  manage.py ensure_platform_tenant
+
+PLATFORM_TENANT_NAME = os.environ.get("PLATFORM_TENANT_NAME", "ANJASI")
+PLATFORM_TENANT_SUBDOMAIN = os.environ.get("PLATFORM_TENANT_SUBDOMAIN", "anjasi")
+
+# ==============================
+# EMAIL
+# ==============================
+# Routed through Django's own email framework rather than a provider SDK, so
+# AWS SES is reached over its SMTP interface and the provider can be swapped
+# (SES / SendGrid / Mailgun / a local relay) by changing environment variables
+# alone — no code change and no extra dependency.
+#
+# With EMAIL_HOST unset the adapter falls back to logging, so development and
+# the test-suite run without credentials.
+
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"
+)
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").strip().lower() == "true"
+EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False").strip().lower() == "true"
+# Never let a stalled SMTP handshake hang the request thread.
+EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))
+
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "")
+SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 
 # ==============================
 # RAZORPAY (global dev fallback — override per-tenant via TenantPaymentConfig)
