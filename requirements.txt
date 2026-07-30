@@ -32,6 +32,14 @@ razorpay==2.0.1
 gunicorn==23.0.0
 whitenoise==6.8.2
 
+# ── Object storage (media) ─────────────────────────────────
+# Needed only when MEDIA_STORAGE_BACKEND=s3|spaces, but installed always so
+# settings can reference the backend without a conditional import. Covers both
+# AWS S3 and DigitalOcean Spaces — Spaces is S3-compatible; only the endpoint
+# URL differs.
+django-storages==1.14.4
+boto3==1.35.36
+
 # ── Media ──────────────────────────────────────────────────
 # Django's ImageField REQUIRES Pillow. Three ImageFields exist
 # (apps/assessments/models.py, apps/settings/branding/models.py);

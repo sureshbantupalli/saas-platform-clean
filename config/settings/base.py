@@ -91,6 +91,13 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+
+    # Serves collected static files in production. Must sit directly after
+    # SecurityMiddleware and before everything else, per WhiteNoise's docs.
+    # It was in requirements.txt but never wired in, so STATIC_ROOT was simply
+    # not served once DEBUG went false.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+
     'django.contrib.sessions.middleware.SessionMiddleware',
 
     'django.middleware.common.CommonMiddleware',
@@ -317,3 +324,84 @@ PAYMENTS_ENCRYPTION_KEY = os.environ.get(
     "PAYMENTS_ENCRYPTION_KEY",
     "BywK4uUFhAvnBYlTJi85zxFGzl74PSoGcVcbKPs_9bY=",  # dev default — change in production
 )
+
+# ==============================
+# CACHE
+# ==============================
+# Eight modules call django.core.cache — including the rate limiter on the
+# public invite endpoint (apps/tenants/views.py) and the settings views.
+#
+# With no CACHES setting Django falls back to LocMemCache, which is PER
+# PROCESS. Under gunicorn with N workers that means the rate limit is N times
+# weaker than it reads, and cached branding/vocabulary can differ between
+# workers depending on which one served the request.
+#
+# Default here is the database cache: no extra service to run or pay for, and
+# ample at this scale. Create its table once per environment:
+#
+#     python manage.py createcachetable
+#
+# Set REDIS_URL to switch to Redis when profiling justifies it — Django 6 ships
+# a Redis backend, so no extra dependency is required.
+
+_redis_url = os.environ.get("REDIS_URL", "").strip()
+
+if _redis_url:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": _redis_url,
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+            "LOCATION": "django_cache_table",
+        }
+    }
+
+
+# ==============================
+# STORAGES (Django 4.2+ API)
+# ==============================
+# Django 5.1 removed STATICFILES_STORAGE and DEFAULT_FILE_STORAGE, so this
+# dict is the only supported way to configure either.
+#
+# MEDIA: local disk by default, which is correct for development and WRONG for
+# production — a droplet rebuild or a redeploy loses every tenant logo and
+# favicon. Set MEDIA_STORAGE_BACKEND=s3 with the AWS_* values to store media in
+# S3 or DigitalOcean Spaces instead. Spaces is S3-compatible, so the same
+# backend serves both; only AWS_S3_ENDPOINT_URL differs.
+#
+# STATIC: WhiteNoise's compressed+manifest backend. Files are hashed, so they
+# can be cached for a year, and a missing file fails loudly at collectstatic
+# rather than 404-ing silently in production.
+
+_media_backend = os.environ.get("MEDIA_STORAGE_BACKEND", "").strip().lower()
+
+if _media_backend in {"s3", "spaces"}:
+    _default_storage = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name":   os.environ.get("AWS_STORAGE_BUCKET_NAME", ""),
+            "endpoint_url":  os.environ.get("AWS_S3_ENDPOINT_URL", "") or None,
+            "region_name":   os.environ.get("AWS_S3_REGION_NAME", ""),
+            "access_key":    os.environ.get("AWS_ACCESS_KEY_ID", ""),
+            "secret_key":    os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
+            # Tenant logos are shown to logged-out users on the login page.
+            "default_acl":   "public-read",
+            "querystring_auth": False,
+            # Never silently overwrite one tenant's upload with another's.
+            "file_overwrite": False,
+        },
+    }
+else:
+    _default_storage = {"BACKEND": "django.core.files.storage.FileSystemStorage"}
+
+STORAGES = {
+    "default": _default_storage,
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
