@@ -1,0 +1,20 @@
+{% extends "auth_base.html" %}
+{% block title %}Workspace ready{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width:520px;margin:48px auto;">
+  <div class="card shadow-sm">
+    <div class="card-body p-4 text-center">
+      <h1 class="h5 mb-2">Your workspace is ready</h1>
+      {% if tenant_name %}
+        <p class="text-muted small">{{ tenant_name }} has been created.</p>
+      {% endif %}
+      <p class="text-muted small">
+        Sign in with the email your invitation was sent to and the password you
+        just chose.
+      </p>
+      <a href="{{ login_url }}" class="btn btn-primary mt-2">Sign in</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

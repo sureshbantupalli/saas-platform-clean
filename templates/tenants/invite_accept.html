@@ -1,0 +1,59 @@
+{% extends "auth_base.html" %}
+{% block title %}Set up {{ invite.studio_name }}{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width:520px;margin:48px auto;">
+  <div class="card shadow-sm">
+    <div class="card-body p-4">
+
+      <h1 class="h4 mb-1">Set up {{ invite.studio_name }}</h1>
+      <p class="text-muted small mb-4">
+        You are creating the owner account for
+        <strong>{{ invite.studio_name }}</strong>.
+        Your workspace address will be
+        <code>{{ invite.subdomain }}</code>.
+      </p>
+
+      {% if error %}
+        <div class="alert alert-danger py-2 small" role="alert">{{ error }}</div>
+      {% endif %}
+
+      <form method="post" novalidate autocomplete="off">
+        {% csrf_token %}
+
+        <div class="mb-3">
+          <label class="form-label small">Sign-in email</label>
+          {# Fixed: the invite was issued to this address, so it is not editable. #}
+          <input type="email" class="form-control" value="{{ invite.email }}" disabled>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label small" for="owner_name">Your name</label>
+          <input type="text" class="form-control" id="owner_name" name="owner_name"
+                 value="{{ owner_name|default:invite.owner_name }}" maxlength="255">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label small" for="password">Create a password</label>
+          <input type="password" class="form-control" id="password" name="password"
+                 required autocomplete="new-password" minlength="12">
+          <div class="form-text">At least 12 characters.</div>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label small" for="password_confirm">Confirm password</label>
+          <input type="password" class="form-control" id="password_confirm"
+                 name="password_confirm" required autocomplete="new-password">
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100">Create my workspace</button>
+      </form>
+
+      <p class="text-muted small mt-3 mb-0">
+        This invitation expires in {{ invite.days_until_expiry }} day{{ invite.days_until_expiry|pluralize }}.
+      </p>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

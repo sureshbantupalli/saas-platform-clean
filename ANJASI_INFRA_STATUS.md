@@ -50,11 +50,12 @@ Postgres runs on **port 5433** (not 5432). Credentials come from `.env` (gitigno
 | — | Platform tenant + platform comms | `apps/core/platform.py`, `apps/communications/services/platform_comms.py`, `apps/tenants/management/commands/ensure_platform_tenant.py` | 16 |
 | — | Platform templates + trigger rules seeded | `apps/communications/management/commands/seed_platform_comms.py` | 12 |
 | P1 | **Per-tenant SMS/WhatsApp credentials** | `apps/communications/models.py` (`TenantMessagingConfig`), `services/messaging_config_service.py`, both adapters, admin | 15 |
+| P1 | **Invite-link onboarding** | `apps/tenants/` — `models.py` (`TenantInvite`), `invite_service.py`, `views.py`, `urls.py`, `create_tenant_invite` command, `templates/tenants/` | 29 |
 
 **The adapter layer is complete — no mocks remain on any channel.**
 
 ### Verification at time of writing
-- Full suite: **1152 passed, 0 failed** (~13–16 min) — run after both commits
+- Full suite: **1181 passed, 0 failed** (~13–16 min) — run after both commits
 - `apps/communications`: **199 passed**
 - `manage.py check`: clean
 
@@ -98,7 +99,23 @@ The communications models are all tenant-scoped, so there was no "from the platf
 
 ```bash
 ./venv/Scripts/python.exe manage.py ensure_platform_tenant   # idempotent, has --dry-run
+./venv/Scripts/python.exe manage.py seed_platform_comms      # ANJASI's own templates
 ```
+
+**Onboarding a studio** (replaces SSH + `provision_tenant`):
+
+```bash
+./venv/Scripts/python.exe manage.py create_tenant_invite     --studio "Setu Yoga" --email owner@setuyoga.com --owner-name "Suresh"
+```
+
+The owner sets their own password via the emailed link, so no one handles it
+for them. The raw token is printed once and stored only as a SHA-256 hash —
+if it is lost, revoke the invite in Django admin and issue a new one.
+`--no-email` prints the link without sending; `--dry-run` changes nothing.
+
+> ⚠️ The link goes to a brand-new address, so **SES must be out of the sandbox**
+> before this works for a real studio. In sandbox SES only delivers to verified
+> identities. Development and tests are unaffected.
 
 ---
 
@@ -157,7 +174,7 @@ Code is not the constraint on any channel. These are.
 ### 5b. Immediate code work
 | Item | Size | Note |
 |---|---|---|
-| **Invite-link onboarding** | 2–3 days | ← recommended next. Needs: invite-token model, public signup view, email delivery, "pending activation" tenant state. Depends on SES sandbox exit. Today onboarding is SSH + `provision_tenant`. |
+| **Nothing outstanding** | — | The P1 queue is clear. Next work is the P2 go-live list below. |
 
 ### 5c. P2 — before go-live
 - Cron for the 10 management commands
@@ -179,7 +196,7 @@ Code is not the constraint on any channel. These are.
 
 ## 6. Suggested order when resuming
 
-1. Invite-link onboarding (removes you from every signup)
-2. P2 go-live items
+1. P2 go-live items (cron, SECRET_KEY, TLS, object storage, testpaths)
+2. P3 hardening
 
 Chase the **SES sandbox exit** in parallel from day one — it is ANJASI-side, only takes 24–48h, and item 3 depends on it.

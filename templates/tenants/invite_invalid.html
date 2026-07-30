@@ -1,0 +1,19 @@
+{% extends "auth_base.html" %}
+{% block title %}Invitation unavailable{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width:520px;margin:48px auto;">
+  <div class="card shadow-sm">
+    <div class="card-body p-4 text-center">
+      <h1 class="h5 mb-3">Invitation unavailable</h1>
+      {# Deliberately generic: this same page is shown for unknown, expired,
+         used and revoked tokens, so the URL space cannot be probed. #}
+      <p class="text-muted small mb-0">{{ message }}</p>
+      <p class="text-muted small mt-3 mb-0">
+        If you were expecting to set up a workspace, reply to your invitation
+        email and we will send a fresh link.
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}

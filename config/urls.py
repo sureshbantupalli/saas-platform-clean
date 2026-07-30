@@ -66,6 +66,12 @@ urlpatterns = [
         include("apps.core.urls")
     ),
 
+    # Public tenant invitations (unauthenticated — token is the credential)
+    path(
+        "",
+        include("apps.tenants.urls")
+    ),
+
     # Monitoring App
     path(
         "monitoring/",
