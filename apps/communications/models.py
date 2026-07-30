@@ -1,5 +1,6 @@
 from django.db import models
-from apps.core.models import TenantAwareModel
+from apps.core.models import TenantAwareModel, BaseModel
+from apps.payments.utils.encryption import EncryptedCharField
 
 
 class Channel(models.TextChoices):
@@ -94,3 +95,81 @@ class CommunicationLog(TenantAwareModel):
     def can_retry(self) -> bool:
         from apps.communications.services.retry_service import MAX_RETRIES
         return self.status == MessageStatus.FAILED and self.retry_count < MAX_RETRIES
+
+
+class MessagingProvider(models.TextChoices):
+    MSG91           = "msg91",           "MSG91 (SMS, India)"
+    WHATSAPP_CLOUD  = "whatsapp_cloud",  "Meta WhatsApp Cloud API"
+
+
+class TenantMessagingConfig(BaseModel):
+    """Per-tenant SMS / WhatsApp credentials.
+
+    Why this exists
+    ---------------
+    Credentials for these two channels are legally the TENANT's, not ANJASI's.
+    Under TRAI DLT the Principal Entity is whoever's content it is, and the
+    sender header is registered against their PAN/GST; a WhatsApp Business
+    Account binds to the studio's own phone number and verified name.
+
+    Until this model existed both were read from global environment variables,
+    which is fine for a single tenant and actively wrong for a second: their
+    messages would go out under the first tenant's DLT header and WhatsApp
+    number. That is a compliance violation, not merely a bug.
+
+    Deliberately mirrors payments.TenantPaymentConfig — same BaseModel + explicit
+    tenant FK (NOT TenantAwareModel, because adapters run in commands and cron
+    where there is no tenant context and the filtering manager would return
+    nothing), same encrypted-secret approach, same is_active flag, same
+    unique_together, and the same env-var fallback for development.
+
+    Field reuse across providers
+    ----------------------------
+    The two providers need the same SHAPE of credential, so the columns are
+    generic rather than provider-prefixed:
+
+        field          MSG91                   WhatsApp Cloud
+        ------------   ---------------------   -----------------------
+        api_key        auth key (secret)       access token (secret)
+        sender_id      sender / header ID      phone number ID
+        template_id    DLT template ID         approved template name
+        template_lang  unused                  template language code
+    """
+
+    tenant = models.ForeignKey(
+        "core.Tenant",
+        on_delete=models.CASCADE,
+        related_name="messaging_configs",
+    )
+    provider = models.CharField(max_length=30, choices=MessagingProvider.choices)
+
+    # Secret. Encrypted at rest; never expose in API responses or logs.
+    api_key = EncryptedCharField(
+        blank=True,
+        help_text="MSG91 auth key, or Meta WhatsApp access token.",
+    )
+    sender_id = models.CharField(
+        max_length=100, blank=True,
+        help_text="MSG91 sender/header ID, or Meta WhatsApp phone number ID.",
+    )
+    template_id = models.CharField(
+        max_length=200, blank=True,
+        help_text="MSG91 DLT template ID, or the approved Meta template name.",
+    )
+    template_lang = models.CharField(
+        max_length=20, blank=True,
+        help_text="Meta template language code (e.g. en, en_US). Unused for MSG91.",
+    )
+
+    is_active = models.BooleanField(
+        default=False,
+        help_text="Off until the tenant's own registration/verification completes.",
+    )
+
+    class Meta:
+        db_table = "tenant_messaging_configs"
+        unique_together = [["tenant", "provider"]]
+
+    def __str__(self):
+        state = "active" if self.is_active else "inactive"
+        return f"{self.tenant} — {self.provider} [{state}]"

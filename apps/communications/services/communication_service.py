@@ -65,14 +65,25 @@ _RECIPIENT_FIELDS = {
 }
 
 
-def _get_adapter(channel: str):
+def _get_adapter(channel: str, tenant=None):
+    """Build the adapter for a channel.
+
+    `tenant` is passed so SMS and WhatsApp can resolve that tenant's OWN
+    provider credentials — those accounts are registered to the tenant, not to
+    ANJASI, so sending under global credentials would put a second tenant's
+    messages out under the first tenant's DLT header and WhatsApp number.
+    EMAIL takes no tenant: SES is ANJASI-owned infrastructure by design.
+
+    Note this constructs all three adapters on every call, which is why each
+    __init__ must never raise.
+    """
     from apps.communications.adapters.sms import SMSAdapter
     from apps.communications.adapters.whatsapp import WhatsAppAdapter
     from apps.communications.adapters.email import EmailAdapter
 
     return {
-        Channel.SMS:      SMSAdapter(),
-        Channel.WHATSAPP: WhatsAppAdapter(),
+        Channel.SMS:      SMSAdapter(tenant=tenant),
+        Channel.WHATSAPP: WhatsAppAdapter(tenant=tenant),
         Channel.EMAIL:    EmailAdapter(),
     }.get(channel)
 
@@ -222,7 +233,7 @@ def send_message(
         return log
 
     # ── No adapter ─────────────────────────────────────────────────────────────
-    adapter = _get_adapter(channel)
+    adapter = _get_adapter(channel, tenant)
     if adapter is None:
         log.status        = MessageStatus.FAILED
         log.error_message = f"No adapter registered for channel: {channel}"

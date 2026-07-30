@@ -16,6 +16,10 @@ Design constraints this file has to respect:
   four-argument signature from BaseAdapter is required.
 * When MSG91 is not configured the adapter falls back to the old logging
   behaviour, so local development and the test-suite work without credentials.
+* Credentials are resolved PER TENANT via TenantMessagingConfig. Under TRAI
+  DLT the sender header is registered to the tenant's own Principal Entity, so
+  a second tenant sending under global env credentials would go out under the
+  wrong registration. Env vars remain a fallback for dev / single-tenant.
 
 India specifics: MSG91 delivers through DLT-approved templates, so a flow
 template id is required. The rendered message is passed as the ``body``
@@ -67,11 +71,29 @@ def normalise_msisdn(raw: str) -> str:
 class SMSAdapter(BaseAdapter):
     """Sends SMS via MSG91's Flow API, or logs when unconfigured."""
 
-    def __init__(self):
-        # Never raise here — see module docstring.
-        self.auth_key = _setting("MSG91_AUTH_KEY")
-        self.sender_id = _setting("MSG91_SENDER_ID")
-        self.template_id = _setting("MSG91_DLT_TE_ID")
+    def __init__(self, tenant=None):
+        """Credentials come from the tenant's own MSG91 registration.
+
+        Under TRAI DLT the sender header belongs to the tenant, so sending a
+        second tenant's message under global env credentials would put it out
+        under the wrong Principal Entity. The env fallback is kept for local
+        development and the single-tenant deployment; the config service logs
+        loudly when it is used while several tenants exist.
+
+        Never raises — see module docstring.
+        """
+        from apps.communications.models import MessagingProvider
+        from apps.communications.services.messaging_config_service import (
+            get_messaging_config, warn_if_env_fallback_is_ambiguous,
+        )
+
+        self.tenant = tenant
+        config = get_messaging_config(tenant, MessagingProvider.MSG91)
+        warn_if_env_fallback_is_ambiguous(tenant, MessagingProvider.MSG91, config)
+
+        self.auth_key = getattr(config, "api_key", "") or ""
+        self.sender_id = getattr(config, "sender_id", "") or ""
+        self.template_id = getattr(config, "template_id", "") or ""
         try:
             self.timeout = int(_setting("MSG91_TIMEOUT") or DEFAULT_TIMEOUT)
         except ValueError:

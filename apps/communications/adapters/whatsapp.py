@@ -28,9 +28,11 @@ rendered message is injected into it. With no template name configured the
 adapter sends free-form text, which is correct only for replies inside the
 24-hour window and for testing.
 
-Credentials are read globally rather than per-tenant. That is right for a
-single-studio deployment; onboarding a second tenant with its own WhatsApp
-Business number will need these moved onto a per-tenant settings model.
+Credentials are resolved PER TENANT via TenantMessagingConfig, because a
+WhatsApp Business Account binds to the studio's own phone number and verified
+business name — a second tenant sending under the first tenant's WABA would
+appear to members as the wrong studio. Global env vars remain as a fallback
+for local development and the single-tenant deployment only.
 """
 
 import logging
@@ -69,12 +71,33 @@ def _setting(name: str, default: str = "") -> str:
 class WhatsAppAdapter(BaseAdapter):
     """Sends WhatsApp messages via Meta's Cloud API, or logs when unconfigured."""
 
-    def __init__(self):
-        # Never raise here — see module docstring.
-        self.phone_number_id = _setting("WHATSAPP_PHONE_NUMBER_ID")
-        self.access_token = _setting("WHATSAPP_ACCESS_TOKEN")
-        self.template_name = _setting("WHATSAPP_TEMPLATE_NAME")
-        self.template_lang = _setting("WHATSAPP_TEMPLATE_LANG") or DEFAULT_TEMPLATE_LANG
+    def __init__(self, tenant=None):
+        """Credentials come from the tenant's own WhatsApp Business Account.
+
+        The WABA binds to the studio's phone number and verified business name,
+        so a second tenant sending under global env credentials would appear to
+        members as the first studio. The env fallback is kept for local
+        development and the single-tenant deployment; the config service logs
+        loudly when it is used while several tenants exist.
+
+        Never raises — see module docstring.
+        """
+        from apps.communications.models import MessagingProvider
+        from apps.communications.services.messaging_config_service import (
+            get_messaging_config, warn_if_env_fallback_is_ambiguous,
+        )
+
+        self.tenant = tenant
+        provider = MessagingProvider.WHATSAPP_CLOUD
+        config = get_messaging_config(tenant, provider)
+        warn_if_env_fallback_is_ambiguous(tenant, provider, config)
+
+        self.phone_number_id = getattr(config, "sender_id", "") or ""
+        self.access_token = getattr(config, "api_key", "") or ""
+        self.template_name = getattr(config, "template_id", "") or ""
+        self.template_lang = (
+            getattr(config, "template_lang", "") or DEFAULT_TEMPLATE_LANG
+        )
         self.api_version = _setting("WHATSAPP_API_VERSION") or DEFAULT_API_VERSION
         try:
             self.timeout = int(_setting("WHATSAPP_TIMEOUT") or DEFAULT_TIMEOUT)

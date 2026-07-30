@@ -49,11 +49,12 @@ Postgres runs on **port 5433** (not 5432). Credentials come from `.env` (gitigno
 | P1-2 | WhatsApp Meta Cloud API adapter + shared phone normalisation | `apps/communications/adapters/whatsapp.py`, `apps/communications/adapters/phone.py` | 17 |
 | — | Platform tenant + platform comms | `apps/core/platform.py`, `apps/communications/services/platform_comms.py`, `apps/tenants/management/commands/ensure_platform_tenant.py` | 16 |
 | — | Platform templates + trigger rules seeded | `apps/communications/management/commands/seed_platform_comms.py` | 12 |
+| P1 | **Per-tenant SMS/WhatsApp credentials** | `apps/communications/models.py` (`TenantMessagingConfig`), `services/messaging_config_service.py`, both adapters, admin | 15 |
 
 **The adapter layer is complete — no mocks remain on any channel.**
 
 ### Verification at time of writing
-- Full suite: **1125 passed, 0 failed** (~13–16 min) — run after both commits
+- Full suite: **1152 passed, 0 failed** (~13–16 min) — run after both commits
 - `apps/communications`: **199 passed**
 - `manage.py check`: clean
 
@@ -118,10 +119,13 @@ This split matters and is easy to get wrong, because you own both ANJASI and Set
 |---|---|
 | Razorpay | ✅ `TenantPaymentConfig` — encrypted, `is_active`, per-provider |
 | Email (SES) | ✅ correctly global — ANJASI-owned by design |
-| SMS (MSG91) | ❌ **global env only** |
-| WhatsApp (Meta) | ❌ **global env only** |
+| SMS (MSG91) | ✅ `TenantMessagingConfig` — encrypted, `is_active`, env fallback for dev |
+| WhatsApp (Meta) | ✅ `TenantMessagingConfig` — encrypted, `is_active`, env fallback for dev |
 
-> ⚠️ Fine for Setu Yoga alone. For tenant #2 it doesn't just break, it **misroutes** — their messages would go out under Setu Yoga's DLT header and WhatsApp number. That is a TRAI compliance violation, not merely a bug. This is why per-tenant messaging credentials is **P1, not P3**.
+> ✅ Resolved. Each tenant's credentials live in `TenantMessagingConfig` (Django
+> admin → Communications). Global env vars remain only as a dev / single-tenant
+> fallback, and the app logs an ERROR if that fallback is used while more than
+> one tenant exists — the misrouting failure mode is silent otherwise.
 
 ---
 
@@ -153,8 +157,7 @@ Code is not the constraint on any channel. These are.
 ### 5b. Immediate code work
 | Item | Size | Note |
 |---|---|---|
-| **Per-tenant SMS/WhatsApp credentials** | ~1 day | ← recommended next. P1 — see §3. Mirror the `TenantPaymentConfig` pattern (encrypted, `is_active`, env as dev fallback) |
-| **Invite-link onboarding** | 2–3 days | Needs: invite-token model, public signup view, email delivery, "pending activation" tenant state. Depends on SES sandbox exit. Today onboarding is SSH + `provision_tenant`. |
+| **Invite-link onboarding** | 2–3 days | ← recommended next. Needs: invite-token model, public signup view, email delivery, "pending activation" tenant state. Depends on SES sandbox exit. Today onboarding is SSH + `provision_tenant`. |
 
 ### 5c. P2 — before go-live
 - Cron for the 10 management commands
@@ -176,8 +179,7 @@ Code is not the constraint on any channel. These are.
 
 ## 6. Suggested order when resuming
 
-1. Per-tenant SMS/WhatsApp credentials (unblocks tenant #2)
-2. Invite-link onboarding (removes you from every signup)
-3. P2 go-live items
+1. Invite-link onboarding (removes you from every signup)
+2. P2 go-live items
 
 Chase the **SES sandbox exit** in parallel from day one — it is ANJASI-side, only takes 24–48h, and item 3 depends on it.
