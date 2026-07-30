@@ -1,7 +1,7 @@
 # ANJASI — Infrastructure Readiness Status
 
-**Last updated:** 2026-07-27
-**Branch:** `develop`
+**Last updated:** 2026-07-30
+**Branch:** `fix/mvp-bugs` (pushed to origin)
 **Purpose:** Resume point. Read this first when picking the work back up.
 
 First deployment target is **Setu Yoga Studio** as tenant #1.
@@ -48,6 +48,7 @@ Postgres runs on **port 5433** (not 5432). Credentials come from `.env` (gitigno
 | P1-1 | AWS SES email adapter + the `EMAIL_*` settings block (none existed before) | `apps/communications/adapters/email.py`, `config/settings/base.py` | 14 |
 | P1-2 | WhatsApp Meta Cloud API adapter + shared phone normalisation | `apps/communications/adapters/whatsapp.py`, `apps/communications/adapters/phone.py` | 17 |
 | — | Platform tenant + platform comms | `apps/core/platform.py`, `apps/communications/services/platform_comms.py`, `apps/tenants/management/commands/ensure_platform_tenant.py` | 16 |
+| — | Platform templates + trigger rules seeded | `apps/communications/management/commands/seed_platform_comms.py` | 12 |
 
 **The adapter layer is complete — no mocks remain on any channel.**
 
@@ -61,8 +62,12 @@ Postgres runs on **port 5433** (not 5432). Credentials come from `.env` (gitigno
 |---|---|
 | `370b7cb` | All the infra work above — adapters, platform tenant, settings, pytest collection fix, this document |
 | `a7d0dbf` | Snapshot of pre-existing uncommitted work found in the tree (17 previously untracked apps, templates, planning docs). **Not authored or reviewed as part of the infra effort** — do not assume it is verified. |
+| `5f3d948` | Doc correction — commit SHAs and verified test count |
+| `b8d11af` | Stop tracking `lifecycle_log.txt` (runtime log, already in .gitignore) |
 
-Both on `develop`. Working tree is clean.
+All on **`fix/mvp-bugs`**, pushed to `origin/fix/mvp-bugs`. `develop` and `main`
+are also in sync with origin. The infra work is **not yet merged into
+`develop`** — open a PR from `fix/mvp-bugs` when ready. Working tree clean.
 
 Deliberately **not** committed, via `.gitignore`:
 - `memory/` — assistant working notes from an earlier session; contains local dev credentials. Note its `MEMORY.md` index references 5 files but only 2 exist.
@@ -148,8 +153,7 @@ Code is not the constraint on any channel. These are.
 ### 5b. Immediate code work
 | Item | Size | Note |
 |---|---|---|
-| **Seed platform templates + trigger rules** | hours | ← recommended next. The ANJASI tenant exists but has **zero templates**, so platform messaging is plumbed but sends nothing |
-| **Per-tenant SMS/WhatsApp credentials** | ~1 day | P1 — see §3. Mirror the `TenantPaymentConfig` pattern (encrypted, `is_active`, env as dev fallback) |
+| **Per-tenant SMS/WhatsApp credentials** | ~1 day | ← recommended next. P1 — see §3. Mirror the `TenantPaymentConfig` pattern (encrypted, `is_active`, env as dev fallback) |
 | **Invite-link onboarding** | 2–3 days | Needs: invite-token model, public signup view, email delivery, "pending activation" tenant state. Depends on SES sandbox exit. Today onboarding is SSH + `provision_tenant`. |
 
 ### 5c. P2 — before go-live
@@ -172,9 +176,8 @@ Code is not the constraint on any channel. These are.
 
 ## 6. Suggested order when resuming
 
-1. Seed platform templates + trigger rules (makes §1's platform work functional)
-2. Per-tenant SMS/WhatsApp credentials (unblocks tenant #2)
-3. Invite-link onboarding (removes you from every signup)
-4. P2 go-live items
+1. Per-tenant SMS/WhatsApp credentials (unblocks tenant #2)
+2. Invite-link onboarding (removes you from every signup)
+3. P2 go-live items
 
 Chase the **SES sandbox exit** in parallel from day one — it is ANJASI-side, only takes 24–48h, and item 3 depends on it.
