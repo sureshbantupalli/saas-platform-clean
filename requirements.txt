@@ -16,7 +16,10 @@ python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
 six==1.17.0
 tzdata==2026.1
-cryptography
+# Pinned: this encrypts TenantPaymentConfig and TenantMessagingConfig secrets
+# via Fernet. Unpinned, two deploys a month apart get different versions of the
+# library holding every stored credential.
+cryptography==46.0.7
 
 # ── HTTP client ────────────────────────────────────────────
 # Used directly by the MSG91 SMS adapter (and, later, the WhatsApp
@@ -44,4 +47,7 @@ boto3==1.35.36
 # Django's ImageField REQUIRES Pillow. Three ImageFields exist
 # (apps/assessments/models.py, apps/settings/branding/models.py);
 # migrations fail on a clean environment without it.
-Pillow==11.1.0
+# Pinned to the version the test suite actually runs against. It previously
+# said 11.1.0 while the venv had 12.2.0 — so a server install would have been a
+# major version behind what was ever tested.
+Pillow==12.2.0

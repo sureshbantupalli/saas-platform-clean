@@ -7,6 +7,10 @@
 To deploy, see **`DEPLOYMENT_RUNBOOK.md`** — server build, gunicorn, nginx,
 TLS, cron, smoke tests, rollback and troubleshooting.
 
+To hand deployment to someone else, give them **`SERVER_SOFTWARE_SPEC.md`** —
+the full software inventory, what is deliberately not needed, and the seven
+things they should be told before starting.
+
 First deployment target is **Setu Yoga Studio** as tenant #1.
 
 ---
