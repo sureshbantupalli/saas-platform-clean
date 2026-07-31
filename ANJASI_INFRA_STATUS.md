@@ -4,6 +4,9 @@
 **Branch:** `fix/mvp-bugs` (pushed to origin)
 **Purpose:** Resume point. Read this first when picking the work back up.
 
+To deploy, see **`DEPLOYMENT_RUNBOOK.md`** — server build, gunicorn, nginx,
+TLS, cron, smoke tests, rollback and troubleshooting.
+
 First deployment target is **Setu Yoga Studio** as tenant #1.
 
 ---
